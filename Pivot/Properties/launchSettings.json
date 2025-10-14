@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Pivot (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Pivot (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

@@ -1,0 +1,73 @@
+<Page
+    x:Class="Pivot.Views.PreferencePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Pivot.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewmodels="using:Pivot.ViewModels" 
+    xmlns:services="using:Pivot.Services"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.DataContext>
+        <viewmodels:DirectoryViewModel x:Name="ViewModel"/>
+    </Page.DataContext>
+
+    <Grid RowDefinitions="Auto,*" Padding="20">
+        <TextBlock Grid.Row="0" Text="Settings" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,20"/>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Spacing="20">
+
+                <!-- Directories Section -->
+                <TextBlock Text="Directories" Style="{StaticResource SubtitleTextBlockStyle}" />
+                
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Asset Directories" Style="{StaticResource BaseTextBlockStyle}"/>
+                    <ListView ItemsSource="{Binding AssetDirectories}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="-" Command="{Binding ElementName=ViewModel, Path=RemoveDirectoryCommand}" CommandParameter="{Binding}" Style="{StaticResource AccentButtonStyle}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Button Content="+" Command="{Binding AddDirectoryCommand}" CommandParameter="{x:Bind Converter={StaticResource DirectoryCategoryConverter}, ConverterParameter=Asset}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Image Directories" Style="{StaticResource BaseTextBlockStyle}"/>
+                    <ListView ItemsSource="{Binding ImageDirectories}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="-" Command="{Binding ElementName=ViewModel, Path=RemoveDirectoryCommand}" CommandParameter="{Binding}" Style="{StaticResource AccentButtonStyle}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Button Content="+" Command="{Binding AddDirectoryCommand}" CommandParameter="{x:Bind Converter={StaticResource DirectoryCategoryConverter}, ConverterParameter=Image}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Project Directories" Style="{StaticResource BaseTextBlockStyle}"/>
+                    <ListView ItemsSource="{Binding ProjectDirectories}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="-" Command="{Binding ElementName=ViewModel, Path=RemoveDirectoryCommand}" CommandParameter="{Binding}" Style="{StaticResource AccentButtonStyle}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Button Content="+" Command="{Binding AddDirectoryCommand}" CommandParameter="{x:Bind Converter={StaticResource DirectoryCategoryConverter}, ConverterParameter=Project}"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Pivot.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Pivot"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Pivot"
+    xmlns:viewmodels="using:Pivot.ViewModels">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="Root">
+        <NavigationView
+            x:Name="MainNavigationView"
+            IsSettingsVisible="True"
+            PaneDisplayMode="Left"
+            Header="{Binding ElementName=ContentFrame, Path=CurrentSourcePageType.Name}"
+            SelectionChanged="MainNavigationView_SelectionChanged">
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Tag="Asset" Content="Asset" Icon="Folder" />
+                <NavigationViewItem Tag="Image" Content="Image" Icon="Document" />
+                <NavigationViewItem Tag="Project" Content="Project" Icon="Document" />
+                <NavigationViewItem Tag="Preference" Content="Preference" Icon="Setting" />
+            </NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
+</Window>
