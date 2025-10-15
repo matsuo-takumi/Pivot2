@@ -81,10 +81,12 @@ namespace Pivot
 
                     // ViewModels
                     services.AddSingleton<MainViewModel>();
+                    services.AddSingleton<DirectoryViewModel>(); // DirectoryViewModelを追加
 
                     // Services
                     services.AddSingleton<MetadataService>(); 
                     services.AddSingleton<FileScannerService>(); 
+                    services.AddSingleton<SettingsService>(); // SettingsServiceを追加
 
                     // Configuration
                     services.AddSingleton<IConfiguration>(context.Configuration);

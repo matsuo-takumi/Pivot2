@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System; // ArgumentOutOfRangeException を使用するために追加
 using Windows.Storage.Pickers; // FolderPicker を使用するために追加
+using Microsoft.Extensions.DependencyInjection; // GetService 拡張メソッドを使用するために追加
 
 namespace Pivot.ViewModels
 {
@@ -15,13 +16,26 @@ namespace Pivot.ViewModels
         private readonly ILogger<DirectoryViewModel> _logger;
         private readonly SettingsService _settingsService;
 
-        public ObservableCollection<string> AssetDirectories { get; }
-        public ObservableCollection<string> ImageDirectories { get; }
-        public ObservableCollection<string> ProjectDirectories { get; }
+        // デザイン時用のコンストラクタ（XAMLデザイナーが使用）
+        public DirectoryViewModel()
+        {
+            if (Windows.ApplicationModel.DesignMode.DesignModeEnabled)
+            {
+                AssetDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Assets" };
+                ImageDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Images" };
+                ProjectDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Projects" };
+                AddDirectoryCommand = new AsyncRelayCommand<DirectoryCategory>(async (_) => await Task.CompletedTask);
+                RemoveDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
+            }
+            else
+            {
+                // 実行時にこのコンストラクタが呼ばれるべきではない
+                // DIコンテナが引数付きのコンストラクタを使用する想定
+                throw new InvalidOperationException("Parameterless constructor should not be called at runtime.");
+            }
+        }
 
-        public IAsyncRelayCommand AddDirectoryCommand { get; }
-        public IAsyncRelayCommand<string> RemoveDirectoryCommand { get; }
-
+        // 実行時用のコンストラクタ（DIコンテナが使用）
         public DirectoryViewModel(
             ILogger<DirectoryViewModel> logger,
             SettingsService settingsService)
@@ -37,6 +51,13 @@ namespace Pivot.ViewModels
             AddDirectoryCommand = new AsyncRelayCommand<DirectoryCategory>(AddDirectoryAsync);
             RemoveDirectoryCommand = new AsyncRelayCommand<string>(RemoveDirectoryAsync);
         }
+
+        public ObservableCollection<string> AssetDirectories { get; }
+        public ObservableCollection<string> ImageDirectories { get; }
+        public ObservableCollection<string> ProjectDirectories { get; }
+
+        public IAsyncRelayCommand AddDirectoryCommand { get; }
+        public IAsyncRelayCommand<string> RemoveDirectoryCommand { get; }
 
         private async Task AddDirectoryAsync(DirectoryCategory category)
         {

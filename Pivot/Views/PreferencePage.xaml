@@ -11,7 +11,6 @@
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Page.DataContext>
-        <viewmodels:DirectoryViewModel x:Name="ViewModel"/>
     </Page.DataContext>
 
     <Grid RowDefinitions="Auto,*" Padding="20">

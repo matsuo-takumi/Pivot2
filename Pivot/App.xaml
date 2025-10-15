@@ -12,8 +12,10 @@
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
             <!-- Other app resources here -->
-            <converters:DirectoryCategoryConverter x:Key="DirectoryCategoryConverter"/>
-            <BooleanNegationConverter x:Key="BooleanNegationConverter" xmlns="using:Microsoft.UI.Xaml.Data"/>
+            <converters:BooleanNegationConverter x:Key="BooleanNegationConverter"
+                xmlns:converters="using:Pivot.Converters" />
+            <converters:DirectoryCategoryConverter x:Key="DirectoryCategoryConverter"
+                xmlns:converters="using:Pivot.Converters" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>
