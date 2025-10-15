@@ -40,30 +40,29 @@ namespace Pivot
             Title = "Pivot - AI Asset Foundation App";
 
             // 初期ナビゲーション
-            ContentFrame.Navigate(typeof(Views.AssetPage)); // ダミーのAssetPageを想定
+            AssetFrame.Navigate(typeof(Views.AssetPage));
+            ImageFrame.Navigate(typeof(Views.ImagePage));
+            ProjectFrame.Navigate(typeof(Views.ProjectPage));
+            PreferenceFrame.Navigate(typeof(Views.PreferencePage));
         }
 
-        private void MainNavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+        private void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (args.IsSettingsSelected)
+            if (MainPivot.SelectedItem is PivotItem selectedPivotItem)
             {
-                ContentFrame.Navigate(typeof(Views.PreferencePage)); // ダミーのPreferencePageを想定
-            }
-            else if (args.SelectedItem is NavigationViewItem selectedItem)
-            {
-                switch (selectedItem.Tag)
+                switch (selectedPivotItem.Header as string)
                 {
                     case "Asset":
-                        ContentFrame.Navigate(typeof(Views.AssetPage)); // ダミーのAssetPageを想定
+                        AssetFrame.Navigate(typeof(Views.AssetPage));
                         break;
                     case "Image":
-                        ContentFrame.Navigate(typeof(Views.ImagePage)); // ダミーのImagePageを想定
+                        ImageFrame.Navigate(typeof(Views.ImagePage));
                         break;
                     case "Project":
-                        ContentFrame.Navigate(typeof(Views.ProjectPage)); // ダミーのProjectPageを想定
+                        ProjectFrame.Navigate(typeof(Views.ProjectPage));
                         break;
                     case "Preference":
-                        ContentFrame.Navigate(typeof(Views.PreferencePage)); // ダミーのPreferencePageを想定
+                        PreferenceFrame.Navigate(typeof(Views.PreferencePage));
                         break;
                 }
             }

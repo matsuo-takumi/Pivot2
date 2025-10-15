@@ -15,21 +15,19 @@
     </Window.SystemBackdrop>
 
     <Grid x:Name="Root">
-        <NavigationView
-            x:Name="MainNavigationView"
-            IsSettingsVisible="True"
-            PaneDisplayMode="Left"
-            Header="{Binding ElementName=ContentFrame, Path=CurrentSourcePageType.Name}"
-            SelectionChanged="MainNavigationView_SelectionChanged">
-
-            <NavigationView.MenuItems>
-                <NavigationViewItem Tag="Asset" Content="Asset" Icon="Folder" />
-                <NavigationViewItem Tag="Image" Content="Image" Icon="Document" />
-                <NavigationViewItem Tag="Project" Content="Project" Icon="Document" />
-                <NavigationViewItem Tag="Preference" Content="Preference" Icon="Setting" />
-            </NavigationView.MenuItems>
-
-            <Frame x:Name="ContentFrame" />
-        </NavigationView>
+        <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
+            <PivotItem Header="Asset">
+                <Frame x:Name="AssetFrame" />
+            </PivotItem>
+            <PivotItem Header="Image">
+                <Frame x:Name="ImageFrame" />
+            </PivotItem>
+            <PivotItem Header="Project">
+                <Frame x:Name="ProjectFrame" />
+            </PivotItem>
+            <PivotItem Header="Preference">
+                <Frame x:Name="PreferenceFrame" />
+            </PivotItem>
+        </Pivot>
     </Grid>
 </Window>

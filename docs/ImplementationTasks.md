@@ -46,10 +46,23 @@
 - [ ] `MainViewModel`と`NavigationView`の基本実装 (タブ切り替え機能)  
 - [ ] **Assetモジュール**: `AssetViewModel`とAsset一覧表示UIの実装  
 - [ ] **Imageモジュール**: `ImageViewModel`とImage表示UIの実装  
-- [ ] **Projectモジュール**: `ProjectViewModel`とプロジェクト一覧表示UIの実装  
+- [ ] **Projectモジュール**: `ProjectViewModel`とプロジェクト一覧表示UIの基本実装  
 - [ ] **Preferenceモジュール**: `PreferenceViewModel`と設定UIの基本実装  
 - [ ] Fluent DesignおよびDark Modeのサポート  
 - [ ] Undo-Redo機能のサポート
+
+---
+
+## Phase 3.5: Advanced Project Management UI & Logic
+**Dependencies:** Phase 3
+**Blockers:** データモデルの依存関係定義の最終確定
+**Related Tickets:** [#12](https://github.com/org/repo/issues/12) (例)
+
+- [ ] Projectタブへのバージョン管理連携UIの実装 (Gitステータス表示、コミット履歴など)
+- [ ] プロジェクト内の依存関係を視覚化するUIの実装 (グラフ/ツリー表示)
+- [ ] 内製タスク管理セクションのUIとデータモデルの実装 (プロジェクトに関連するタスクのCRUD)
+- [ ] アセット/スクリプトの「使用箇所」検索機能の実装 (Projectタブ内での検索)
+- [ ] プロジェクトデータのアクティビティログ表示機能の実装 (変更履歴など)
 
 ---
 
@@ -83,8 +96,18 @@
 
 ---
 
+## Phase 5.5: Project Output & Optimization
+**Dependencies:** Phase 5
+**Blockers:** 出力フォーマットと変換ロジックの確定
+**Related Tickets:** [#22](https://github.com/org/repo/issues/22) (例)
+
+- [ ] カスタム出力プロファイル機能の実装 (ファイル変換、配置設定など)
+- [ ] プロジェクトの差分出力機能の実装 (変更点のみを検出し更新)
+
+---
+
 ## Phase 6: Testing & QA
-**Dependencies:** Phase 5  
+**Dependencies:** Phase 5.5
 **Blockers:** 全機能の実装完了  
 **Related Tickets:** [#25](https://github.com/org/repo/issues/25) (例)
 
