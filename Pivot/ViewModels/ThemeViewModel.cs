@@ -8,8 +8,6 @@ using System.Text;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
 using Pivot.Messages; // BackdropTypeChangedMessage, ThemeChangedMessage
-using Windows.UI; // Colorを使用するために追加
-using Pivot.Messages; // AccentColorChangedMessageを使用するために追加
 using Pivot.Models; // BackdropType moved here
 
 namespace Pivot.ViewModels
@@ -25,9 +23,6 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private BackdropType _selectedBackdropType;
 
-        [ObservableProperty]
-        private Color _selectedAccentColor;
-
         public IEnumerable<BackdropType> BackdropTypes => Enum.GetValues<BackdropType>();
         public IEnumerable<ElementTheme> ElementThemes => Enum.GetValues<ElementTheme>();
 
@@ -38,7 +33,6 @@ namespace Pivot.ViewModels
 
             CurrentTheme = _settingsService.GetTheme();
             SelectedBackdropType = _settingsService.GetBackdropType();
-            SelectedAccentColor = _settingsService.GetAccentColor();
 
             // テーマが変更されたときに保存
             PropertyChanged += (s, e) =>
@@ -52,11 +46,6 @@ namespace Pivot.ViewModels
                 {
                     _settingsService.SetBackdropType(SelectedBackdropType);
                     _messenger.Send(new BackdropTypeChangedMessage(SelectedBackdropType));
-                }
-                if (e.PropertyName == nameof(SelectedAccentColor))
-                {
-                    _settingsService.SetAccentColor(SelectedAccentColor);
-                    _messenger.Send(new AccentColorChangedMessage(SelectedAccentColor));
                 }
             };
         }

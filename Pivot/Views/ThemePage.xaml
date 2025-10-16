@@ -40,15 +40,8 @@
                 </RadioButtons>
             </StackPanel>
 
-            <StackPanel Spacing="10">
-                <TextBlock Text="Accent Color" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                <ColorPicker
-                    Color="{Binding SelectedAccentColor, Mode=TwoWay}"
-                    IsMoreButtonVisible="True"
-                    IsColorSpectrumVisible="True"
-                    IsHexInputVisible="True"
-                    IsAlphaEnabled="False" />
-            </StackPanel>
+            <!-- Accent Color セクションを削除 -->
+
         </StackPanel>
     </Grid>
 </Page>

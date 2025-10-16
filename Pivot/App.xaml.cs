@@ -25,8 +25,8 @@ using Microsoft.Extensions.Logging; // ILoggerを使用するために追加
 using Pivot.Services; // サービスを使用するために追加
 using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
 using Pivot.Messages; // ThemeChangedMessageを使用するために追加
-using Pivot.Messages; // AccentColorChangedMessageを使用するために追加
-using Windows.UI; // Colorを使用するために追加
+// using Pivot.Messages; // AccentColorChangedMessageを使用するために追加
+// using Windows.UI; // Colorを使用するために追加
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -36,7 +36,7 @@ namespace Pivot
     /// <summary>
     /// Provides application-specific behavior to supplement the default Application class.
     /// </summary>
-    public partial class App : Application, IRecipient<ThemeChangedMessage>, IRecipient<AccentColorChangedMessage>
+    public partial class App : Application, IRecipient<ThemeChangedMessage>
     {
         private Window? _window;
 
@@ -65,7 +65,7 @@ namespace Pivot
             Services = ConfigureServices();
             _messenger = Services.GetRequiredService<IMessenger>();
             _messenger.Register<ThemeChangedMessage>(this); // テーマ変更メッセージを購読
-            _messenger.Register<AccentColorChangedMessage>(this); // AccentColorChangedMessageを購読
+            // _messenger.Register<AccentColorChangedMessage>(this); // AccentColorChangedMessageを購読
             _settingsService = Services.GetRequiredService<SettingsService>(); // SettingsServiceを取得
         }
 
@@ -127,7 +127,7 @@ namespace Pivot
                 rootElement.RequestedTheme = settingsService.GetTheme();
             }
             // 初期アクセントカラーを適用
-            ApplyAccentColor(settingsService.GetAccentColor());
+            // ApplyAccentColor(settingsService.GetAccentColor()); // 削除
 
             // 初期タイトルバーボタンの色を更新
             if (rootElement != null) // rootElementがnullでないことを確認
@@ -155,66 +155,13 @@ namespace Pivot
             }
         }
 
-        public void Receive(AccentColorChangedMessage message)
-        {
-            ApplyAccentColor(message.Value);
-            if (_window?.Content is FrameworkElement rootElement) // ここでキャスト
-            {            
-                UpdateTitleBarColors(rootElement.ActualTheme); // アクセントカラー変更時にタイトルバーの色を更新
-            }
-        }
+        // AccentColorChangedMessage の Receive メソッドを削除
 
-        private void ApplyAccentColor(Color color)
-        {
-            // アクセントカラーをシステムリソースに設定
-            Application.Current.Resources["SystemAccentColor"] = color;
-            Application.Current.Resources["SystemAccentColorLight1"] = ToLight(color, 0.2f);
-            Application.Current.Resources["SystemAccentColorLight2"] = ToLight(color, 0.4f);
-            Application.Current.Resources["SystemAccentColorLight3"] = ToLight(color, 0.6f);
-            Application.Current.Resources["SystemAccentColorDark1"] = ToDark(color, 0.2f);
-            Application.Current.Resources["SystemAccentColorDark2"] = ToDark(color, 0.4f);
-            Application.Current.Resources["SystemAccentColorDark3"] = ToDark(color, 0.6f);
+        // ApplyAccentColor メソッドを削除
 
-            // DynamicAccentBrushを更新
-            if (Application.Current.Resources.TryGetValue("SystemAccentColor", out object systemAccentColorObj) &&
-                systemAccentColorObj is Color systemAccentColor)
-            {
-                var dynamicAccentBrush = new SolidColorBrush(systemAccentColor);
-                Application.Current.Resources["SystemControlForegroundAccentBrush"] = dynamicAccentBrush;
-                Application.Current.Resources["SystemControlHighlightAccentBrush"] = dynamicAccentBrush;
-                Application.Current.Resources["SystemControlBackgroundAccentBrush"] = dynamicAccentBrush;
-                Application.Current.Resources["AccentTextFillColorPrimaryBrush"] = dynamicAccentBrush;
-                Application.Current.Resources["AccentTextFillColorSecondaryBrush"] = dynamicAccentBrush;
-                Application.Current.Resources["AccentTextFillColorTertiaryBrush"] = dynamicAccentBrush;
-                Application.Current.Resources["AccentControlBackgroundAccentBrush"] = dynamicAccentBrush;
-            }
-        }
+        // ToLight メソッドを削除
 
-        private Color ToLight(Color color, float factor)
-        {
-            float red = color.R;
-            float green = color.G;
-            float blue = color.B;
-
-            red = Math.Min(255, red + (255 - red) * factor);
-            green = Math.Min(255, green + (255 - green) * factor);
-            blue = Math.Min(255, blue + (255 - blue) * factor);
-
-            return Color.FromArgb(color.A, (byte)red, (byte)green, (byte)blue);
-        }
-
-        private Color ToDark(Color color, float factor)
-        {
-            float red = color.R;
-            float green = color.G;
-            float blue = color.B;
-
-            red = Math.Max(0, red - red * factor);
-            green = Math.Max(0, green - green * factor);
-            blue = Math.Max(0, blue - blue * factor);
-
-            return Color.FromArgb(color.A, (byte)red, (byte)green, (byte)blue);
-        }
+        // ToDark メソッドを削除
 
         // タイトルバーボタンの色を更新するメソッド
         private void UpdateTitleBarColors(ElementTheme theme)
@@ -234,8 +181,8 @@ namespace Pivot
                     titleBar.TitleBar.ButtonPressedForegroundColor = Microsoft.UI.Colors.White;
                     titleBar.TitleBar.BackgroundColor = Microsoft.UI.Colors.Transparent;
                     titleBar.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
-                    titleBar.TitleBar.ButtonHoverBackgroundColor = Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF); // 半透明の白
-                    titleBar.TitleBar.ButtonPressedBackgroundColor = Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF); // さらに半透明の白
+                    titleBar.TitleBar.ButtonHoverBackgroundColor = Microsoft.UI.ColorHelper.FromArgb(0x20, 0xFF, 0xFF, 0xFF); // 半透明の白
+                    titleBar.TitleBar.ButtonPressedBackgroundColor = Microsoft.UI.ColorHelper.FromArgb(0x40, 0xFF, 0xFF, 0xFF); // さらに半透明の白
                 }
                 else // Light theme
                 {
@@ -245,8 +192,8 @@ namespace Pivot
                     titleBar.TitleBar.ButtonPressedForegroundColor = Microsoft.UI.Colors.Black;
                     titleBar.TitleBar.BackgroundColor = Microsoft.UI.Colors.Transparent;
                     titleBar.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
-                    titleBar.TitleBar.ButtonHoverBackgroundColor = Color.FromArgb(0x20, 0x00, 0x00, 0x00); // 半透明の黒
-                    titleBar.TitleBar.ButtonPressedBackgroundColor = Color.FromArgb(0x40, 0x00, 0x00, 0x00); // さらに半透明の黒
+                    titleBar.TitleBar.ButtonHoverBackgroundColor = Microsoft.UI.ColorHelper.FromArgb(0x20, 0x00, 0x00, 0x00); // 半透明の黒
+                    titleBar.TitleBar.ButtonPressedBackgroundColor = Microsoft.UI.ColorHelper.FromArgb(0x40, 0x00, 0x00, 0x00); // さらに半透明の黒
                 }
             }
         }

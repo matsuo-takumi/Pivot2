@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using System; // AppContext を使用するために追加
 using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
 // using static Pivot.MainWindow; // BackdropType was moved out
-using Windows.UI; // Colorを使用するために追加
 
 namespace Pivot.Services
 {
@@ -45,17 +44,6 @@ namespace Pivot.Services
         public async Task SetBackdropType(BackdropType type)
         {
             _userSettings.AppBackdropType = type;
-            await SaveSettingsAsync();
-        }
-
-        public Color GetAccentColor()
-        {
-            return _userSettings.AccentColor;
-        }
-
-        public async Task SetAccentColor(Color color)
-        {
-            _userSettings.AccentColor = color;
             await SaveSettingsAsync();
         }
 
