@@ -36,7 +36,7 @@ namespace Pivot.ViewModels
         private async Task LoadAssetsAsync()
         {
             Assets.Clear();
-            var settings = _settingsService.GetDirectorySettings();
+            var settings = _settingsService.GetUserSettings();
             var assetPaths = settings.AssetDirectories;
 
             if (!assetPaths.Any()) return;
@@ -48,7 +48,7 @@ namespace Pivot.ViewModels
             }
         }
 
-        private bool IsAssetFile(string filePath, DirectorySettings settings)
+        private bool IsAssetFile(string filePath, UserSettings settings)
         {
             // Assetディレクトリに含まれるファイルであるか
             bool inAssetDir = settings.AssetDirectories.Any(dir => filePath.StartsWith(dir, StringComparison.OrdinalIgnoreCase));

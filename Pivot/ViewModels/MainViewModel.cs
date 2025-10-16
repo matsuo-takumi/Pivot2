@@ -117,7 +117,7 @@ namespace Pivot.ViewModels
 
 		private void LoadScanDirectories()
 		{
-			var settings = _settingsService.GetDirectorySettings();
+			var settings = _settingsService.GetUserSettings();
 			ScanDirectories.Clear();
 			foreach (var dir in settings.AssetDirectories) ScanDirectories.Add(dir);
 			foreach (var dir in settings.ImageDirectories) ScanDirectories.Add(dir);

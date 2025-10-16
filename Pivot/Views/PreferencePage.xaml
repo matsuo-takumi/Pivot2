@@ -13,60 +13,54 @@
     <Page.DataContext>
     </Page.DataContext>
 
-    <Grid RowDefinitions="Auto,*" Padding="20">
-        <TextBlock Grid.Row="0" Text="Settings" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,20"/>
+    <NavigationView x:Name="nvSample"
+    IsSettingsVisible="False"
+    IsBackButtonVisible="Collapsed"
+    IsBackEnabled="False"
+    SelectionChanged="NavigationView_SelectionChanged"
+    Header="Preference"
+    AlwaysShowHeader="True"
+    PaneDisplayMode="Left"
+    ExpandedModeThresholdWidth="500"
+    SelectionFollowsFocus="Enabled"
+    IsTabStop="False">
 
-        <ScrollViewer Grid.Row="1">
-            <StackPanel Spacing="20">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="Theme" Tag="ThemePage" x:Name="ThemeItem">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Setting" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItemHeader Content="Actions"/>
+            <NavigationViewItem Content="Menu Item2" Tag="SamplePage2" x:Name="SamplePage2Item" SelectsOnInvoked="True">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Save" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Menu Item3" Tag="SamplePage3" x:Name="SamplePage3Item">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Refresh" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+        </NavigationView.MenuItems>
 
-                <!-- Directories Section -->
-                <TextBlock Text="Directories" Style="{StaticResource SubtitleTextBlockStyle}" />
-                
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Asset Directories" Style="{StaticResource BaseTextBlockStyle}"/>
-                    <ListView ItemsSource="{Binding AssetDirectories}">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="-" Command="{Binding ElementName=ViewModel, Path=RemoveDirectoryCommand}" CommandParameter="{Binding}" Style="{StaticResource AccentButtonStyle}"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <Button Content="+" Command="{Binding AddDirectoryCommand}" CommandParameter="{x:Bind Converter={StaticResource DirectoryCategoryConverter}, ConverterParameter=Asset}"/>
-                </StackPanel>
+        <NavigationView.PaneCustomContent>
+            <HyperlinkButton x:Name="PaneHyperlink" Content="More info" Margin="12,0" Visibility="Collapsed" />
+        </NavigationView.PaneCustomContent>
+        
+        <NavigationView.AutoSuggestBox> 
+            <AutoSuggestBox QueryIcon="Find" AutomationProperties.Name="Search" /> 
+        </NavigationView.AutoSuggestBox> 
 
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Image Directories" Style="{StaticResource BaseTextBlockStyle}"/>
-                    <ListView ItemsSource="{Binding ImageDirectories}">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="-" Command="{Binding ElementName=ViewModel, Path=RemoveDirectoryCommand}" CommandParameter="{Binding}" Style="{StaticResource AccentButtonStyle}"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <Button Content="+" Command="{Binding AddDirectoryCommand}" CommandParameter="{x:Bind Converter={StaticResource DirectoryCategoryConverter}, ConverterParameter=Image}"/>
-                </StackPanel>
-
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Project Directories" Style="{StaticResource BaseTextBlockStyle}"/>
-                    <ListView ItemsSource="{Binding ProjectDirectories}">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="-" Command="{Binding ElementName=ViewModel, Path=RemoveDirectoryCommand}" CommandParameter="{Binding}" Style="{StaticResource AccentButtonStyle}"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <Button Content="+" Command="{Binding AddDirectoryCommand}" CommandParameter="{x:Bind Converter={StaticResource DirectoryCategoryConverter}, ConverterParameter=Project}"/>
-                </StackPanel>
+        <NavigationView.PaneFooter>
+            <StackPanel x:Name="FooterStackPanel" Orientation="Vertical" Visibility="Collapsed">
+                <NavigationViewItem Icon="Download" AutomationProperties.Name="download" />
+                <NavigationViewItem Icon="Favorite" AutomationProperties.Name="favorite" />
             </StackPanel>
-        </ScrollViewer>
-    </Grid>
+        </NavigationView.PaneFooter>
+
+        <Grid>
+            <Frame x:Name="contentFrame" />
+        </Grid>
+    </NavigationView>
 </Page>

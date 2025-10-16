@@ -1,0 +1,28 @@
+<Page
+    x:Class="Pivot.Views.ThemePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Pivot.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid Padding="20">
+        <StackPanel Spacing="20">
+            <TextBlock Text="Theme Settings" Style="{StaticResource TitleTextBlockStyle}"/>
+
+            <StackPanel Spacing="10">
+                <TextBlock Text="Background Style" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <RadioButtons Header="Choose a background style" SelectedItem="{Binding SelectedBackdropType, Mode=TwoWay}" ItemsSource="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:ThemePage}}, Path=BackdropTypes}">
+                </RadioButtons>
+            </StackPanel>
+
+            <StackPanel Spacing="10">
+                <TextBlock Text="App Theme" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <RadioButtons Header="Choose a theme" SelectedItem="{Binding CurrentTheme, Mode=TwoWay}" ItemsSource="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:ThemePage}}, Path=ElementThemes}">
+                </RadioButtons>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Page>

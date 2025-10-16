@@ -43,7 +43,7 @@ namespace Pivot.ViewModels
             _logger = logger;
             _settingsService = settingsService;
 
-            var settings = _settingsService.GetDirectorySettings();
+            var settings = _settingsService.GetUserSettings();
             AssetDirectories = new ObservableCollection<string>(settings.AssetDirectories);
             ImageDirectories = new ObservableCollection<string>(settings.ImageDirectories);
             ProjectDirectories = new ObservableCollection<string>(settings.ProjectDirectories);

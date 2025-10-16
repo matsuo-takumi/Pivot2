@@ -23,6 +23,8 @@ using Pivot.ViewModels; // MainViewModelを使用するために追加
 using Serilog; // Serilogを使用するために追加
 using Microsoft.Extensions.Logging; // ILoggerを使用するために追加
 using Pivot.Services; // サービスを使用するために追加
+using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
+using Pivot.Messages; // ThemeChangedMessageを使用するために追加
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -32,7 +34,7 @@ namespace Pivot
     /// <summary>
     /// Provides application-specific behavior to supplement the default Application class.
     /// </summary>
-    public partial class App : Application
+    public partial class App : Application, IRecipient<ThemeChangedMessage>
     {
         private Window? _window;
 
@@ -47,6 +49,7 @@ namespace Pivot
         /// Gets the <see cref="IServiceProvider"/> instance to resolve application services.
         /// </summary>
         public IServiceProvider Services { get; }
+        private IMessenger _messenger; // IMessengerを追加
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -57,6 +60,8 @@ namespace Pivot
             InitializeComponent();
 
             Services = ConfigureServices();
+            _messenger = Services.GetRequiredService<IMessenger>();
+            _messenger.Register<ThemeChangedMessage>(this); // テーマ変更メッセージを購読
         }
 
         private static IServiceProvider ConfigureServices()
@@ -82,11 +87,13 @@ namespace Pivot
                     // ViewModels
                     services.AddSingleton<MainViewModel>();
                     services.AddSingleton<DirectoryViewModel>(); // DirectoryViewModelを追加
+                    services.AddSingleton<ThemeViewModel>(); // ThemeViewModelを追加
 
                     // Services
                     services.AddSingleton<MetadataService>(); 
                     services.AddSingleton<FileScannerService>(); 
                     services.AddSingleton<SettingsService>(); // SettingsServiceを追加
+                    services.AddSingleton<IMessenger, WeakReferenceMessenger>(); // IMessengerを追加
 
                     // Configuration
                     services.AddSingleton<IConfiguration>(context.Configuration);
@@ -103,6 +110,13 @@ namespace Pivot
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
             _window = new MainWindow();
+            // SettingsServiceから初期テーマを取得して設定
+            var settingsService = Services.GetRequiredService<SettingsService>();
+            if (_window?.Content is FrameworkElement rootElement)
+            {
+                rootElement.RequestedTheme = settingsService.GetTheme();
+            }
+
             _window.Activate();
 
             // LoggerのDI取得とテストログ出力
@@ -112,6 +126,14 @@ namespace Pivot
             // データベースの非同期初期化
             var metadataService = Services.GetRequiredService<MetadataService>();
             _ = metadataService.InitializeDatabase(); // Waitせずに起動継続
+        }
+
+        public void Receive(ThemeChangedMessage message)
+        {
+            if (_window?.Content is FrameworkElement rootElement)
+            {
+                rootElement.RequestedTheme = message.Value;
+            }
         }
     }
 }

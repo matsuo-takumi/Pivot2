@@ -10,9 +10,9 @@
     Title="Pivot"
     xmlns:viewmodels="using:Pivot.ViewModels">
 
-    <Window.SystemBackdrop>
+    <!-- <Window.SystemBackdrop>
         <MicaBackdrop />
-    </Window.SystemBackdrop>
+    </Window.SystemBackdrop> -->
 
     <Grid x:Name="Root">
         <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">

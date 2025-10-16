@@ -36,7 +36,7 @@ namespace Pivot.ViewModels
         private async Task LoadImagesAsync()
         {
             Images.Clear();
-            var settings = _settingsService.GetDirectorySettings();
+            var settings = _settingsService.GetUserSettings();
             var imagePaths = settings.ImageDirectories;
 
             if (!imagePaths.Any()) return;
@@ -48,7 +48,7 @@ namespace Pivot.ViewModels
             }
         }
 
-        private bool IsImageFile(string filePath, DirectorySettings settings)
+        private bool IsImageFile(string filePath, UserSettings settings)
         {
             // Imageディレクトリに含まれるファイルであるか
             bool inImageDir = settings.ImageDirectories.Any(dir => filePath.StartsWith(dir, StringComparison.OrdinalIgnoreCase));

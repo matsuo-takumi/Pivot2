@@ -4,6 +4,8 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System; // AppContext を使用するために追加
+using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
+using static Pivot.MainWindow; // BackdropTypeを使用するために追加
 
 namespace Pivot.Services
 {
@@ -11,30 +13,52 @@ namespace Pivot.Services
     {
         private readonly IConfiguration _configuration;
         private readonly string _settingsFilePath;
-        private DirectorySettings _directorySettings;
+        private UserSettings _userSettings;
 
         public SettingsService(IConfiguration configuration)
         {
             _configuration = configuration;
             // appsettings.json とは別に、ユーザー設定を保存するファイルを想定
             _settingsFilePath = Path.Combine(AppContext.BaseDirectory, "user_settings.json");
-            _directorySettings = LoadSettings();
+            _userSettings = LoadSettings();
         }
 
-        public DirectorySettings GetDirectorySettings() => _directorySettings;
+        public UserSettings GetUserSettings() => _userSettings;
+
+        public ElementTheme GetTheme()
+        {
+            return _userSettings.AppTheme;
+        }
+
+        public async Task SetTheme(ElementTheme theme)
+        {
+            _userSettings.AppTheme = theme;
+            await SaveSettingsAsync();
+        }
+
+        public BackdropType GetBackdropType()
+        {
+            return _userSettings.AppBackdropType;
+        }
+
+        public async Task SetBackdropType(BackdropType type)
+        {
+            _userSettings.AppBackdropType = type;
+            await SaveSettingsAsync();
+        }
 
         public async Task AddDirectoryAsync(DirectoryCategory category, string path)
         {
             switch (category)
             {
                 case DirectoryCategory.Asset:
-                    _directorySettings.AssetDirectories.Add(path);
+                    _userSettings.AssetDirectories.Add(path);
                     break;
                 case DirectoryCategory.Image:
-                    _directorySettings.ImageDirectories.Add(path);
+                    _userSettings.ImageDirectories.Add(path);
                     break;
                 case DirectoryCategory.Project:
-                    _directorySettings.ProjectDirectories.Add(path);
+                    _userSettings.ProjectDirectories.Add(path);
                     break;
             }
             await SaveSettingsAsync();
@@ -45,39 +69,39 @@ namespace Pivot.Services
             switch (category)
             {
                 case DirectoryCategory.Asset:
-                    _directorySettings.AssetDirectories.Remove(path);
+                    _userSettings.AssetDirectories.Remove(path);
                     break;
                 case DirectoryCategory.Image:
-                    _directorySettings.ImageDirectories.Remove(path);
+                    _userSettings.ImageDirectories.Remove(path);
                     break;
                 case DirectoryCategory.Project:
-                    _directorySettings.ProjectDirectories.Remove(path);
+                    _userSettings.ProjectDirectories.Remove(path);
                     break;
             }
             await SaveSettingsAsync();
         }
 
-        private DirectorySettings LoadSettings()
+        private UserSettings LoadSettings()
         {
             if (File.Exists(_settingsFilePath))
             {
                 try
                 {
                     string json = File.ReadAllText(_settingsFilePath);
-                    return JsonSerializer.Deserialize<DirectorySettings>(json) ?? new DirectorySettings();
+                    return JsonSerializer.Deserialize<UserSettings>(json) ?? new UserSettings();
                 }
                 catch (JsonException /* ex */)
                 {
                     // ロギングを追加すべきだが、ここでは簡略化
-                    return new DirectorySettings();
+                    return new UserSettings();
                 }
             }
-            return new DirectorySettings();
+            return new UserSettings();
         }
 
         private async Task SaveSettingsAsync()
         {
-            string json = JsonSerializer.Serialize(_directorySettings, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(_userSettings, new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(_settingsFilePath, json);
         }
     }
