@@ -8,19 +8,19 @@
     xmlns:viewmodels="using:Pivot.ViewModels" 
     xmlns:services="using:Pivot.Services"
     mc:Ignorable="d"
-    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-
-    <Page.DataContext>
-    </Page.DataContext>
+    Background="Transparent"
+    x:DataType="viewmodels:MainViewModel">
 
     <NavigationView x:Name="nvSample"
+    Background="Transparent"
     IsSettingsVisible="False"
     IsBackButtonVisible="Collapsed"
     IsBackEnabled="False"
+    IsPaneOpen="{Binding IsPreferencePaneOpen, Mode=TwoWay}"
     SelectionChanged="NavigationView_SelectionChanged"
     Header="Preference"
     AlwaysShowHeader="True"
-    PaneDisplayMode="Left"
+    PaneDisplayMode="LeftCompact"
     ExpandedModeThresholdWidth="500"
     SelectionFollowsFocus="Enabled"
     IsTabStop="False">

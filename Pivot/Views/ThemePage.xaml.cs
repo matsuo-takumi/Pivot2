@@ -5,15 +5,11 @@ using System; // Enum.GetValuesを使用するために追加
 using System.Linq; // Selectを使用するために追加
 using System.Collections.Generic; // IEnumerableを使用するために追加
 using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
-using static Pivot.MainWindow; // BackdropTypeを使用するために追加
 
 namespace Pivot.Views
 {
     public sealed partial class ThemePage : Page
     {
-        public IEnumerable<BackdropType> BackdropTypes => Enum.GetValues<BackdropType>();
-        public IEnumerable<ElementTheme> ElementThemes => Enum.GetValues<ElementTheme>();
-
         public ThemePage()
         {
             this.InitializeComponent();

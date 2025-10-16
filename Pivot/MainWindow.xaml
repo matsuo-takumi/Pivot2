@@ -10,24 +10,35 @@
     Title="Pivot"
     xmlns:viewmodels="using:Pivot.ViewModels">
 
-    <!-- <Window.SystemBackdrop>
-        <MicaBackdrop />
-    </Window.SystemBackdrop> -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-    <Grid x:Name="Root">
-        <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
-            <PivotItem Header="Asset">
-                <Frame x:Name="AssetFrame" />
-            </PivotItem>
-            <PivotItem Header="Image">
-                <Frame x:Name="ImageFrame" />
-            </PivotItem>
-            <PivotItem Header="Project">
-                <Frame x:Name="ProjectFrame" />
-            </PivotItem>
-            <PivotItem Header="Preference">
-                <Frame x:Name="PreferenceFrame" />
-            </PivotItem>
-        </Pivot>
+        <Grid x:Name="AppTitleBar" Background="Transparent" Grid.Row="0">
+            <TextBlock x:Name="AppTitleBarText"
+                       Text="{x:Bind Title, Mode=OneWay}"
+                       VerticalAlignment="Center"
+                       Margin="12,0,0,0"
+                       Style="{StaticResource CaptionTextBlockStyle}" />
+        </Grid>
+        
+        <Grid x:Name="Root" Grid.Row="1">
+            <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
+                <PivotItem Header="Asset">
+                    <Frame x:Name="AssetFrame" Background="Transparent"/>
+                </PivotItem>
+                <PivotItem Header="Image">
+                    <Frame x:Name="ImageFrame" Background="Transparent"/>
+                </PivotItem>
+                <PivotItem Header="Project">
+                    <Frame x:Name="ProjectFrame" Background="Transparent"/>
+                </PivotItem>
+                <PivotItem Header="Preference">
+                    <Frame x:Name="PreferenceFrame" Background="Transparent"/>
+                </PivotItem>
+            </Pivot>
+        </Grid>
     </Grid>
 </Window>

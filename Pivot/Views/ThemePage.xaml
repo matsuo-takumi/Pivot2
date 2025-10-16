@@ -5,8 +5,14 @@
     xmlns:local="using:Pivot.Views"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:converters="using:Pivot.Converters"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <converters:BackdropTypeToStringConverter x:Key="BackdropTypeConverter"/>
+        <converters:ElementThemeToStringConverter x:Key="ElementThemeConverter"/>
+    </Page.Resources>
 
     <Grid Padding="20">
         <StackPanel Spacing="20">
@@ -14,14 +20,34 @@
 
             <StackPanel Spacing="10">
                 <TextBlock Text="Background Style" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                <RadioButtons Header="Choose a background style" SelectedItem="{Binding SelectedBackdropType, Mode=TwoWay}" ItemsSource="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:ThemePage}}, Path=BackdropTypes}">
+                <RadioButtons Header="Choose a background style" SelectedItem="{Binding SelectedBackdropType, Mode=TwoWay}" ItemsSource="{Binding BackdropTypes}">
+                    <RadioButtons.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource BackdropTypeConverter}}" />
+                        </DataTemplate>
+                    </RadioButtons.ItemTemplate>
                 </RadioButtons>
             </StackPanel>
 
             <StackPanel Spacing="10">
                 <TextBlock Text="App Theme" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                <RadioButtons Header="Choose a theme" SelectedItem="{Binding CurrentTheme, Mode=TwoWay}" ItemsSource="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:ThemePage}}, Path=ElementThemes}">
+                <RadioButtons Header="Choose a theme" SelectedItem="{Binding CurrentTheme, Mode=TwoWay}" ItemsSource="{Binding ElementThemes}">
+                    <RadioButtons.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource ElementThemeConverter}}" />
+                        </DataTemplate>
+                    </RadioButtons.ItemTemplate>
                 </RadioButtons>
+            </StackPanel>
+
+            <StackPanel Spacing="10">
+                <TextBlock Text="Accent Color" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <ColorPicker
+                    Color="{Binding SelectedAccentColor, Mode=TwoWay}"
+                    IsMoreButtonVisible="True"
+                    IsColorSpectrumVisible="True"
+                    IsHexInputVisible="True"
+                    IsAlphaEnabled="False" />
             </StackPanel>
         </StackPanel>
     </Grid>

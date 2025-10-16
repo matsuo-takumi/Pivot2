@@ -4,21 +4,25 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Pivot.Models;
 using Pivot.Services;
+using Pivot.Messages;
+using Pivot.Models;
 using System.Linq;
 
 namespace Pivot.ViewModels
 {
-	public class MainViewModel : ObservableObject
+	public partial class MainViewModel : ObservableObject
 	{
-		private readonly ILogger<MainViewModel> _logger;
+		//private readonly ILogger<MainViewModel> _logger; // コメントアウト
 		private readonly IConfiguration _configuration;
 		private readonly FileScannerService _fileScannerService;
 		private readonly MetadataService _metadataService;
-		private readonly SettingsService _settingsService; // SettingsServiceを追加
+        private readonly SettingsService _settingsService; // SettingsServiceを追加
+        private readonly IMessenger _messenger;
 
 		// private string _rootPath; // 単一のRootPathは非推奨になるため、プライベートフィールドとして残し、SetPropertyを削除
 		// public string RootPath // このプロパティは今後使用しないので削除または変更
@@ -47,27 +51,40 @@ namespace Pivot.ViewModels
 
 		private CancellationTokenSource? _scanCts;
 
-		public IAsyncRelayCommand ScanCommand { get; }
-		public IRelayCommand CancelScanCommand { get; }
+        public IAsyncRelayCommand ScanCommand { get; }
+        public IRelayCommand CancelScanCommand { get; }
+        public IRelayCommand<NavigationRegion> RequestNavigateCommand { get; }
 
-		public MainViewModel(
-			ILogger<MainViewModel> logger,
+		[ObservableProperty]
+		private bool _isPreferencePaneOpen;
+
+        public MainViewModel(
+			//ILogger<MainViewModel> logger, // コメントアウト
 			IConfiguration configuration,
 			FileScannerService fileScannerService,
 			MetadataService metadataService,
-			SettingsService settingsService) // SettingsServiceをDIに追加
+            SettingsService settingsService,
+            IMessenger messenger) // SettingsServiceをDIに追加
 		{
-			_logger = logger;
+			//_logger = logger; // コメントアウト
 			_configuration = configuration;
 			_fileScannerService = fileScannerService;
 			_metadataService = metadataService;
-			_settingsService = settingsService; // SettingsServiceを初期化
+            _settingsService = settingsService; // SettingsServiceを初期化
+            _messenger = messenger;
 
 			// _rootPath = _configuration["AppSettings:ScanRootFolder"] ?? string.Empty; // 削除
 			LoadScanDirectories(); // ディレクトリ設定を読み込む
 
-			ScanCommand = new AsyncRelayCommand(ScanAsync, CanStartScan);
+            ScanCommand = new AsyncRelayCommand(ScanAsync, CanStartScan);
 			CancelScanCommand = new RelayCommand(CancelScan, () => IsScanning);
+            RequestNavigateCommand = new RelayCommand<NavigationRegion>(region =>
+            {
+                _messenger.Send(new NavigationRequestMessage(region));
+            });
+
+			// PreferencePaneの初期状態を設定 (例: 起動時は開いておく)
+			IsPreferencePaneOpen = true;
 		}
 
 		private bool CanStartScan()
@@ -96,11 +113,11 @@ namespace Pivot.ViewModels
 			}
 			catch (OperationCanceledException)
 			{
-				_logger.LogInformation("Scan cancelled.");
+				//_logger.LogInformation("Scan cancelled."); // コメントアウト
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Scan failed.");
+				//_logger.LogError(ex, "Scan failed."); // コメントアウト
 			}
 			finally
 			{

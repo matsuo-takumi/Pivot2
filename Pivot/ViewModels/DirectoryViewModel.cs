@@ -13,7 +13,7 @@ namespace Pivot.ViewModels
 {
     public class DirectoryViewModel : ObservableObject
     {
-        private readonly ILogger<DirectoryViewModel> _logger;
+        //private readonly ILogger<DirectoryViewModel> _logger; // コメントアウト
         private readonly SettingsService _settingsService;
 
         // デザイン時用のコンストラクタ（XAMLデザイナーが使用）
@@ -37,10 +37,10 @@ namespace Pivot.ViewModels
 
         // 実行時用のコンストラクタ（DIコンテナが使用）
         public DirectoryViewModel(
-            ILogger<DirectoryViewModel> logger,
+            //ILogger<DirectoryViewModel> logger, // コメントアウト
             SettingsService settingsService)
         {
-            _logger = logger;
+            //_logger = logger; // コメントアウト
             _settingsService = settingsService;
 
             var settings = _settingsService.GetUserSettings();
@@ -81,7 +81,7 @@ namespace Pivot.ViewModels
                 {
                     await _settingsService.AddDirectoryAsync(category, path);
                     GetDirectoryCollection(category).Add(path);
-                    _logger.LogInformation("Added directory: {Category} - {Path}", category, path);
+                    //_logger.LogInformation("Added directory: {Category} - {Path}", category, path); // コメントアウト
                 }
             }
         }
@@ -99,11 +99,11 @@ namespace Pivot.ViewModels
             {
                 await _settingsService.RemoveDirectoryAsync(category.Value, path);
                 GetDirectoryCollection(category.Value).Remove(path);
-                _logger.LogInformation("Removed directory: {Category} - {Path}", category.Value, path);
+                //_logger.LogInformation("Removed directory: {Category} - {Path}", category.Value, path); // コメントアウト
             }
             else
             {
-                _logger.LogWarning("Attempted to remove path not found in any category: {Path}", path);
+                //_logger.LogWarning("Attempted to remove path not found in any category: {Path}", path); // コメントアウト
             }
         }
 

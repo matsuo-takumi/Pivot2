@@ -18,6 +18,7 @@ using Microsoft.UI.Composition.SystemBackdrops; // SystemBackdropを使用する
 using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
 using Pivot.Messages; // BackdropTypeChangedMessageを使用するために追加
 using Pivot.Services; // SettingsServiceを使用するために追加
+using Pivot.Models; // BackdropType moved here
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -27,7 +28,7 @@ namespace Pivot
     /// <summary>
     /// An empty window that can be used on its own or navigated to within a Frame.
     /// </summary>
-    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>
+    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<NavigationRequestMessage>
     {
         public MainViewModel ViewModel { get; }
         private readonly IMessenger _messenger;
@@ -48,31 +49,29 @@ namespace Pivot
             
             Title = "Pivot - AI Asset Foundation App";
 
+            // カスタムタイトルバーの設定
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(AppTitleBar); // MainWindow.xamlで定義したGridをタイトルバーとして設定
+
             // SettingsServiceから初期のBackdropTypeを取得して設定
             SetSystemBackdrop(_settingsService.GetBackdropType());
 
             // BackdropTypeChangedMessageを購読
             _messenger.Register<BackdropTypeChangedMessage>(this);
 
-            // 初期ナビゲーション
-            AssetFrame.Navigate(typeof(Views.AssetPage), null, new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight });
-            ImageFrame.Navigate(typeof(Views.ImagePage), null, new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight });
-            ProjectFrame.Navigate(typeof(Views.ProjectPage), null, new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight });
-            PreferenceFrame.Navigate(typeof(Views.PreferencePage), null, new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight });
+            // 初期ナビゲーション（ViewModelからの要求でも遷移可能）
+            NavigateTo(NavigationRegion.Asset);
+            NavigateTo(NavigationRegion.Image);
+            NavigateTo(NavigationRegion.Project);
+            NavigateTo(NavigationRegion.Preference);
+
+            // ナビゲーション要求購読
+            _messenger.Register<NavigationRequestMessage>(this);
         }
 
         public void Receive(BackdropTypeChangedMessage message)
         {
             SetSystemBackdrop(message.Value);
-        }
-
-        // 背景のタイプを定義するEnum
-        public enum BackdropType
-        {
-            None,
-            Mica,
-            AcrylicThin,
-            MicaAlt
         }
 
         public void SetSystemBackdrop(BackdropType type)
@@ -104,19 +103,44 @@ namespace Pivot
                 switch (selectedPivotItem.Header as string)
                 {
                     case "Asset":
-                        AssetFrame.Navigate(typeof(Views.AssetPage), null, new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight });
+                        NavigateTo(NavigationRegion.Asset);
                         break;
                     case "Image":
-                        ImageFrame.Navigate(typeof(Views.ImagePage), null, new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight });
+                        NavigateTo(NavigationRegion.Image);
                         break;
                     case "Project":
-                        ProjectFrame.Navigate(typeof(Views.ProjectPage), null, new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight });
+                        NavigateTo(NavigationRegion.Project);
                         break;
                     case "Preference":
-                        PreferenceFrame.Navigate(typeof(Views.PreferencePage), null, new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight });
+                        NavigateTo(NavigationRegion.Preference);
                         break;
                 }
             }
+        }
+
+        private void NavigateTo(NavigationRegion region)
+        {
+            var transition = new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight };
+            switch (region)
+            {
+                case NavigationRegion.Asset:
+                    AssetFrame.Navigate(typeof(Views.AssetPage), null, transition);
+                    break;
+                case NavigationRegion.Image:
+                    ImageFrame.Navigate(typeof(Views.ImagePage), null, transition);
+                    break;
+                case NavigationRegion.Project:
+                    ProjectFrame.Navigate(typeof(Views.ProjectPage), null, transition);
+                    break;
+                case NavigationRegion.Preference:
+                    PreferenceFrame.Navigate(typeof(Views.PreferencePage), null, transition);
+                    break;
+            }
+        }
+
+        public void Receive(NavigationRequestMessage message)
+        {
+            NavigateTo(message.Value);
         }
     }
 }

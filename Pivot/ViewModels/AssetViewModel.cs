@@ -12,7 +12,7 @@ namespace Pivot.ViewModels
 {
     public class AssetViewModel : ObservableObject
     {
-        private readonly ILogger<AssetViewModel> _logger;
+        //private readonly ILogger<AssetViewModel> _logger; // コメントアウト
         private readonly MetadataService _metadataService;
         private readonly SettingsService _settingsService;
 
@@ -21,11 +21,11 @@ namespace Pivot.ViewModels
         public IAsyncRelayCommand LoadAssetsCommand { get; }
 
         public AssetViewModel(
-            ILogger<AssetViewModel> logger,
+            //ILogger<AssetViewModel> logger, // コメントアウト
             MetadataService metadataService,
             SettingsService settingsService)
         {
-            _logger = logger;
+            //_logger = logger; // コメントアウト
             _metadataService = metadataService;
             _settingsService = settingsService;
 

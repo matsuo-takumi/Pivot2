@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.ViewModels;
+using Microsoft.UI.Xaml; // for RoutedEventHandler
+using Microsoft.UI.Xaml.Media.Animation; // for SuppressNavigationTransitionInfo
 
 namespace Pivot.Views
 {
@@ -9,11 +11,23 @@ namespace Pivot.Views
         public PreferencePage()
         {
             this.InitializeComponent();
-            this.DataContext = App.Current.Services.GetRequiredService<DirectoryViewModel>();
+            this.DataContext = App.Current.Services.GetRequiredService<MainViewModel>(); // MainViewModel に修正
 
-            // 初期選択
-            nvSample.SelectedItem = ThemeItem;
-            contentFrame.Navigate(typeof(ThemePage)); // ThemePageへナビゲーション
+            // 初回表示時に確実に初期化
+            this.Loaded += PreferencePage_Loaded;
+        }
+
+        private void PreferencePage_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (nvSample.SelectedItem == null)
+            {
+                nvSample.SelectedItem = ThemeItem;
+            }
+
+            if (contentFrame.Content == null)
+            {
+                contentFrame.Navigate(typeof(ThemePage), null, new SuppressNavigationTransitionInfo());
+            }
         }
 
         private void NavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -27,7 +41,7 @@ namespace Pivot.Views
                 switch (selectedItem.Tag?.ToString())
                 {
                     case "ThemePage":
-                        contentFrame.Navigate(typeof(ThemePage)); // ThemePageへナビゲーション
+                        contentFrame.Navigate(typeof(ThemePage), null, new SuppressNavigationTransitionInfo()); // アニメーション無効化
                         break;
                     // 他のメニュー項目に対するナビゲーションロジック
                 }

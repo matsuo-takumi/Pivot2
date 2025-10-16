@@ -25,6 +25,8 @@ using Microsoft.Extensions.Logging; // ILoggerを使用するために追加
 using Pivot.Services; // サービスを使用するために追加
 using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
 using Pivot.Messages; // ThemeChangedMessageを使用するために追加
+using Pivot.Messages; // AccentColorChangedMessageを使用するために追加
+using Windows.UI; // Colorを使用するために追加
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -34,7 +36,7 @@ namespace Pivot
     /// <summary>
     /// Provides application-specific behavior to supplement the default Application class.
     /// </summary>
-    public partial class App : Application, IRecipient<ThemeChangedMessage>
+    public partial class App : Application, IRecipient<ThemeChangedMessage>, IRecipient<AccentColorChangedMessage>
     {
         private Window? _window;
 
@@ -50,6 +52,7 @@ namespace Pivot
         /// </summary>
         public IServiceProvider Services { get; }
         private IMessenger _messenger; // IMessengerを追加
+        private SettingsService _settingsService; // SettingsServiceを追加
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -62,6 +65,8 @@ namespace Pivot
             Services = ConfigureServices();
             _messenger = Services.GetRequiredService<IMessenger>();
             _messenger.Register<ThemeChangedMessage>(this); // テーマ変更メッセージを購読
+            _messenger.Register<AccentColorChangedMessage>(this); // AccentColorChangedMessageを購読
+            _settingsService = Services.GetRequiredService<SettingsService>(); // SettingsServiceを取得
         }
 
         private static IServiceProvider ConfigureServices()
@@ -88,6 +93,8 @@ namespace Pivot
                     services.AddSingleton<MainViewModel>();
                     services.AddSingleton<DirectoryViewModel>(); // DirectoryViewModelを追加
                     services.AddSingleton<ThemeViewModel>(); // ThemeViewModelを追加
+                    services.AddSingleton<AssetViewModel>(); // AssetViewModelの追加
+                    services.AddSingleton<ImageViewModel>(); // ImageViewModelの追加
 
                     // Services
                     services.AddSingleton<MetadataService>(); 
@@ -110,11 +117,22 @@ namespace Pivot
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
             _window = new MainWindow();
-            // SettingsServiceから初期テーマを取得して設定
             var settingsService = Services.GetRequiredService<SettingsService>();
-            if (_window?.Content is FrameworkElement rootElement)
+            
+            // rootElement を確実に取得
+            FrameworkElement? rootElement = _window?.Content as FrameworkElement;
+
+            if (rootElement != null)
             {
                 rootElement.RequestedTheme = settingsService.GetTheme();
+            }
+            // 初期アクセントカラーを適用
+            ApplyAccentColor(settingsService.GetAccentColor());
+
+            // 初期タイトルバーボタンの色を更新
+            if (rootElement != null) // rootElementがnullでないことを確認
+            {
+                UpdateTitleBarColors(rootElement.RequestedTheme); // ここでテーマを渡す
             }
 
             _window.Activate();
@@ -133,6 +151,103 @@ namespace Pivot
             if (_window?.Content is FrameworkElement rootElement)
             {
                 rootElement.RequestedTheme = message.Value;
+                UpdateTitleBarColors(message.Value); // テーマ変更時にタイトルバーの色を更新
+            }
+        }
+
+        public void Receive(AccentColorChangedMessage message)
+        {
+            ApplyAccentColor(message.Value);
+            if (_window?.Content is FrameworkElement rootElement) // ここでキャスト
+            {            
+                UpdateTitleBarColors(rootElement.ActualTheme); // アクセントカラー変更時にタイトルバーの色を更新
+            }
+        }
+
+        private void ApplyAccentColor(Color color)
+        {
+            // アクセントカラーをシステムリソースに設定
+            Application.Current.Resources["SystemAccentColor"] = color;
+            Application.Current.Resources["SystemAccentColorLight1"] = ToLight(color, 0.2f);
+            Application.Current.Resources["SystemAccentColorLight2"] = ToLight(color, 0.4f);
+            Application.Current.Resources["SystemAccentColorLight3"] = ToLight(color, 0.6f);
+            Application.Current.Resources["SystemAccentColorDark1"] = ToDark(color, 0.2f);
+            Application.Current.Resources["SystemAccentColorDark2"] = ToDark(color, 0.4f);
+            Application.Current.Resources["SystemAccentColorDark3"] = ToDark(color, 0.6f);
+
+            // DynamicAccentBrushを更新
+            if (Application.Current.Resources.TryGetValue("SystemAccentColor", out object systemAccentColorObj) &&
+                systemAccentColorObj is Color systemAccentColor)
+            {
+                var dynamicAccentBrush = new SolidColorBrush(systemAccentColor);
+                Application.Current.Resources["SystemControlForegroundAccentBrush"] = dynamicAccentBrush;
+                Application.Current.Resources["SystemControlHighlightAccentBrush"] = dynamicAccentBrush;
+                Application.Current.Resources["SystemControlBackgroundAccentBrush"] = dynamicAccentBrush;
+                Application.Current.Resources["AccentTextFillColorPrimaryBrush"] = dynamicAccentBrush;
+                Application.Current.Resources["AccentTextFillColorSecondaryBrush"] = dynamicAccentBrush;
+                Application.Current.Resources["AccentTextFillColorTertiaryBrush"] = dynamicAccentBrush;
+                Application.Current.Resources["AccentControlBackgroundAccentBrush"] = dynamicAccentBrush;
+            }
+        }
+
+        private Color ToLight(Color color, float factor)
+        {
+            float red = color.R;
+            float green = color.G;
+            float blue = color.B;
+
+            red = Math.Min(255, red + (255 - red) * factor);
+            green = Math.Min(255, green + (255 - green) * factor);
+            blue = Math.Min(255, blue + (255 - blue) * factor);
+
+            return Color.FromArgb(color.A, (byte)red, (byte)green, (byte)blue);
+        }
+
+        private Color ToDark(Color color, float factor)
+        {
+            float red = color.R;
+            float green = color.G;
+            float blue = color.B;
+
+            red = Math.Max(0, red - red * factor);
+            green = Math.Max(0, green - green * factor);
+            blue = Math.Max(0, blue - blue * factor);
+
+            return Color.FromArgb(color.A, (byte)red, (byte)green, (byte)blue);
+        }
+
+        // タイトルバーボタンの色を更新するメソッド
+        private void UpdateTitleBarColors(ElementTheme theme)
+        {
+            if (MainWindow == null) return;
+
+            var titleBar = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WinRT.Interop.WindowNative.GetWindowHandle(MainWindow)));
+
+            if (titleBar.TitleBar != null)
+            {
+                // DarkとLightテーマに基づいて色を設定
+                if (theme == ElementTheme.Dark)
+                {
+                    titleBar.TitleBar.ForegroundColor = Microsoft.UI.Colors.White;
+                    titleBar.TitleBar.ButtonForegroundColor = Microsoft.UI.Colors.White;
+                    titleBar.TitleBar.ButtonHoverForegroundColor = Microsoft.UI.Colors.White;
+                    titleBar.TitleBar.ButtonPressedForegroundColor = Microsoft.UI.Colors.White;
+                    titleBar.TitleBar.BackgroundColor = Microsoft.UI.Colors.Transparent;
+                    titleBar.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+                    titleBar.TitleBar.ButtonHoverBackgroundColor = Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF); // 半透明の白
+                    titleBar.TitleBar.ButtonPressedBackgroundColor = Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF); // さらに半透明の白
+                }
+                else // Light theme
+                {
+                    titleBar.TitleBar.ForegroundColor = Microsoft.UI.Colors.Black;
+                    titleBar.TitleBar.ButtonForegroundColor = Microsoft.UI.Colors.Black;
+                    titleBar.TitleBar.ButtonHoverForegroundColor = Microsoft.UI.Colors.Black;
+                    titleBar.TitleBar.ButtonPressedForegroundColor = Microsoft.UI.Colors.Black;
+                    titleBar.TitleBar.BackgroundColor = Microsoft.UI.Colors.Transparent;
+                    titleBar.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+                    titleBar.TitleBar.ButtonHoverBackgroundColor = Color.FromArgb(0x20, 0x00, 0x00, 0x00); // 半透明の黒
+                    titleBar.TitleBar.ButtonPressedBackgroundColor = Color.FromArgb(0x40, 0x00, 0x00, 0x00); // さらに半透明の黒
+                }
             }
         }
     }

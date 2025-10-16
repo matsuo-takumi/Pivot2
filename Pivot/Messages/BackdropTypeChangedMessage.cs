@@ -1,5 +1,5 @@
 using CommunityToolkit.Mvvm.Messaging.Messages;
-using static Pivot.MainWindow;
+using Pivot.Models; // BackdropType moved to Models
 
 namespace Pivot.Messages
 {
