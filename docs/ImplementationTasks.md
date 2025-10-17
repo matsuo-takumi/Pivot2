@@ -8,14 +8,14 @@
 **Blockers:** None  
 **Related Tickets:** [#1](https://github.com/org/repo/issues/1) (例)
 
-- [ ] リポジトリ構造の初期化 (`docs/`, `logs/`, `tips/` フォルダと必須ファイルの作成)  
-- [ ] WinUI 3プロジェクトの作成と基本構成  
-- [ ] .NET 8環境のセットアップ  
-- [ ] MVVMフレームワークの導入 (Community Toolkit MVVMなど)  
-- [ ] 依存性注入 (DI) コンテナのセットアップ (`Microsoft.Extensions.DependencyInjection`)  
-- [ ] Serilogによるログ出力の構成  
-- [ ] SQLite/LiteDBの初期設定と接続確立  
-- [ ] プロジェクト全体の命名規則とフォルダ構成の確立
+- [x] リポジトリ構造の初期化 (`docs/`, `logs/`, `tips/` フォルダと必須ファイルの作成)  
+- [x] WinUI 3プロジェクトの作成と基本構成  
+- [x] .NET 8環境のセットアップ  
+- [x] MVVMフレームワークの導入 (Community Toolkit MVVMなど)  
+- [x] 依存性注入 (DI) コンテナのセットアップ (`Microsoft.Extensions.DependencyInjection`)  
+- [x] Serilogによるログ出力の構成  
+- [x] SQLite/LiteDBの初期設定と接続確立  
+- [x] プロジェクト全体の命名規則とフォルダ構成の確立
 
 ---
 
@@ -24,9 +24,9 @@
 **Blockers:** データモデルの最終確定  
 **Related Tickets:** [#5](https://github.com/org/repo/issues/5) (例)
 
-- [ ] `MetadataService`の基本実装 (CRUD操作、トランザクション管理)  
-- [ ] `Files`テーブルのORMモデルとDB操作実装  
-- [ ] `Images`テーブルのORMモデルとDB操作実装  
+- [x] `MetadataService`の基本実装 (CRUD操作、トランザクション管理)  
+- [x] `Files`テーブルのORMモデルとDB操作実装  
+- [x] `Images`テーブルのORMモデルとDB操作実装  
 - [ ] `Projects`テーブルのORMモデルとDB操作実装  
 - [ ] `Assets`テーブルのORMモデルとDB操作実装  
 - [ ] `Scripts`テーブルのORMモデルとDB操作実装  
@@ -43,12 +43,12 @@
 **Blockers:** Figmaワイヤーフレームの確定  
 **Related Tickets:** [#10](https://github.com/org/repo/issues/10) (例)
 
-- [ ] `MainViewModel`と`NavigationView`の基本実装 (タブ切り替え機能)  
+- [x] `MainViewModel`と`NavigationView`の基本実装 (タブ切り替え機能)  
 - [ ] **Assetモジュール**: `AssetViewModel`とAsset一覧表示UIの実装  
 - [ ] **Imageモジュール**: `ImageViewModel`とImage表示UIの実装  
 - [ ] **Projectモジュール**: `ProjectViewModel`とプロジェクト一覧表示UIの基本実装  
-- [ ] **Preferenceモジュール**: `PreferenceViewModel`と設定UIの基本実装  
-- [ ] Fluent DesignおよびDark Modeのサポート  
+- [x] **Preferenceモジュール**: `PreferenceViewModel`と設定UIの基本実装  
+- [x] Fluent DesignおよびDark Modeのサポート  
 - [ ] Undo-Redo機能のサポート
 
 ---

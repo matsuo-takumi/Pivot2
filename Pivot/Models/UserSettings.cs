@@ -11,5 +11,7 @@ namespace Pivot.Models
         public List<string> ProjectDirectories { get; set; } = new List<string>();
         public ElementTheme AppTheme { get; set; } = ElementTheme.Default; // デフォルトはシステム設定に従う
         public BackdropType AppBackdropType { get; set; } = BackdropType.Mica; // デフォルトはMica
+
+        // (カスタムAcrylic/Luminosity設定は削除)
     }
 }

@@ -15,8 +15,9 @@ namespace Pivot.Converters
                 {
                     BackdropType.None => "なし",
                     BackdropType.Mica => "Mica",
-                    BackdropType.AcrylicThin => "Acrylic Thin",
                     BackdropType.MicaAlt => "Mica Alt",
+                    BackdropType.Acrylic => "Acrylic",
+                    BackdropType.AcrylicThin => "Acrylic Thin",
                     _ => value.ToString()
                 };
             }

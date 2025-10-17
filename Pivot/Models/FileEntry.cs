@@ -1,18 +1,16 @@
-using SQLite;
 using System;
+using LiteDB; // LiteDB を使用するために追加
 
 namespace Pivot.Models
 {
     public class FileEntry
     {
-        [PrimaryKey, AutoIncrement]
-        public int Id { get; set; }
-        [Indexed]
+        [BsonId]
+        public int Id { get; set; } // LiteDB のプライマリキー
         public string Path { get; set; }
         public string Type { get; set; }
         public long Size { get; set; }
         public DateTime UpdatedAt { get; set; }
-        [Indexed]
         public string Hash { get; set; }
 
         public FileEntry()

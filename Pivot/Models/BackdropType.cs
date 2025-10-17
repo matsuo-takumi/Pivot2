@@ -4,8 +4,9 @@ namespace Pivot.Models
     {
         None,
         Mica,
-        AcrylicThin,
-        MicaAlt
+        MicaAlt,
+        Acrylic,
+        AcrylicThin
     }
 }
 

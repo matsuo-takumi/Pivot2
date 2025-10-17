@@ -81,6 +81,8 @@ namespace Pivot.Services
             await SaveSettingsAsync();
         }
 
+        // (カスタムAcrylic/Luminosity メソッドは削除)
+
         private UserSettings LoadSettings()
         {
             if (File.Exists(_settingsFilePath))

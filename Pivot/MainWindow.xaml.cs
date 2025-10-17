@@ -19,6 +19,11 @@ using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追�
 using Pivot.Messages; // BackdropTypeChangedMessageを使用するために追加
 using Pivot.Services; // SettingsServiceを使用するために追加
 using Pivot.Models; // BackdropType moved here
+using System.Runtime.InteropServices; // Interopを使用するために追加
+using WinRT; // WinRT.As<T>()を使用するために追加
+using Microsoft.UI.Composition; // ICompositionSupportsSystemBackdropを使用するために追加
+using Microsoft.UI.Dispatching; // DispatcherQueueを使用するために追加
+using Microsoft.UI; // Colors
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -30,22 +35,37 @@ namespace Pivot
     /// </summary>
     public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<NavigationRequestMessage>
     {
+        // Provide an implicit conversion so generated binding code can pass 'this' (MainWindow)
+        // to APIs that expect a FrameworkElement (the generated code calls SetConverterLookupRoot(this)).
+        public static implicit operator Microsoft.UI.Xaml.FrameworkElement(MainWindow window)
+        {
+            return window?.Content as Microsoft.UI.Xaml.FrameworkElement;
+        }
         public MainViewModel ViewModel { get; }
+        public ThemeViewModel ThemeViewModel { get; }
         private readonly IMessenger _messenger;
         private readonly SettingsService _settingsService;
+
+        // Backdrop Controllers
+        private DesktopAcrylicController? _acrylicController; // Null許容型に変更
+        private MicaController? _micaController; // MicaControllerも追加
+        private SystemBackdropConfiguration? _configurationSource; // Null許容型に変更
 
         public MainWindow()
         {
             InitializeComponent();
             ViewModel = App.Current.Services.GetRequiredService<MainViewModel>();
+            ThemeViewModel = App.Current.Services.GetRequiredService<ThemeViewModel>();
             _messenger = App.Current.Services.GetRequiredService<IMessenger>();
             _settingsService = App.Current.Services.GetRequiredService<SettingsService>();
 
             var rootElement = this.Content as FrameworkElement;
             if (rootElement != null)
             {
+                // Set DataContext to MainViewModel for general UI
                 rootElement.DataContext = ViewModel;
             }
+            // Also expose ThemeViewModel as a code-behind property for x:Bind in XAML
             
             Title = "Pivot - AI Asset Foundation App";
 
@@ -76,23 +96,146 @@ namespace Pivot
 
         public void SetSystemBackdrop(BackdropType type)
         {
+            // Dispose any existing controllers
+            if (_micaController != null)
+            {
+                _micaController.Dispose();
+                _micaController = null;
+            }
+            if (_acrylicController != null)
+            {
+                _acrylicController.Dispose();
+                _acrylicController = null;
+            }
+
+            this.Activated -= Window_Activated; // イベントハンドラの重複登録を避ける
+            this.Closed -= Window_Closed;
+            if (Content is FrameworkElement rootElement) // nullチェックを追加
+            {
+                rootElement.ActualThemeChanged -= Window_ThemeChanged;
+            }
+            
+            _configurationSource = null;
+
+            if (type == BackdropType.None)
+            {
+                SystemBackdrop = null;
+                return;
+            }
+
+            DispatcherQueue.EnsureSystemDispatcherQueue();
+
+            _configurationSource = new SystemBackdropConfiguration();
+            Activated += Window_Activated;
+            Closed += Window_Closed;
+            if (Content is FrameworkElement rootElement2) // nullチェックを追加
+            {
+                rootElement2.ActualThemeChanged += Window_ThemeChanged;
+            }
+
+            _configurationSource.IsInputActive = true;
+            SetConfigurationSourceTheme();
+
             switch (type)
             {
                 case BackdropType.Mica:
-                    SystemBackdrop = new MicaBackdrop();
-                    break;
-                case BackdropType.AcrylicThin:
-                    // TODO: AcrylicThinの実装
-                    SystemBackdrop = new DesktopAcrylicBackdrop();
+                    if (MicaController.IsSupported())
+                    {
+                        _micaController = new MicaController();
+                        _micaController.Kind = MicaKind.Base;
+                        _micaController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
+                        _micaController.SetSystemBackdropConfiguration(_configurationSource);
+                        SystemBackdrop = null;
+                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                    }
                     break;
                 case BackdropType.MicaAlt:
-                    // TODO: Mica Altの実装
-                    SystemBackdrop = new MicaBackdrop() { Kind = MicaKind.BaseAlt };
+                    if (MicaController.IsSupported())
+                    {
+                        _micaController = new MicaController();
+                        _micaController.Kind = MicaKind.BaseAlt;
+                        _micaController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
+                        _micaController.SetSystemBackdropConfiguration(_configurationSource);
+                        SystemBackdrop = null;
+                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                    }
                     break;
-                case BackdropType.None:
+                case BackdropType.AcrylicThin:
+                    if (DesktopAcrylicController.IsSupported())
+                    {
+                        _acrylicController = new DesktopAcrylicController();
+                        _acrylicController.Kind = DesktopAcrylicKind.Thin;
+                        _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
+                        _acrylicController.SetSystemBackdropConfiguration(_configurationSource);
+                        SystemBackdrop = null;
+                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                    }
+                    break;
+                case BackdropType.Acrylic:
+                    if (DesktopAcrylicController.IsSupported())
+                    {
+                        _acrylicController = new DesktopAcrylicController();
+                        _acrylicController.Kind = DesktopAcrylicKind.Base;
+                        _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
+                        _acrylicController.SetSystemBackdropConfiguration(_configurationSource);
+                        SystemBackdrop = null;
+                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                    }
+                    break;
+                // custom types removed
                 default:
                     SystemBackdrop = null;
+                    if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
                     break;
+            }
+        }
+
+        private void Window_Activated(object sender, WindowActivatedEventArgs args)
+        {
+            if (_configurationSource != null)
+            {
+                _configurationSource.IsInputActive = args.WindowActivationState != WindowActivationState.Deactivated;
+            }
+        }
+
+        private void Window_Closed(object sender, WindowEventArgs args)
+        {
+            if (_acrylicController != null)
+            {
+                _acrylicController.Dispose();
+                _acrylicController = null;
+            }
+            if (_micaController != null)
+            {
+                _micaController.Dispose();
+                _micaController = null;
+            }
+            Activated -= Window_Activated;
+            if (Content is FrameworkElement rootElement) // nullチェックを追加
+            {
+                rootElement.ActualThemeChanged -= Window_ThemeChanged;
+            }
+            _configurationSource = null;
+        }
+
+        private void Window_ThemeChanged(FrameworkElement sender, object args)
+        {
+            if (_configurationSource != null)
+            {
+                SetConfigurationSourceTheme();
+            }
+        }
+
+        private void SetConfigurationSourceTheme()
+        {
+            if (_configurationSource != null && Content is FrameworkElement rootElement) // nullチェックを追加
+            {
+                switch (rootElement.ActualTheme)
+                {
+                    case ElementTheme.Dark: _configurationSource.Theme = SystemBackdropTheme.Dark; break;
+                    case ElementTheme.Light: _configurationSource.Theme = SystemBackdropTheme.Light; break;
+                    case ElementTheme.Default: _configurationSource.Theme = SystemBackdropTheme.Default; break;
+                }
             }
         }
 
@@ -141,6 +284,18 @@ namespace Pivot
         public void Receive(NavigationRequestMessage message)
         {
             NavigateTo(message.Value);
+        }
+
+        private Brush? GetResourceBrush(string key)
+        {
+            if (this.Content is FrameworkElement fe)
+            {
+                if (fe.Resources != null && fe.Resources.ContainsKey(key))
+                {
+                    return fe.Resources[key] as Brush;
+                }
+            }
+            return null;
         }
     }
 }

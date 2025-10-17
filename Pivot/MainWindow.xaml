@@ -8,7 +8,9 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     Title="Pivot"
-    xmlns:viewmodels="using:Pivot.ViewModels">
+    xmlns:viewmodels="using:Pivot.ViewModels"
+    xmlns:media="using:Microsoft.UI.Xaml.Media"
+    xmlns:converters="using:Pivot.Converters">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -24,7 +26,7 @@
                        Style="{StaticResource CaptionTextBlockStyle}" />
         </Grid>
         
-        <Grid x:Name="Root" Grid.Row="1">
+        <Grid x:Name="Root" Grid.Row="1" Background="Transparent">
             <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
                 <PivotItem Header="Asset">
                     <Frame x:Name="AssetFrame" Background="Transparent"/>
