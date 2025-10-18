@@ -58,6 +58,20 @@ namespace Pivot.Services
                 assets.EnsureIndex("Path", true);
                 assets.EnsureIndex("Hash", false);
 
+                // Scripts コレクション初期化
+                var scripts = Database.GetCollection<ScriptEntry>();
+                scripts.EnsureIndex("Path", true);  // Path はユニークインデックス
+                scripts.EnsureIndex("Language", false);  // Language は非ユニークインデックス
+                scripts.EnsureIndex("TargetApplication", false);  // TargetApplication は非ユニークインデックス
+                scripts.EnsureIndex("Category", false);  // Category は非ユニークインデックス
+
+                // UnrealPresets コレクション初期化
+                var presets = Database.GetCollection<UnrealPresetEntry>();
+                presets.EnsureIndex("Name", false);  // Name は非ユニークインデックス
+                presets.EnsureIndex("UprojectPath", false);  // UprojectPath は非ユニークインデックス
+                presets.EnsureIndex("Category", false);  // Category は非ユニークインデックス
+                presets.EnsureIndex("ProjectName", false);  // ProjectName は非ユニークインデックス
+
                 _logger.LogInformation("Database initialized and tables created.");
             }
             catch (Exception ex)
@@ -336,5 +350,285 @@ namespace Pivot.Services
             var assets = Database.GetCollection<AssetEntry>();
             await Task.Run(() => assets.Delete(id));
         }
+
+        // ScriptEntry の追加
+        public async Task AddScriptEntryAsync(ScriptEntry scriptEntry)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            await Task.Run(() => scripts.Insert(scriptEntry));
+        }
+
+        // ScriptEntry を ID で取得
+        public async Task<ScriptEntry?> GetScriptEntryByIdAsync(int id)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            return await Task.Run(() => scripts.FindById(id));
+        }
+
+        // ScriptEntry を Path で取得
+        public async Task<ScriptEntry?> GetScriptEntryByPathAsync(string path)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            return await Task.Run(() => scripts.FindOne(s => s.Path == path));
+        }
+
+        // ScriptEntry を Name で取得
+        public async Task<ScriptEntry?> GetScriptEntryByNameAsync(string name)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            return await Task.Run(() => scripts.FindOne(s => s.Name == name));
+        }
+
+        // 特定の言語のスクリプトをすべて取得
+        public async Task<List<ScriptEntry>> GetScriptsByLanguageAsync(string language)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            return await Task.Run(() => scripts.Find(s => s.Language == language).ToList());
+        }
+
+        // 特定のアプリケーション対応のスクリプトをすべて取得
+        public async Task<List<ScriptEntry>> GetScriptsByApplicationAsync(string targetApplication)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            return await Task.Run(() => scripts.Find(s => s.TargetApplication == targetApplication).ToList());
+        }
+
+        // 特定のカテゴリのスクリプトをすべて取得
+        public async Task<List<ScriptEntry>> GetScriptsByCategoryAsync(string category)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            return await Task.Run(() => scripts.Find(s => s.Category == category).ToList());
+        }
+
+        // 有効なスクリプトをすべて取得
+        public async Task<List<ScriptEntry>> GetActiveScriptsAsync()
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            return await Task.Run(() => scripts.Find(s => s.IsActive == true).ToList());
+        }
+
+        // ScriptEntry をページングで取得
+        public async Task<List<ScriptEntry>> GetScriptEntriesAsync(int skip, int take)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            return await Task.Run(() => scripts.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+        }
+
+        // ScriptEntry を更新
+        public async Task UpdateScriptEntryAsync(ScriptEntry scriptEntry)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            await Task.Run(() => scripts.Update(scriptEntry));
+        }
+
+        // ScriptEntry を削除
+        public async Task DeleteScriptEntryAsync(int id)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            await Task.Run(() => scripts.Delete(id));
+        }
+
+        // Path で削除
+        public async Task DeleteScriptByPathAsync(string path)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            var script = await GetScriptEntryByPathAsync(path);
+            if (script != null)
+            {
+                await DeleteScriptEntryAsync(script.Id);
+            }
+        }
+
+        // Upsert: Path をキーに、存在すれば更新、なければ作成
+        public async Task<ScriptEntry> UpsertScriptByPathAsync(
+            string path,
+            string name,
+            string language,
+            string targetApplication,
+            string? codeContent = null,
+            string? description = null,
+            string? category = null,
+            string? version = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+
+            return await Task.Run(() =>
+            {
+                var existing = scripts.FindOne(s => s.Path == path);
+                if (existing != null)
+                {
+                    // 既存エントリを更新
+                    if (!string.IsNullOrEmpty(name)) existing.Name = name;
+                    if (!string.IsNullOrEmpty(language)) existing.Language = language;
+                    if (!string.IsNullOrEmpty(targetApplication)) existing.TargetApplication = targetApplication;
+                    if (codeContent != null) existing.CodeContent = codeContent;
+                    if (description != null) existing.Description = description;
+                    if (category != null) existing.Category = category;
+                    if (version != null) existing.Version = version;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    scripts.Update(existing);
+                    return existing;
+                }
+
+                // 新規作成
+                var newScript = new ScriptEntry
+                {
+                    Path = path,
+                    Name = name,
+                    Language = language,
+                    TargetApplication = targetApplication,
+                    CodeContent = codeContent ?? string.Empty,
+                    Description = description ?? string.Empty,
+                    Category = category ?? string.Empty,
+                    Version = version ?? "1.0.0",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                scripts.Insert(newScript);
+                return newScript;
+            });
+        }
+
+        // UnrealPresetEntry の追加
+        public async Task AddUnrealPresetEntryAsync(UnrealPresetEntry presetEntry)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            await Task.Run(() => presets.Insert(presetEntry));
+        }
+
+        // UnrealPresetEntry を ID で取得
+        public async Task<UnrealPresetEntry?> GetUnrealPresetEntryByIdAsync(int id)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            return await Task.Run(() => presets.FindById(id));
+        }
+
+        // UnrealPresetEntry を Name で取得
+        public async Task<UnrealPresetEntry?> GetUnrealPresetEntryByNameAsync(string name)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            return await Task.Run(() => presets.FindOne(p => p.Name == name));
+        }
+
+        // 特定の .uproject に関連するプリセットをすべて取得
+        public async Task<List<UnrealPresetEntry>> GetPresetsByUprojectAsync(string uprojectPath)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            return await Task.Run(() => presets.Find(p => p.UprojectPath == uprojectPath).ToList());
+        }
+
+        // 特定のカテゴリのプリセットをすべて取得
+        public async Task<List<UnrealPresetEntry>> GetPresetsByCategoryAsync(string category)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            return await Task.Run(() => presets.Find(p => p.Category == category).ToList());
+        }
+
+        // 有効なプリセットをすべて取得
+        public async Task<List<UnrealPresetEntry>> GetActiveUnrealPresetsAsync()
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            return await Task.Run(() => presets.Find(p => p.IsActive == true).ToList());
+        }
+
+        // UnrealPresetEntry をページングで取得
+        public async Task<List<UnrealPresetEntry>> GetUnrealPresetEntriesAsync(int skip, int take)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            return await Task.Run(() => presets.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+        }
+
+        // UnrealPresetEntry を更新
+        public async Task UpdateUnrealPresetEntryAsync(UnrealPresetEntry presetEntry)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            await Task.Run(() => presets.Update(presetEntry));
+        }
+
+        // UnrealPresetEntry を削除
+        public async Task DeleteUnrealPresetEntryAsync(int id)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            await Task.Run(() => presets.Delete(id));
+        }
+
+        // Upsert: Name をキーに、存在すれば更新、なければ作成
+        public async Task<UnrealPresetEntry> UpsertUnrealPresetByNameAsync(
+            string name,
+            string uprojectPath,
+            string projectName,
+            string? category = null,
+            string? description = null,
+            string? version = null,
+            string? engineVersion = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+
+            return await Task.Run(() =>
+            {
+                var existing = presets.FindOne(p => p.Name == name);
+                if (existing != null)
+                {
+                    // 既存エントリを更新
+                    if (!string.IsNullOrEmpty(uprojectPath)) existing.UprojectPath = uprojectPath;
+                    if (!string.IsNullOrEmpty(projectName)) existing.ProjectName = projectName;
+                    if (category != null) existing.Category = category;
+                    if (description != null) existing.Description = description;
+                    if (version != null) existing.Version = version;
+                    if (engineVersion != null) existing.EngineVersion = engineVersion;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    presets.Update(existing);
+                    return existing;
+                }
+
+                // 新規作成
+                var newPreset = new UnrealPresetEntry
+                {
+                    Name = name,
+                    UprojectPath = uprojectPath,
+                    ProjectName = projectName,
+                    Category = category ?? string.Empty,
+                    Description = description ?? string.Empty,
+                    Version = version ?? "1.0.0",
+                    EngineVersion = engineVersion ?? string.Empty,
+                    IsActive = true,
+                    IsCompatible = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                presets.Insert(newPreset);
+                return newPreset;
+            });
+        }
+
+        // TODO: Bridge通信用メソッド（後で実装予定）
+        // - プリセット同期メソッド（Unreal <-> Pivot）
+        // - プリセット適用メソッド（Unreal内での適用処理）
+        // - 依存関係解決メソッド（プリセット間の依存関係を検証）
+        // - プリセット検証メソッド（互換性チェック）
     }
 }
