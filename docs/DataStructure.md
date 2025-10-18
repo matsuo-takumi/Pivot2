@@ -418,6 +418,53 @@ BridgeSystem経由でUnreal Engineから受信するプリセット情報や、P
 }
 ```
 
+### 2.5 Preferences テーブル スキーマ
+
+**Preferencesテーブル詳細定義**
+
+Preferencesテーブルは、アプリケーション全体のユーザー設定をキーと値のペアで管理します。
+値はJSON文字列として保存され、複雑な設定にも対応できます。
+
+| フィールド名 | 型 | 説明 | 必須 | インデックス |
+|---|---|---|---|---|
+| Key | string (PK) | 設定を一意に識別するキー（例: "AppTheme", "AssetDirectories"） | ✓ | Primary Key |
+| Value | string | 設定の値（JSON文字列として保存） | ✓ | ✗ |
+
+**例: Preference エントリの JSON 表現**
+
+```json
+[
+  {
+    "Key": "AppTheme",
+    "Value": "Dark"
+  },
+  {
+    "Key": "AppBackdropType",
+    "Value": "MicaAlt"
+  },
+  {
+    "Key": "AssetDirectories",
+    "Value": "[\"C:\\\\Users\\\\User\\\\Assets\\\\Textures\",\"D:\\\\GameDev\\\\ProjectX\\\\Models\"]"
+  },
+  {
+    "Key": "ImageDirectories",
+    "Value": "[\"C:\\\\Users\\\\User\\\\Pictures\",\"E:\\\\References\"]"
+  },
+  {
+    "Key": "ProjectDirectories",
+    "Value": "[\"D:\\\\Projects\\\\MyGame\",\"F:\\\\Archives\"]"
+  },
+  {
+    "Key": "ViewportSettings.CameraSpeed",
+    "Value": "150.0"
+  },
+  {
+    "Key": "KeyBindings.AssetPage.Delete",
+    "Value": "{\"Key\":\"Delete\",\"Modifiers\":[]}"
+  }
+]
+```
+
 ## 3. Persistent vs. Transient Data
 
 - **永続データ (Persistent Data)**:

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
-using static Pivot.MainWindow; // BackdropTypeを使用するために追加
+// using static Pivot.MainWindow; // BackdropTypeを使用するために追加
 
 namespace Pivot.Models
 {

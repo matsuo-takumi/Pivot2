@@ -36,8 +36,22 @@ namespace Pivot.Services
 
             try
             {
+                // 1. DB ファイルが存在するかチェック（新規 vs 既存）
+                bool isNewDatabase = !File.Exists(_databasePath);
+                
+                if (isNewDatabase)
+                {
+                    _logger.LogInformation("Creating new database at: {DatabasePath}", _databasePath);
+                }
+                else
+                {
+                    _logger.LogInformation("Opening existing database at: {DatabasePath}", _databasePath);
+                }
+
+                // 2. Database をオープン
                 Database = new LiteDatabase(_databasePath);
 
+                // 3. コレクション初期化
                 var files = Database.GetCollection<FileEntry>();
                 files.EnsureIndex(f => f.Path, true); // Path はユニークインデックス
                 files.EnsureIndex(f => f.Hash, false); // Hash は非ユニークインデックス
@@ -72,11 +86,107 @@ namespace Pivot.Services
                 presets.EnsureIndex("Category", false);  // Category は非ユニークインデックス
                 presets.EnsureIndex("ProjectName", false);  // ProjectName は非ユニークインデックス
 
+                // Preferences コレクション初期化
+                var preferences = Database.GetCollection<PreferenceEntry>();
+                // Do NOT create unique index on 'Key' because 'Key' is BsonId (stored as _id)
+                // If an old incorrect index exists, drop it to avoid duplicate-null errors
+                try { preferences.DropIndex("Key"); } catch { /* ignore if not exists */ }
+
                 _logger.LogInformation("Database initialized and tables created.");
+
+                // 4. データベース修復処理（既存 DB の場合のみ）
+                if (!isNewDatabase)
+                {
+                    await Task.Run(() => RepairDatabase(preferences));
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to initialize database.");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 不正なエントリを削除してデータベースを修復します。
+        /// </summary>
+        private void RepairDatabase(ILiteCollection<PreferenceEntry> preferences)
+        {
+            try
+            {
+                _logger.LogInformation("Starting database repair check...");
+
+                // Access raw BSON collection by name to inspect _id values directly
+                var raw = Database.GetCollection<BsonDocument>(preferences.Name);
+
+                var allDocs = raw.FindAll().ToList();
+                _logger.LogDebug("RepairDatabase: total docs in collection '{Name}': {Count}", preferences.Name, allDocs.Count);
+
+                // Partition valid and invalid docs
+                var validDocs = new List<BsonDocument>();
+                var invalidDocs = new List<BsonDocument>();
+
+                foreach (var doc in allDocs)
+                {
+                    if (!doc.ContainsKey("_id") || doc["_id"].IsNull)
+                    {
+                        invalidDocs.Add(doc);
+                        continue;
+                    }
+
+                    var id = doc["_id"];
+
+                    // We expect keys to be strings (preference keys)
+                    if (id.IsString)
+                    {
+                        var s = id.AsString;
+                        if (string.IsNullOrWhiteSpace(s))
+                        {
+                            invalidDocs.Add(doc);
+                        }
+                        else
+                        {
+                            validDocs.Add(doc);
+                        }
+                    }
+                    else
+                    {
+                        // non-string _id is considered invalid for PreferenceEntry
+                        invalidDocs.Add(doc);
+                    }
+                }
+
+                if (invalidDocs.Count > 0)
+                {
+                    _logger.LogWarning("Found {InvalidEntryCount} invalid preference documents (null/missing/_id not string). Rebuilding collection without them...", invalidDocs.Count);
+
+                    // Rebuild collection: delete all and insert only valid docs
+                    raw.DeleteAll();
+
+                    // Ensure we reinsert valid docs (preserve other fields)
+                    foreach (var v in validDocs)
+                    {
+                        try
+                        {
+                            raw.Insert(v);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to reinsert preference document with _id: {Id}", v.ContainsKey("_id") ? v["_id"].ToString() : "(missing)");
+                        }
+                    }
+
+                    _logger.LogInformation("Database repair completed. Removed {InvalidEntryCount} invalid documents and reinserted {ValidCount} valid documents.", invalidDocs.Count, validDocs.Count);
+                }
+                else
+                {
+                    _logger.LogInformation("Database repair check completed. No invalid entries found.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Database repair failed. This may indicate a corrupted database. Consider backing up and deleting the database file at: {DatabasePath}", _databasePath);
+                // 修復失敗してもアプリケーションを継続する（例外は投げない）
             }
         }
 
@@ -623,6 +733,88 @@ namespace Pivot.Services
                 presets.Insert(newPreset);
                 return newPreset;
             });
+        }
+
+        // PreferenceEntry の追加または更新 (Upsert)
+        public async Task UpsertPreferenceAsync(string key, string value)
+        {
+            if (Database == null)
+            {
+                _logger.LogError("Database is not initialized when calling UpsertPreferenceAsync for key: {Key}", key);
+                throw new InvalidOperationException("Database is not initialized");
+            }
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                _logger.LogError("Attempted to upsert preference with null or empty key. Value: {Value}", value);
+                throw new ArgumentException("Preference key cannot be null or empty.", nameof(key));
+            }
+
+            _logger.LogDebug("Upserting preference: Key='{Key}', Value='{Value}'", key, value);
+
+            var preferences = Database.GetCollection<PreferenceEntry>();
+
+            // LiteDB.LiteException: Cannot insert duplicate key in unique index 'Key'. The duplicate value is 'null'.
+            // このエラーは、'Key'フィールドがnullまたは空文字列で、それが既にDBに存在する場合に発生する。
+            // ここでは例外発生時に DB 修復を試みてもう一度 Upsert を行います（1回のみリトライ）。
+            try
+            {
+                await Task.Run(() => preferences.Upsert(new PreferenceEntry(key, value)));
+            }
+            catch (LiteException lex)
+            {
+                _logger.LogWarning(lex, "LiteDB Upsert failed for key '{Key}'. Attempting repair and retry.", key);
+                try
+                {
+                    // Drop incorrect unique index if present
+                    try { Database.GetCollection<PreferenceEntry>().DropIndex("Key"); } catch { }
+                    RepairDatabase(preferences);
+                }
+                catch (Exception rex)
+                {
+                    _logger.LogError(rex, "RepairDatabase failed while handling Upsert failure for key '{Key}'.", key);
+                    throw;
+                }
+
+                // Retry once
+                try
+                {
+                    await Task.Run(() => preferences.Upsert(new PreferenceEntry(key, value)));
+                }
+                catch (Exception retryEx)
+                {
+                    _logger.LogError(retryEx, "Retry Upsert failed for key '{Key}'.", key);
+                    throw;
+                }
+            }
+
+            _logger.LogDebug("Successfully upserted preference: Key='{Key}'", key);
+        }
+
+        // PreferenceEntry をキーで取得
+        public async Task<PreferenceEntry?> GetPreferenceAsync(string key)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var preferences = Database.GetCollection<PreferenceEntry>();
+
+            return await Task.Run(() => preferences.FindById(key));
+        }
+
+        // 全ての PreferenceEntry を取得
+        public async Task<List<PreferenceEntry>> GetAllPreferencesAsync()
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var preferences = Database.GetCollection<PreferenceEntry>();
+
+            return await Task.Run(() => preferences.FindAll().ToList());
+        }
+
+        // PreferenceEntry をキーで削除
+        public async Task DeletePreferenceAsync(string key)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var preferences = Database.GetCollection<PreferenceEntry>();
+
+            await Task.Run(() => preferences.Delete(key));
         }
 
         // TODO: Bridge通信用メソッド（後で実装予定）

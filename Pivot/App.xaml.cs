@@ -144,6 +144,35 @@ namespace Pivot
             // データベースの非同期初期化
             var metadataService = Services.GetRequiredService<MetadataService>();
             _ = metadataService.InitializeDatabase(); // Waitせずに起動継続
+
+            // 設定の非同期初期化（UIスレッドをブロックしない）
+            var messenger = Services.GetRequiredService<IMessenger>();
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    await settingsService.InitializeAsync();
+
+                    var theme = settingsService.GetTheme();
+                    var backdrop = settingsService.GetBackdropType();
+
+                    _window?.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (_window?.Content is FrameworkElement re)
+                        {
+                            re.RequestedTheme = theme;
+                            UpdateTitleBarColors(theme);
+                        }
+                        // メッセンジャー経由で他コンポーネントへ反映
+                        messenger.Send(new ThemeChangedMessage(theme));
+                        messenger.Send(new BackdropTypeChangedMessage(backdrop));
+                    });
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Settings initialization failed.");
+                }
+            });
         }
 
         public void Receive(ThemeChangedMessage message)

@@ -24,7 +24,7 @@
             
             <!-- Add Button -->
             <Button Content="+" 
-                    Command="{x:Bind ViewModel.SelectAssetDirectoryCommand}" 
+                    Command="{Binding SelectAssetDirectoryCommand}" 
                     Width="40" 
                     Height="40"
                     HorizontalAlignment="Left"
@@ -33,7 +33,7 @@
                     Padding="0"/>
             
             <!-- Directory List -->
-            <ItemsControl ItemsSource="{x:Bind ViewModel.AssetDirectories, Mode=OneWay}">
+            <ItemsControl ItemsSource="{Binding AssetDirectories}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Spacing="4"/>
@@ -72,7 +72,7 @@
             
             <!-- Add Button -->
             <Button Content="+" 
-                    Command="{x:Bind ViewModel.SelectImageDirectoryCommand}" 
+                    Command="{Binding SelectImageDirectoryCommand}" 
                     Width="40" 
                     Height="40"
                     HorizontalAlignment="Left"
@@ -81,7 +81,7 @@
                     Padding="0"/>
             
             <!-- Directory List -->
-            <ItemsControl ItemsSource="{x:Bind ViewModel.ImageDirectories, Mode=OneWay}">
+            <ItemsControl ItemsSource="{Binding ImageDirectories}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Spacing="4"/>
@@ -120,7 +120,7 @@
             
             <!-- Add Button -->
             <Button Content="+" 
-                    Command="{x:Bind ViewModel.SelectProjectDirectoryCommand}" 
+                    Command="{Binding SelectProjectDirectoryCommand}" 
                     Width="40" 
                     Height="40"
                     HorizontalAlignment="Left"
@@ -129,7 +129,7 @@
                     Padding="0"/>
             
             <!-- Directory List -->
-            <ItemsControl ItemsSource="{x:Bind ViewModel.ProjectDirectories, Mode=OneWay}">
+            <ItemsControl ItemsSource="{Binding ProjectDirectories}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Spacing="4"/>

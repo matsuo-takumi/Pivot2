@@ -31,7 +31,7 @@
 - [x] `Assets`テーブルのORMモデルとDB操作実装  
 - [x] `Scripts`テーブルのORMモデルとDB操作実装  
 - [x] `UnrealPresets`テーブルのORMモデルとDB操作実装（骨子のみ、後で実装予定）  
-- [ ] `Preferences`テーブルのORMモデルとDB操作実装  
+- [x] `Preferences`テーブルのORMモデルとDB操作実装  
 - [x] `FileScannerService`の実装 (ルートフォルダ指定、再帰スキャン、SQLiteへのメタデータ登録)  
 - [x] `FileSystemWatcher`によるファイル変更検知と自動更新の実装  
 - [ ] スキャン結果のキャッシュ機構 (ハッシュ比較) 実装
