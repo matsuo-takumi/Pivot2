@@ -18,7 +18,7 @@
     IsBackEnabled="False"
     IsPaneOpen="{Binding IsPreferencePaneOpen, Mode=TwoWay}"
     SelectionChanged="NavigationView_SelectionChanged"
-    Header="Preference"
+    Header="{Binding ElementName=nvSample, Path=SelectedItem.(NavigationViewItem.Content)}"
     AlwaysShowHeader="True"
     PaneDisplayMode="LeftCompact"
     ExpandedModeThresholdWidth="500"
@@ -26,9 +26,14 @@
     IsTabStop="False">
 
         <NavigationView.MenuItems>
-            <NavigationViewItem Content="Theme" Tag="ThemePage" x:Name="ThemeItem">
+            <NavigationViewItem Content="Theme Settings" Tag="ThemePage" x:Name="ThemeItem">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Setting" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Directories" Tag="DirectoryPage" x:Name="DirectoryItem">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Folder" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
             <NavigationViewItemHeader Content="Actions"/>

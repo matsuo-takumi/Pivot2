@@ -1,0 +1,167 @@
+/* ========================= */
+/* Light テーマ用            */
+/* ========================= */
+.theme-light .markdown-preview-view table {
+  border-collapse: collapse;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  overflow: hidden;
+  background-color: white;
+  margin: 1em 0;
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.theme-light .markdown-preview-view thead tr {
+  border-bottom: 1px solid #eee;
+  background: linear-gradient(to right, #f9f9f9, #fff);
+}
+
+.theme-light .markdown-preview-view th,
+.theme-light .markdown-preview-view td {
+  padding: 12px 16px;
+  border: none;
+  vertical-align: top;
+  transition: background 0.2s ease, color 0.2s ease;
+  /* align指定をリセットしてMarkdownのinline styleを尊重 */
+  text-align: initial;
+}
+
+.theme-light .markdown-preview-view th {
+  font-weight: 600;
+  color: #333;
+  background-color: transparent;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.theme-light .markdown-preview-view td {
+  color: #444;
+  font-size: 14px;
+  line-height: 1.6;
+  border-top: 1px solid #eee;
+}
+
+.theme-light .markdown-preview-view tbody tr:first-child td {
+  border-top: none;
+}
+
+/* ========================= */
+/* Dark テーマ用             */
+/* ========================= */
+.theme-dark .markdown-preview-view table {
+  border-collapse: collapse;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  overflow: hidden;
+  background-color: #1e1e1e;
+  margin: 1em 0;
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.theme-dark .markdown-preview-view thead tr {
+  border-bottom: 1px solid #444;
+  background: linear-gradient(to right, #2a2a2a, #1e1e1e);
+}
+
+.theme-dark .markdown-preview-view th,
+.theme-dark .markdown-preview-view td {
+  padding: 12px 16px;
+  border: none;
+  vertical-align: top;
+  transition: background 0.2s ease, color 0.2s ease;
+  text-align: initial;
+}
+
+.theme-dark .markdown-preview-view th {
+  font-weight: 600;
+  color: #ddd;
+  background-color: transparent;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.theme-dark .markdown-preview-view td {
+  color: #ccc;
+  font-size: 14px;
+  line-height: 1.6;
+  border-top: 1px solid #444;
+}
+
+.theme-dark .markdown-preview-view tbody tr:first-child td {
+  border-top: none;
+}
+
+/* ========================= */
+/* 共通エフェクト            */
+/* ========================= */
+.markdown-preview-view tbody tr:hover {
+  transform: scale(1.005);
+}
+
+.markdown-preview-view table:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+}
+
+.markdown-preview-view tbody tr {
+  position: relative;
+  overflow: hidden;
+}
+
+.markdown-preview-view tbody tr::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255,255,255,0.3) 50%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.markdown-preview-view tbody tr:hover::after {
+  opacity: 1;
+  animation: shimmer-row 1.5s forwards;
+}
+
+@keyframes shimmer-row {
+  0%   { left: -60%; }
+  100% { left: 120%; }
+}
+
+/* ========================= */
+/* リップル効果削除          */
+/* ========================= */
+.markdown-preview-view td:active::after {
+  content: none !important;
+}
+
+/* ========================= */
+/* ALIGN対応（プレビュー側） */
+/* ========================= */
+.markdown-preview-view th[style*="text-align:center"],
+.markdown-preview-view td[style*="text-align:center"] { text-align: center; }
+
+.markdown-preview-view th[style*="text-align:right"],
+.markdown-preview-view td[style*="text-align:right"]  { text-align: right; }
+
+/* ========================= */
+/* エディタ（Live Preview）  */
+/* ========================= */
+.cm-table .cm-table-cell { text-align: initial; }
+.cm-table .cm-table-cell.cm-align-left   { text-align: left; }
+.cm-table .cm-table-cell.cm-align-center { text-align: center; }
+.cm-table .cm-table-cell.cm-align-right  { text-align: right; }
+
+.cm-table .cm-table-cell[data-align="left"]   { text-align: left; }
+.cm-table .cm-table-cell[data-align="center"] { text-align: center; }
+.cm-table .cm-table-cell[data-align="right"]  { text-align: right; }

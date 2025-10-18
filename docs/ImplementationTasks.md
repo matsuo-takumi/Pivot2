@@ -27,13 +27,13 @@
 - [x] `MetadataService`の基本実装 (CRUD操作、トランザクション管理)  
 - [x] `Files`テーブルのORMモデルとDB操作実装  
 - [x] `Images`テーブルのORMモデルとDB操作実装  
-- [ ] `Projects`テーブルのORMモデルとDB操作実装  
-- [ ] `Assets`テーブルのORMモデルとDB操作実装  
+- [x] `Projects`テーブルのORMモデルとDB操作実装  
+- [x] `Assets`テーブルのORMモデルとDB操作実装  
 - [ ] `Scripts`テーブルのORMモデルとDB操作実装  
 - [ ] `UnrealPresets`テーブルのORMモデルとDB操作実装  
 - [ ] `Preferences`テーブルのORMモデルとDB操作実装  
-- [ ] `FileScannerService`の実装 (ルートフォルダ指定、再帰スキャン、SQLiteへのメタデータ登録)  
-- [ ] `FileSystemWatcher`によるファイル変更検知と自動更新の実装  
+- [x] `FileScannerService`の実装 (ルートフォルダ指定、再帰スキャン、SQLiteへのメタデータ登録)  
+- [x] `FileSystemWatcher`によるファイル変更検知と自動更新の実装  
 - [ ] スキャン結果のキャッシュ機構 (ハッシュ比較) 実装
 
 ---
@@ -47,7 +47,7 @@
 - [ ] **Assetモジュール**: `AssetViewModel`とAsset一覧表示UIの実装  
 - [ ] **Imageモジュール**: `ImageViewModel`とImage表示UIの実装  
 - [ ] **Projectモジュール**: `ProjectViewModel`とプロジェクト一覧表示UIの基本実装  
-- [x] **Preferenceモジュール**: `PreferenceViewModel`と設定UIの基本実装  
+- [x] **Preferenceモジュール**: ディレクトリ設定UIの実装（MVVM準拠、フォルダ選択ダイアログ対応）
 - [x] Fluent DesignおよびDark Modeのサポート  
 - [ ] Undo-Redo機能のサポート
 

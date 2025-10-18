@@ -1,1 +1,6 @@
-{}
+{
+  "enabledCssSnippets": [
+    "custom-table",
+    "table"
+  ]
+}

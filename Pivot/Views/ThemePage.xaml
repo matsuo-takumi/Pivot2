@@ -16,8 +16,6 @@
 
     <Grid Padding="20">
         <StackPanel Spacing="20">
-            <TextBlock Text="Theme Settings" Style="{StaticResource TitleTextBlockStyle}"/>
-
             <StackPanel Spacing="10">
                 <TextBlock Text="Background Style" Style="{StaticResource SubtitleTextBlockStyle}"/>
                 <RadioButtons Header="Choose a background style" SelectedItem="{Binding AppBackdropType, Mode=TwoWay}" ItemsSource="{Binding BackdropTypes}">

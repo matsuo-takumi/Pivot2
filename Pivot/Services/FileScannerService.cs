@@ -1,11 +1,14 @@
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using System.IO;
+using System.Linq;
 using System;
 using System.Security.Cryptography;
+using System.Diagnostics;
 using System.Threading;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using Pivot.Models;
 
 namespace Pivot.Services
 {
@@ -15,6 +18,9 @@ namespace Pivot.Services
         private readonly MetadataService _metadataService;
         private FileSystemWatcher? _watcher;
         private string? _currentRootPath;
+        private CancellationTokenSource? _watcherCts;
+        private Task? _watcherProcessingTask;
+        private readonly ConcurrentDictionary<string, (WatcherChangeTypes ChangeType, string? NewPath, DateTime EnqueuedAt)> _pendingEvents = new ConcurrentDictionary<string, (WatcherChangeTypes, string?, DateTime)>();
 
         // 短期間の複数イベントをまとめるためのディレイとキュー
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _delayTokens = new ConcurrentDictionary<string, CancellationTokenSource>();
@@ -24,6 +30,28 @@ namespace Pivot.Services
         {
             ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp"
         };
+
+        // Asset extensions include images and 3D model formats
+        private static readonly HashSet<string> AssetExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp",
+            ".fbx", ".obj", ".usd", ".usdz", ".gltf", ".glb", ".hdr", ".exr"
+        };
+
+        private static bool IsAssetExtension(string ext)
+        {
+            if (string.IsNullOrEmpty(ext)) return false;
+            return AssetExtensions.Contains(ext);
+        }
+
+        // Default settings (can be tuned or moved to configuration)
+        private const bool UseQuickCheck = true;
+        private const int DefaultMaxOpenFiles = 64;
+        private const int DefaultRetryCount = 3;
+        private const int DefaultRetryDelayMs = 200;
+
+        private SemaphoreSlim? _fileOpenSemaphore;
+        private SemaphoreSlim? _hashSemaphore;
 
         public FileScannerService(ILogger<FileScannerService> logger, MetadataService metadataService)
         {
@@ -44,23 +72,33 @@ namespace Pivot.Services
                 }
                 _currentRootPath = rootPath; // 現在のスキャン対象パスを保持
 
-                var files = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories);
-                int total = 0;
+                // Probe throughput and configure per-root parallelism
+                double mbps = 0;
                 try
                 {
-                    total = 0;
-                    foreach (var _ in files) total++;
+                    mbps = await ProbeThroughputMbPerSecAsync(rootPath, cancellationToken);
                 }
-                catch { /* 省略 */ }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Probe failed for {rootPath}, falling back to defaults", rootPath);
+                    mbps = 0;
+                }
+
+                ConfigureForRoot(mbps, out int scanDop, out int hashDop);
+                _fileOpenSemaphore = new SemaphoreSlim(DefaultMaxOpenFiles);
+                _hashSemaphore = new SemaphoreSlim(hashDop);
+
+                var allFiles = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories);
+                int total = 0;
+                try { foreach (var _ in allFiles) total++; } catch { }
 
                 int processed = 0;
-                foreach (var path in Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories))
+                // Use Parallel.ForEachAsync to control scan parallelism
+                await Parallel.ForEachAsync(Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories), new ParallelOptions { MaxDegreeOfParallelism = scanDop, CancellationToken = cancellationToken }, async (path, ct) =>
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
                     try
                     {
-                        await ProcessFileChange(path, WatcherChangeTypes.Created, null, cancellationToken); // ファイル作成として処理
+                        await ProcessFileChange(path, WatcherChangeTypes.Created, null, ct);
                     }
                     catch (Exception ex)
                     {
@@ -68,14 +106,14 @@ namespace Pivot.Services
                     }
                     finally
                     {
-                        processed++;
+                        Interlocked.Increment(ref processed);
                         if (total > 0)
                         {
                             int percent = (int)Math.Clamp(processed * 100.0 / total, 0, 100);
                             progress?.Report(percent);
                         }
                     }
-                }
+                });
 
                 progress?.Report(100);
                 _logger.LogInformation("Scan completed for {rootPath}", rootPath);
@@ -120,13 +158,23 @@ namespace Pivot.Services
                 _watcher.Dispose();
                 _watcher = null;
                 _logger.LogInformation("Stopped watching directory.");
+                // Cancel background processor
+                try
+                {
+                    _watcherCts?.Cancel();
+                    _watcherProcessingTask = null;
+                    _watcherCts?.Dispose();
+                    _watcherCts = null;
+                    _pendingEvents.Clear();
+                }
+                catch { }
             }
         }
 
-        private async void OnCreated(object sender, FileSystemEventArgs e) => await DelayAndProcessFile(e.FullPath, e.ChangeType);
-        private async void OnChanged(object sender, FileSystemEventArgs e) => await DelayAndProcessFile(e.FullPath, e.ChangeType);
-        private async void OnDeleted(object sender, FileSystemEventArgs e) => await DelayAndProcessFile(e.FullPath, e.ChangeType);
-        private async void OnRenamed(object sender, RenamedEventArgs e) => await DelayAndProcessFile(e.OldFullPath, e.ChangeType, e.FullPath);
+        private void OnCreated(object sender, FileSystemEventArgs e) => EnqueueWatcherEvent(e.FullPath, e.ChangeType, null);
+        private void OnChanged(object sender, FileSystemEventArgs e) => EnqueueWatcherEvent(e.FullPath, e.ChangeType, null);
+        private void OnDeleted(object sender, FileSystemEventArgs e) => EnqueueWatcherEvent(e.FullPath, e.ChangeType, null);
+        private void OnRenamed(object sender, RenamedEventArgs e) => EnqueueWatcherEvent(e.OldFullPath, e.ChangeType, e.FullPath);
 
         private async Task DelayAndProcessFile(string path, WatcherChangeTypes changeType, string? newPath = null)
         {
@@ -148,6 +196,74 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error delaying file processing: {path}", path);
+            }
+        }
+
+        private void EnqueueWatcherEvent(string path, WatcherChangeTypes changeType, string? newPath)
+        {
+            try
+            {
+                var entry = (changeType, newPath, DateTime.UtcNow);
+                _pendingEvents.AddOrUpdate(path, entry, (k, v) => entry);
+
+                // Ensure background processor is running
+                if (_watcherProcessingTask == null || _watcherProcessingTask.IsCompleted)
+                {
+                    _watcherCts = new CancellationTokenSource();
+                    _watcherProcessingTask = Task.Run(() => ProcessPendingWatcherEventsAsync(_watcherCts.Token));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to enqueue watcher event for {Path}", path);
+            }
+        }
+
+        private async Task ProcessPendingWatcherEventsAsync(CancellationToken ct)
+        {
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    var now = DateTime.UtcNow;
+                    var toProcess = new List<(string Path, WatcherChangeTypes ChangeType, string? NewPath)>();
+
+                    foreach (var kv in _pendingEvents)
+                    {
+                        if ((now - kv.Value.EnqueuedAt).TotalMilliseconds >= EventDelayMs)
+                        {
+                            if (_pendingEvents.TryRemove(kv.Key, out var v))
+                            {
+                                toProcess.Add((kv.Key, v.ChangeType, v.NewPath));
+                            }
+                        }
+                    }
+
+                    if (toProcess.Count > 0)
+                    {
+                        // Process in parallel but bounded
+                        var tasks = toProcess.Select(item => Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await ProcessFileChange(item.Path, item.ChangeType, item.NewPath, ct);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Error processing watcher batch item: {Path}", item.Path);
+                            }
+                        }, ct));
+
+                        await Task.WhenAll(tasks);
+                    }
+
+                    await Task.Delay(Math.Max(50, EventDelayMs / 2), ct);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Watcher processing loop failed");
             }
         }
 
@@ -180,9 +296,102 @@ namespace Pivot.Services
                     var fileInfo = new FileInfo(path);
                     string ext = fileInfo.Extension ?? string.Empty;
                     string type = GuessMime(ext);
-                    string hash = await ComputeMD5Async(path, cancellationToken);
+
+                    // Quick check: compare size and mtime to skip unnecessary hashing
+                    FileEntry? existingFileEntry = null;
+                    bool needsHash = true;
+                    if (UseQuickCheck)
+                    {
+                        existingFileEntry = await _metadataService.GetFileEntryByPathAsync(path);
+                        if (existingFileEntry != null && existingFileEntry.Size == fileInfo.Length && existingFileEntry.UpdatedAt == fileInfo.LastWriteTimeUtc)
+                        {
+                            needsHash = false; // no content change
+                        }
+                    }
+
+                    // Ensure semaphores exist (for watcher-triggered events)
+                    _fileOpenSemaphore ??= new SemaphoreSlim(DefaultMaxOpenFiles);
+                    _hashSemaphore ??= new SemaphoreSlim(Math.Max(1, Environment.ProcessorCount - 1));
+
+                    string hash = existingFileEntry?.Hash ?? string.Empty;
+                    if (needsHash)
+                    {
+                        // Acquire semaphores to limit open files and concurrent hash CPU usage
+                        await _fileOpenSemaphore.WaitAsync(cancellationToken);
+                        try
+                        {
+                            await _hashSemaphore.WaitAsync(cancellationToken);
+                            try
+                            {
+                                int tries = 0;
+                                while (true)
+                                {
+                                    try
+                                    {
+                                        hash = await ComputeXxHash64Async(path, cancellationToken);
+                                        break;
+                                    }
+                                    catch (IOException) when (++tries <= DefaultRetryCount)
+                                    {
+                                        await Task.Delay(DefaultRetryDelayMs, cancellationToken);
+                                    }
+                                }
+                            }
+                            finally
+                            {
+                                _hashSemaphore.Release();
+                            }
+                        }
+                        finally
+                        {
+                            _fileOpenSemaphore.Release();
+                        }
+                    }
+
                     await _metadataService.UpsertFileAsync(path, type, fileInfo.Length, fileInfo.LastWriteTimeUtc, hash);
                     _logger.LogInformation("Upserted metadata for: {Path}", path);
+
+                    // Asset integration: create or update AssetEntry when file looks like an asset
+                    try
+                    {
+                        if (IsAssetExtension(ext))
+                        {
+                            var fileEntry = await _metadataService.GetFileEntryByPathAsync(path);
+                            if (fileEntry != null)
+                            {
+                                var existingAsset = await _metadataService.GetAssetEntryByPathAsync(path);
+                                if (existingAsset != null)
+                                {
+                                    existingAsset.Name = Path.GetFileName(path);
+                                    existingAsset.Type = type;
+                                    existingAsset.Size = fileInfo.Length;
+                                    existingAsset.Hash = hash;
+                                    existingAsset.File = fileEntry;
+                                    existingAsset.UpdatedAt = DateTime.UtcNow;
+                                    await _metadataService.UpdateAssetEntryAsync(existingAsset);
+                                }
+                                else
+                                {
+                                    var newAsset = new AssetEntry
+                                    {
+                                        Name = Path.GetFileName(path),
+                                        Type = type,
+                                        Path = path,
+                                        Size = fileInfo.Length,
+                                        Hash = hash,
+                                        File = fileEntry,
+                                        CreatedAt = DateTime.UtcNow,
+                                        UpdatedAt = DateTime.UtcNow
+                                    };
+                                    await _metadataService.AddAssetEntryAsync(newAsset);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to upsert asset entry for: {Path}", path);
+                    }
                 }
             }
             catch (OperationCanceledException) { /* スキャンキャンセル */ }
@@ -222,6 +431,167 @@ namespace Pivot.Services
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
             var hash = await md5.ComputeHashAsync(stream, ct);
             return Convert.ToHexString(hash);
+        }
+
+        private static async Task<string> ComputeXxHash64Async(string path, CancellationToken ct)
+        {
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            var hasher = new XxHash64();
+            var buffer = new byte[8192];
+            while (true)
+            {
+                int read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
+                if (read == 0) break;
+                hasher.Append(new ReadOnlySpan<byte>(buffer, 0, read));
+            }
+            return Convert.ToHexString(hasher.GetCurrentHash());
+        }
+
+        // Minimal managed implementation of xxHash64 (public domain algorithm)
+        private class XxHash64
+        {
+            private const ulong PRIME1 = 11400714785074694791UL;
+            private const ulong PRIME2 = 14029467366897019727UL;
+            private const ulong PRIME3 = 1609587929392839161UL;
+            private const ulong PRIME4 = 9650029242287828579UL;
+            private const ulong PRIME5 = 2870177450012600261UL;
+
+            private ulong _v1, _v2, _v3, _v4;
+            private ulong _totalLen;
+            private byte[] _buffer = new byte[32];
+            private int _bufferLen = 0;
+
+            public XxHash64()
+            {
+                _v1 = unchecked(PRIME1 + PRIME2);
+                _v2 = PRIME2;
+                _v3 = 0UL;
+                _v4 = unchecked(ulong.MaxValue - PRIME1);
+                _totalLen = 0;
+            }
+
+            public void Append(ReadOnlySpan<byte> input)
+            {
+                _totalLen += (ulong)input.Length;
+
+                int offset = 0;
+                if (_bufferLen + input.Length < 32)
+                {
+                    input.CopyTo(_buffer.AsSpan(_bufferLen));
+                    _bufferLen += input.Length;
+                    return;
+                }
+
+                if (_bufferLen > 0)
+                {
+                    int need = 32 - _bufferLen;
+                    input.Slice(0, need).CopyTo(_buffer.AsSpan(_bufferLen));
+                    ProcessChunk(_buffer.AsSpan(0, 32));
+                    offset += need;
+                    _bufferLen = 0;
+                }
+
+                while (offset + 32 <= input.Length)
+                {
+                    ProcessChunk(input.Slice(offset, 32));
+                    offset += 32;
+                }
+
+                if (offset < input.Length)
+                {
+                    var remaining = input.Slice(offset);
+                    remaining.CopyTo(_buffer);
+                    _bufferLen = remaining.Length;
+                }
+            }
+
+            private static ulong RotateLeft(ulong value, int count) => (value << count) | (value >> (64 - count));
+
+            private void ProcessChunk(ReadOnlySpan<byte> chunk)
+            {
+                ulong k1 = BitConverter.ToUInt64(chunk.Slice(0, 8));
+                _v1 = RotateLeft(_v1 + k1 * PRIME2, 31) * PRIME1;
+                ulong k2 = BitConverter.ToUInt64(chunk.Slice(8, 8));
+                _v2 = RotateLeft(_v2 + k2 * PRIME2, 31) * PRIME1;
+                ulong k3 = BitConverter.ToUInt64(chunk.Slice(16, 8));
+                _v3 = RotateLeft(_v3 + k3 * PRIME2, 31) * PRIME1;
+                ulong k4 = BitConverter.ToUInt64(chunk.Slice(24, 8));
+                _v4 = RotateLeft(_v4 + k4 * PRIME2, 31) * PRIME1;
+            }
+
+            public byte[] GetCurrentHash()
+            {
+                ulong h64;
+                if (_totalLen >= 32)
+                {
+                    h64 = RotateLeft(_v1, 1) + RotateLeft(_v2, 7) + RotateLeft(_v3, 12) + RotateLeft(_v4, 18);
+                    h64 = Mix64(h64, _v1);
+                    h64 = Mix64(h64, _v2);
+                    h64 = Mix64(h64, _v3);
+                    h64 = Mix64(h64, _v4);
+                }
+                else
+                {
+                    h64 = PRIME5;
+                }
+
+                h64 += _totalLen;
+
+                int idx = 0;
+                while (idx + 8 <= _bufferLen)
+                {
+                    ulong k1 = BitConverter.ToUInt64(_buffer, idx);
+                    h64 = RotateLeft(h64 ^ (k1 * PRIME2), 31) * PRIME1 + PRIME4;
+                    idx += 8;
+                }
+
+                while (idx < _bufferLen)
+                {
+                    h64 = RotateLeft(h64 ^ ((_buffer[idx]) * PRIME5), 11) * PRIME1;
+                    idx++;
+                }
+
+                h64 ^= h64 >> 33;
+                h64 *= PRIME2;
+                h64 ^= h64 >> 29;
+                h64 *= PRIME3;
+                h64 ^= h64 >> 32;
+
+                var outBytes = BitConverter.GetBytes(h64);
+                return outBytes;
+            }
+
+            private static ulong Mix64(ulong h, ulong v)
+            {
+                v *= PRIME2;
+                v = RotateLeft(v, 31);
+                v *= PRIME1;
+                h ^= v;
+                h = h * PRIME1 + PRIME4;
+                return h;
+            }
+        }
+
+        // Probe throughput (MB/s) by reading a small chunk of a representative file
+        private static async Task<double> ProbeThroughputMbPerSecAsync(string rootPath, CancellationToken ct)
+        {
+            var file = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories).FirstOrDefault(f => new FileInfo(f).Length >= 65536);
+            if (file == null) return 0;
+            var readBytes = 256 * 1024; // 256KB
+            var sw = Stopwatch.StartNew();
+            await using var s = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            var buffer = new byte[readBytes];
+            int got = await s.ReadAsync(buffer.AsMemory(0, readBytes), ct);
+            sw.Stop();
+            if (got == 0) return 0;
+            return (got / 1024.0 / 1024.0) / Math.Max(0.0001, sw.Elapsed.TotalSeconds);
+        }
+
+        private static void ConfigureForRoot(double mbps, out int scanDop, out int hashDop)
+        {
+            if (mbps >= 100) { scanDop = Math.Min(64, Environment.ProcessorCount * 4); hashDop = Math.Max(1, Environment.ProcessorCount * 2); }
+            else if (mbps >= 20) { scanDop = Math.Min(32, Environment.ProcessorCount * 2); hashDop = Math.Max(1, Environment.ProcessorCount); }
+            else { scanDop = 4; hashDop = Math.Max(1, Environment.ProcessorCount / 2); }
         }
     }
 }

@@ -26,7 +26,7 @@ namespace Pivot.Views
 
             if (contentFrame.Content == null)
             {
-                contentFrame.Navigate(typeof(ThemePage), null, new SuppressNavigationTransitionInfo());
+                contentFrame.Navigate(typeof(ThemePage), null, new EntranceNavigationTransitionInfo());
             }
         }
 
@@ -41,7 +41,10 @@ namespace Pivot.Views
                 switch (selectedItem.Tag?.ToString())
                 {
                     case "ThemePage":
-                        contentFrame.Navigate(typeof(ThemePage), null, new SuppressNavigationTransitionInfo()); // アニメーション無効化
+                        contentFrame.Navigate(typeof(ThemePage), null, new EntranceNavigationTransitionInfo());
+                        break;
+                    case "DirectoryPage":
+                        contentFrame.Navigate(typeof(DirectoryPage), null, new EntranceNavigationTransitionInfo());
                         break;
                     // 他のメニュー項目に対するナビゲーションロジック
                 }

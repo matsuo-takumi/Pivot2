@@ -55,6 +55,12 @@ namespace Pivot.ViewModels
         public IRelayCommand CancelScanCommand { get; }
         public IRelayCommand<NavigationRegion> RequestNavigateCommand { get; }
 
+        // Directory preferences commands
+        public IAsyncRelayCommand<string> AddAssetDirectoryCommand { get; private set; }
+        public IAsyncRelayCommand<string> AddImageDirectoryCommand { get; private set; }
+        public IAsyncRelayCommand<string> AddProjectDirectoryCommand { get; private set; }
+        public IAsyncRelayCommand<string> RemoveDirectoryCommand { get; private set; }
+
 		[ObservableProperty]
 		private bool _isPreferencePaneOpen;
 
@@ -81,6 +87,36 @@ namespace Pivot.ViewModels
             RequestNavigateCommand = new RelayCommand<NavigationRegion>(region =>
             {
                 _messenger.Send(new NavigationRequestMessage(region));
+            });
+
+            AddAssetDirectoryCommand = new AsyncRelayCommand<string>(async path =>
+            {
+                if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
+                await _settingsService.AddDirectoryAsync(DirectoryCategory.Asset, path);
+                LoadScanDirectories();
+            });
+
+            AddImageDirectoryCommand = new AsyncRelayCommand<string>(async path =>
+            {
+                if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
+                await _settingsService.AddDirectoryAsync(DirectoryCategory.Image, path);
+                LoadScanDirectories();
+            });
+
+            AddProjectDirectoryCommand = new AsyncRelayCommand<string>(async path =>
+            {
+                if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
+                await _settingsService.AddDirectoryAsync(DirectoryCategory.Project, path);
+                LoadScanDirectories();
+            });
+
+            RemoveDirectoryCommand = new AsyncRelayCommand<string>(async path =>
+            {
+                if (string.IsNullOrWhiteSpace(path)) return;
+                await _settingsService.RemoveDirectoryAsync(DirectoryCategory.Asset, path);
+                await _settingsService.RemoveDirectoryAsync(DirectoryCategory.Image, path);
+                await _settingsService.RemoveDirectoryAsync(DirectoryCategory.Project, path);
+                LoadScanDirectories();
             });
 
 			// PreferencePaneの初期状態を設定 (例: 起動時は開いておく)
@@ -132,17 +168,17 @@ namespace Pivot.ViewModels
 			_scanCts?.Cancel();
 		}
 
-		private void LoadScanDirectories()
-		{
-			var settings = _settingsService.GetUserSettings();
-			ScanDirectories.Clear();
-			foreach (var dir in settings.AssetDirectories) ScanDirectories.Add(dir);
-			foreach (var dir in settings.ImageDirectories) ScanDirectories.Add(dir);
-			foreach (var dir in settings.ProjectDirectories) ScanDirectories.Add(dir);
+        public void LoadScanDirectories()
+        {
+            var settings = _settingsService.GetUserSettings();
+            ScanDirectories.Clear();
+            foreach (var dir in settings.AssetDirectories) ScanDirectories.Add(dir);
+            foreach (var dir in settings.ImageDirectories) ScanDirectories.Add(dir);
+            foreach (var dir in settings.ProjectDirectories) ScanDirectories.Add(dir);
 
-			// ScanDirectoriesの変更をUIに通知し、CanExecuteChangedを呼び出す
-			OnPropertyChanged(nameof(ScanDirectories));
-			(ScanCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
-		}
+            // ScanDirectoriesの変更をUIに通知し、CanExecuteChangedを呼び出す
+            OnPropertyChanged(nameof(ScanDirectories));
+            (ScanCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
+        }
 	}
 }

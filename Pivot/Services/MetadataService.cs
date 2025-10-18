@@ -52,6 +52,11 @@ namespace Pivot.Services
                 // 画像関連のコレクションも初期化
                 images.EnsureIndex(i => i.Width);
                 images.EnsureIndex(i => i.Height);
+                // Assets コレクション初期化
+                var assets = Database.GetCollection<AssetEntry>();
+                // Use string field names to avoid ambiguous member resolution in expression trees
+                assets.EnsureIndex("Path", true);
+                assets.EnsureIndex("Hash", false);
 
                 _logger.LogInformation("Database initialized and tables created.");
             }
@@ -240,6 +245,96 @@ namespace Pivot.Services
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
             var projects = Database.GetCollection<ProjectEntry>();
             return await Task.Run(() => projects.Include(p => p.Files).FindAll().ToList());
+        }
+
+        // ProjectEntry をページングで取得
+        public async Task<List<ProjectEntry>> GetProjectEntriesAsync(int skip, int take)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var projects = Database.GetCollection<ProjectEntry>();
+            return await Task.Run(() => projects
+                .Include(p => p.Files)
+                .Find(Query.All("UpdatedAt", Query.Descending), skip, take)
+                .ToList());
+        }
+
+        // Name をキーとして Upsert（存在すれば更新、なければ作成）
+        public async Task<ProjectEntry> UpsertProjectByNameAsync(string name, string? description = null, string? path = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var projects = Database.GetCollection<ProjectEntry>();
+
+            return await Task.Run(() =>
+            {
+                var existing = projects.FindOne(p => p.Name == name);
+                if (existing != null)
+                {
+                    if (description != null) existing.Description = description;
+                    if (path != null) existing.Path = path;
+                    existing.UpdatedAt = DateTime.Now;
+                    projects.Update(existing);
+                    return existing;
+                }
+
+                var newProject = new ProjectEntry
+                {
+                    Name = name,
+                    Description = description ?? string.Empty,
+                    Path = path ?? string.Empty,
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now
+                };
+                projects.Insert(newProject);
+                return newProject;
+            });
+        }
+
+        // AssetEntry の追加
+        public async Task AddAssetEntryAsync(AssetEntry assetEntry)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            await Task.Run(() => assets.Insert(assetEntry));
+        }
+
+        // AssetEntry を ID で取得
+        public async Task<AssetEntry?> GetAssetEntryByIdAsync(int id)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            return await Task.Run(() => assets.Include(a => a.File).FindById(id));
+        }
+
+        // Path による取得
+        public async Task<AssetEntry?> GetAssetEntryByPathAsync(string path)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            return await Task.Run(() => assets.Include(a => a.File).FindOne(a => a.Path == path));
+        }
+
+        // AssetEntry をページングで取得
+        public async Task<List<AssetEntry>> GetAssetEntriesAsync(int skip, int take)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            return await Task.Run(() => assets.Include(a => a.File).Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+        }
+
+        // AssetEntry を更新
+        public async Task UpdateAssetEntryAsync(AssetEntry assetEntry)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            await Task.Run(() => assets.Update(assetEntry));
+        }
+
+        // AssetEntry を削除
+        public async Task DeleteAssetEntryAsync(int id)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            await Task.Run(() => assets.Delete(id));
         }
     }
 }
