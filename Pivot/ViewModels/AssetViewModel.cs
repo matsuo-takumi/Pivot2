@@ -87,6 +87,40 @@ namespace Pivot.ViewModels
         public IAsyncRelayCommand LoadAssetsCommand { get; }
         public IAsyncRelayCommand LoadMoreAssetsCommand { get; }
         public IAsyncRelayCommand ResetFiltersCommand { get; }
+        public IRelayCommand ToggleDisplayModeCommand { get; }
+        public IRelayCommand ToggleMetadataCommand { get; }
+        public IRelayCommand<string> SetDisplayModeCommand { get; }
+
+        private AssetDisplayMode _selectedDisplayMode = AssetDisplayMode.List;
+        public AssetDisplayMode SelectedDisplayMode
+        {
+            get => _selectedDisplayMode;
+            set
+            {
+                if (SetProperty(ref _selectedDisplayMode, value))
+                {
+                    _ = _settingsService.SetAssetDisplayModeAsync(value);
+                    OnPropertyChanged(nameof(IsListMode));
+                    OnPropertyChanged(nameof(IsGridMode));
+                }
+            }
+        }
+
+        private bool _showMetadata = true;
+        public bool ShowMetadata
+        {
+            get => _showMetadata;
+            set
+            {
+                if (SetProperty(ref _showMetadata, value))
+                {
+                    _ = _settingsService.SetShowAssetMetadataAsync(value);
+                }
+            }
+        }
+
+        public bool IsListMode => SelectedDisplayMode == AssetDisplayMode.List;
+        public bool IsGridMode => SelectedDisplayMode == AssetDisplayMode.Grid;
 
         public AssetViewModel(
             ILogger<AssetViewModel> logger,
@@ -102,6 +136,20 @@ namespace Pivot.ViewModels
             LoadAssetsCommand = new AsyncRelayCommand(LoadAssetsAsync);
             LoadMoreAssetsCommand = new AsyncRelayCommand(LoadMoreAssetsAsync);
             ResetFiltersCommand = new AsyncRelayCommand(ResetAndLoadAssetsAsync);
+            ToggleDisplayModeCommand = new RelayCommand(() =>
+            {
+                SelectedDisplayMode = SelectedDisplayMode == AssetDisplayMode.List ? AssetDisplayMode.Grid : AssetDisplayMode.List;
+            });
+            ToggleMetadataCommand = new RelayCommand(() =>
+            {
+                ShowMetadata = !ShowMetadata;
+            });
+            SetDisplayModeCommand = new RelayCommand<string>(mode =>
+            {
+                SelectedDisplayMode = string.Equals(mode, "Grid", StringComparison.OrdinalIgnoreCase)
+                    ? AssetDisplayMode.Grid
+                    : AssetDisplayMode.List;
+            });
 
             _ = InitializeAsync();
         }
@@ -111,6 +159,9 @@ namespace Pivot.ViewModels
             try
             {
                 await LoadFilterOptionsAsync();
+                // 設定の復元
+                SelectedDisplayMode = _settingsService.GetAssetDisplayMode();
+                ShowMetadata = _settingsService.GetShowAssetMetadata();
                 await LoadAssetsAsync();
 
                 // スキャン完了メッセージをリッスン

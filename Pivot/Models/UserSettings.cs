@@ -12,6 +12,10 @@ namespace Pivot.Models
         public ElementTheme AppTheme { get; set; } = ElementTheme.Default; // デフォルトはシステム設定に従う
         public BackdropType AppBackdropType { get; set; } = BackdropType.Mica; // デフォルトはMica
 
+        // Asset 表示関連のユーザー設定
+        public AssetDisplayMode AssetDisplayMode { get; set; } = AssetDisplayMode.List;
+        public bool ShowAssetMetadata { get; set; } = true;
+
         // (カスタムAcrylic/Luminosity設定は削除)
     }
 }

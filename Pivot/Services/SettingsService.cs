@@ -90,6 +90,46 @@ namespace Pivot.Services
                 _cache.AppBackdropType = BackdropType.Mica;
             }
             _logger.LogInformation("SettingsService: Loaded AppBackdropType: {BackdropType}", _cache.AppBackdropType);
+
+            // Asset 表示モード
+            try
+            {
+                var modeStr = (await _metadataService.GetPreferenceAsync("AssetDisplayMode"))?.Value;
+                if (Enum.TryParse<AssetDisplayMode>(modeStr, out var mode))
+                {
+                    _cache.AssetDisplayMode = mode;
+                }
+                else
+                {
+                    _cache.AssetDisplayMode = AssetDisplayMode.List;
+                }
+                _logger.LogInformation("SettingsService: Loaded AssetDisplayMode: {Mode}", _cache.AssetDisplayMode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load AssetDisplayMode. Using default.");
+                _cache.AssetDisplayMode = AssetDisplayMode.List;
+            }
+
+            // Asset メタデータ表示
+            try
+            {
+                var showMetaStr = (await _metadataService.GetPreferenceAsync("ShowAssetMetadata"))?.Value;
+                if (bool.TryParse(showMetaStr, out var show))
+                {
+                    _cache.ShowAssetMetadata = show;
+                }
+                else
+                {
+                    _cache.ShowAssetMetadata = true;
+                }
+                _logger.LogInformation("SettingsService: Loaded ShowAssetMetadata: {Show}", _cache.ShowAssetMetadata);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load ShowAssetMetadata. Using default.");
+                _cache.ShowAssetMetadata = true;
+            }
         }
 
         private static bool LooksLikeJsonArray(string value)
@@ -171,9 +211,9 @@ namespace Pivot.Services
         }
 
         private async Task NormalizeAndPersistIfNeededAsync(string key, string? originalStoredValue, List<string> directories)
-        {
-            try
             {
+                try
+                {
                 var normalized = JsonSerializer.Serialize(directories);
                 if (!string.Equals((originalStoredValue ?? string.Empty).Trim(), normalized, StringComparison.Ordinal))
                 {
@@ -210,6 +250,25 @@ namespace Pivot.Services
             await EnsureDbAsync();
             _cache.AppBackdropType = type;
             await _metadataService.UpsertPreferenceAsync("AppBackdropType", type.ToString());
+        }
+
+        // Asset 表示モード/メタ表示 設定
+        public AssetDisplayMode GetAssetDisplayMode() => _cache.AssetDisplayMode;
+
+        public async Task SetAssetDisplayModeAsync(AssetDisplayMode mode)
+        {
+            await EnsureDbAsync();
+            _cache.AssetDisplayMode = mode;
+            await _metadataService.UpsertPreferenceAsync("AssetDisplayMode", mode.ToString());
+        }
+
+        public bool GetShowAssetMetadata() => _cache.ShowAssetMetadata;
+
+        public async Task SetShowAssetMetadataAsync(bool show)
+        {
+            await EnsureDbAsync();
+            _cache.ShowAssetMetadata = show;
+            await _metadataService.UpsertPreferenceAsync("ShowAssetMetadata", show.ToString());
         }
 
         public async Task AddDirectoryAsync(DirectoryCategory category, string path)
