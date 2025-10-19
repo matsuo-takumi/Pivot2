@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.Extensions.DependencyInjection; // GetRequiredServiceを使用するために追加
-using Pivot.ViewModels; // AssetViewModelを使用するために追加
+using Microsoft.UI.Xaml;
+using Microsoft.Extensions.DependencyInjection;
+using Pivot.ViewModels;
+using Microsoft.UI.Xaml.Media;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -12,10 +14,72 @@ namespace Pivot.Views
     /// </summary>
     public sealed partial class AssetPage : Page
     {
+        private AssetViewModel? _viewModel;
+        private ScrollViewer? _scrollViewer;
+
         public AssetPage()
         {
             this.InitializeComponent();
             this.DataContext = App.Current.Services.GetRequiredService<AssetViewModel>();
+            _viewModel = this.DataContext as AssetViewModel;
+        }
+
+        private void Page_Loaded(object sender, RoutedEventArgs e)
+        {
+            // ScrollViewer を取得してスクロールイベントを購読
+            _scrollViewer = FindScrollViewer(this);
+            if (_scrollViewer != null)
+            {
+                _scrollViewer.ViewChanged += ScrollViewer_ViewChanged;
+            }
+        }
+
+        private void Page_Unloaded(object sender, RoutedEventArgs e)
+        {
+            // スクロールイベント購読を解除
+            if (_scrollViewer != null)
+            {
+                _scrollViewer.ViewChanged -= ScrollViewer_ViewChanged;
+            }
+        }
+
+        private void ScrollViewer_ViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+        {
+            if (_scrollViewer == null || _viewModel == null)
+                return;
+
+            // スクロール位置をチェック（下端に近いかどうか）
+            double scrollPercentage = _scrollViewer.ScrollableHeight > 0
+                ? (_scrollViewer.VerticalOffset / _scrollViewer.ScrollableHeight) * 100
+                : 0;
+
+            // 下端から 80% 以上の位置に達したら次のバッチをロード
+            if (scrollPercentage >= 80)
+            {
+                _ = _viewModel.LoadMoreAssetsAsync();
+            }
+        }
+
+        /// <summary>
+        /// ScrollViewerを再帰的に探索して取得
+        /// </summary>
+        private ScrollViewer? FindScrollViewer(DependencyObject obj)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(obj, i);
+                if (child is ScrollViewer scrollViewer)
+                {
+                    return scrollViewer;
+                }
+
+                ScrollViewer? result = FindScrollViewer(child);
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+            return null;
         }
     }
 }

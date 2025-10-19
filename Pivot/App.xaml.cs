@@ -77,17 +77,20 @@ namespace Pivot
                     config.SetBasePath(AppContext.BaseDirectory);
                     config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
                 })
+                .UseSerilog((context, services, configuration) =>
+                {
+                    var defaultLevel = context.Configuration.GetSection("Serilog:MinimumLevel:Default").Value;
+                    Console.WriteLine($"[DEBUG] Serilog Default MinimumLevel from config: {defaultLevel}");
+                    configuration // ★Serilogの初期化をここに統一
+                        .ReadFrom.Configuration(context.Configuration)
+                        .ReadFrom.Services(services)
+                        .Enrich.FromLogContext()
+                        .WriteTo.Debug(restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Debug) // Visual Studio の出力ウィンドウにもログを出力
+                        .WriteTo.File("logs/pivot.log", rollingInterval: RollingInterval.Day, shared: true, restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Debug); // ファイル出力 (shared: true で複数プロセスからの書き込みに対応)
+                })
                 .ConfigureServices((context, services) =>
                 {
-                    // Serilogの統合
-                    Log.Logger = new Serilog.LoggerConfiguration()
-                        .ReadFrom.Configuration(context.Configuration)
-                        .CreateLogger();
-
-                    services.AddLogging(loggingBuilder =>
-                    {
-                        loggingBuilder.AddSerilog(dispose: true);
-                    });
+                    // 以前の Serilog 統合と AddLogging の呼び出しは削除
 
                     // ViewModels
                     services.AddSingleton<MainViewModel>();
@@ -114,17 +117,31 @@ namespace Pivot
         /// Invoked when the application is launched.
         /// </summary>
         /// <param name="args">Details about the launch request and process.</param>
-        protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
+        protected override async void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
             _window = new MainWindow();
-            var settingsService = Services.GetRequiredService<SettingsService>();
+            // アプリ終了時にサービスを確実にDispose
+            if (_window != null)
+            {
+                _window.Closed += (_, __) =>
+                {
+                    try
+                    {
+                        var md = Services.GetService(typeof(Pivot.Services.MetadataService)) as Pivot.Services.MetadataService;
+                        md?.Dispose();
+                        var fs = Services.GetService(typeof(Pivot.Services.FileScannerService)) as Pivot.Services.FileScannerService;
+                        fs?.Dispose();
+                    }
+                    catch { }
+                };
+            }
             
             // rootElement を確実に取得
             FrameworkElement? rootElement = _window?.Content as FrameworkElement;
 
             if (rootElement != null)
             {
-                rootElement.RequestedTheme = settingsService.GetTheme();
+                rootElement.RequestedTheme = _settingsService.GetTheme();
             }
             // 初期アクセントカラーを適用
             // ApplyAccentColor(settingsService.GetAccentColor()); // 削除
@@ -132,10 +149,8 @@ namespace Pivot
             // 初期タイトルバーボタンの色を更新
             if (rootElement != null) // rootElementがnullでないことを確認
             {
-                UpdateTitleBarColors(rootElement.RequestedTheme); // ここでテーマを渡す
+                UpdateTitleBarColors(_settingsService.GetTheme()); // ここでテーマを渡す
             }
-
-            _window.Activate();
 
             // LoggerのDI取得とテストログ出力
             var logger = Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<App>>();
@@ -143,36 +158,35 @@ namespace Pivot
 
             // データベースの非同期初期化
             var metadataService = Services.GetRequiredService<MetadataService>();
-            _ = metadataService.InitializeDatabase(); // Waitせずに起動継続
+            await metadataService.InitializeDatabase(); // ここでawaitする
 
-            // 設定の非同期初期化（UIスレッドをブロックしない）
-            var messenger = Services.GetRequiredService<IMessenger>();
-            _ = System.Threading.Tasks.Task.Run(async () =>
+            // 設定の非同期初期化を待つ
+            // var settingsService = Services.GetRequiredService<SettingsService>(); // ローカル変数として再宣言しない
+            await _settingsService.InitializeAsync(); // ここでawaitする
+
+            // メッセンジャー経由で他コンポーネントへ反映 (初期テーマ・背景タイプ)
+            // var messenger = Services.GetRequiredService<IMessenger>(); // _messenger フィールドを使用
+            var theme = _settingsService.GetTheme();
+            var backdrop = _settingsService.GetBackdropType();
+
+            _window?.DispatcherQueue.TryEnqueue(() =>
             {
-                try
+                if (_window?.Content is FrameworkElement re)
                 {
-                    await settingsService.InitializeAsync();
-
-                    var theme = settingsService.GetTheme();
-                    var backdrop = settingsService.GetBackdropType();
-
-                    _window?.DispatcherQueue.TryEnqueue(() =>
-                    {
-                        if (_window?.Content is FrameworkElement re)
-                        {
-                            re.RequestedTheme = theme;
-                            UpdateTitleBarColors(theme);
-                        }
-                        // メッセンジャー経由で他コンポーネントへ反映
-                        messenger.Send(new ThemeChangedMessage(theme));
-                        messenger.Send(new BackdropTypeChangedMessage(backdrop));
-                    });
+                    re.RequestedTheme = theme;
+                    UpdateTitleBarColors(theme);
                 }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Settings initialization failed.");
-                }
+                _messenger.Send(new ThemeChangedMessage(theme));
+                _messenger.Send(new BackdropTypeChangedMessage(backdrop));
             });
+
+            // MainViewModelを初期化し、自動スキャンを開始 (SettingsService初期化後に実行)
+            // ここで MainViewModel が生成され、コンストラクタ内で LoadScanDirectories() が呼ばれる。
+            // この時点では settingsService は完全に初期化されている。
+            var mainViewModel = Services.GetRequiredService<MainViewModel>();
+            await mainViewModel.InitializeAsync(); // MainViewModelの初期化を待つ
+            
+            _window?.Activate();
         }
 
         public void Receive(ThemeChangedMessage message)

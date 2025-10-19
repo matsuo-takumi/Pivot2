@@ -46,3 +46,45 @@
 - **メモリ割り当ての削減**: オブジェクトの生成頻度を減らし、可能な限り既存のオブジェクトを再利用します。特にループ内での不要なオブジェクト生成は避けます。
 - **文字列操作**: `StringBuilder` を使用して、多数の文字列連結操作のパフォーマンスを向上させます。
 - **コレクションの適切な選択**: `List<T>`, `Dictionary<TKey, TValue>`, `HashSet<T>` など、ユースケースに最適なコレクション型を選択します。
+
+# ✅ フォルダ追加/削除の複数回クリック問題の解決
+
+## 問題
+ユーザーがアプリケーションの「設定」画面でディレクトリ（アセット、画像、プロジェクトなど）を追加または削除する際、ボタンを1回クリックしただけでは操作が反映されず、複数回クリックする必要がありました。
+
+## 根本原因
+この問題は複数の要因が複合的に絡み合って発生していました。
+
+1.  **LiteDBのユニークインデックス誤設定と不正なデータベース状態:**
+    -   `PreferenceEntry` モデルは `Key` プロパティを `[BsonId]` として持つため、LiteDB は自動的に `_id` フィールドを作成し、その値をユニークに保ちます。
+    -   しかし、以前の実装では `MetadataService.InitializeDatabase()` 内で誤って `preferences.EnsureIndex("Key", true)` が記述されており、これは **`_id` とは別に `Key` フィールドにもユニークインデックスを作成**していました。
+    -   何らかの理由（初期化シーケンスの問題、以前のバグなど）で、この `Key` インデックスに `null` や空文字列などの不正な重複エントリが書き込まれてしまうことがありました。例えば、`PreferenceEntry` のパラメータなしコンストラクタが呼ばれて `Key = string.Empty` となり、これがデータベースに挿入されると、LiteDB は `string.Empty` を `null` と見なして重複エラーを引き起こすことがありました。
+    -   この不正な `Key` インデックスの重複が原因で、`UpsertPreferenceAsync` が `LiteDB.LiteException: Cannot insert duplicate key in unique index 'Key'. The duplicate value is 'null'.` をスローしていました。
+
+2.  **ViewModelとService間の同期の不整合:**
+    -   `DirectoryViewModel` の `ObservableCollection<string>` と `SettingsService` の内部キャッシュ（`List<string>`) が別オブジェクトであり、かつ `NormalizePath` の適用に一貫性がなかったため、UI表示と実際のデータ状態にズレが生じていました。
+    -   これにより、`DirectoryViewModel` 側で「既に存在する」と判断されてUI更新がスキップされたり、`SettingsService` 側でデータベースへの書き込みが失敗してもその情報がViewModelに適切に伝わらない状況がありました。
+
+3.  **非同期処理の競合とUI更新のタイミング:**
+    -   非同期処理（ファイルピッカーの呼び出しやデータベース操作）中にUIが更新されず、ユーザーが次の操作を試みてしまうことがありました。
+
+## 解決策
+上記の根本原因に対処するため、以下の修正を実装しました。
+
+1.  **`MetadataService` のデータベース自動修復機能の強化:**
+    -   `InitializeDatabase()` メソッド内で、データベースファイルが既に存在する場合に `RepairDatabase()` を自動的に呼び出すようにしました。
+    -   `RepairDatabase()` メソッドを大幅に改善し、`PreferenceEntry` コレクションの生のBSONドキュメントを直接検査するようにしました。これにより、`_id` フィールドが `null`、欠落、非文字列、または空文字列である不正なドキュメントを正確に特定し、それらを除去してコレクションを再構築するようにしました。
+    -   最も重要な修正として、`preferences.EnsureIndex("Key", true)` を削除し、さらに `InitializeDatabase()` と `UpsertPreferenceAsync` の例外処理ブロック内で、既存の不正な `Key` インデックスを `DropIndex("Key")` で確実に除去するようにしました。これにより、`_id` 以外の `Key` インデックスによる重複エラーが完全に解消されました。
+
+2.  **`PreferenceEntry` モデルの堅牢化:**
+    -   `PreferenceEntry` のパラメータ付きコンストラクタで `Key` が `null` または空文字列の場合に `ArgumentException` をスローするようになり、不正なキーがデータベースに挿入されるのをコードレベルで防止するようになりました。
+    -   パラメータなしコンストラクタには `[EditorBrowsable(EditorBrowsableState.Never)]` 属性を付与し、LiteDB のデシリアライゼーション専用であることを明示しました。
+
+3.  **`DirectoryViewModel` と `SettingsService` の同期とログ強化:**
+    -   `DirectoryViewModel` と `SettingsService` 間でパスの正規化ロジックを一貫して適用し、パス比較の信頼性を向上させました。
+    -   `DirectoryViewModel` の `Select...DirectoryAsync` メソッド内で、`SettingsService` への保存後に、自身の `ObservableCollection` に直接パスを追加するように変更し、UIの即時更新を保証しました。
+    -   `MetadataService`, `SettingsService`, `DirectoryViewModel` の各所で詳細なデバッグログを追加し、問題発生時の状況把握を容易にしました。
+    -   `MetadataService.UpsertPreferenceAsync` 内で LiteDB 例外をキャッチした場合、`RepairDatabase()` を呼び出してデータベースの修復を試み、その後に `Upsert` 処理を1回リトライするロジックを導入しました。これにより、一時的なデータベースの不整合があっても自動的に回復を試みるようになりました。
+
+## 結果
+これらの複合的な修正により、アプリケーションはデータベースの不正な状態を自動的に修復し、ディレクトリの追加および削除操作が1回のクリックで確実に反映されるようになりました。ユーザーが手動でデータベースファイルを削除する必要はなくなりました。問題発生時のデバッグログも強化され、今後のトラブルシューティングが容易になります。

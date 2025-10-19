@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Tasks/BridgeImplementationTasks.md",
+                "file": "Tasks/ImplementationTasks.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "BridgeImplementationTasks"
+              "title": "ImplementationTasks"
             }
           }
         ]
@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 305.5
   },
   "right": {
     "id": "690f72de03149a70",
@@ -169,10 +169,10 @@
       "bases:Create new base": false
     }
   },
-  "active": "56e8779befa31e42",
+  "active": "b5c0334a7eb85fb8",
   "lastOpenFiles": [
-    "Tasks/ImplementationTasks.md",
     "Tasks/BridgeImplementationTasks.md",
+    "Tasks/ImplementationTasks.md",
     "Tasks/UI_Animation_Specification.md",
     "ImplementationTasks.md",
     "UI_Animation_Specification.md",

@@ -6,24 +6,31 @@ using System;
 using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
 using System.Collections.Generic; // Listを使用するために追加
 using Microsoft.Extensions.Logging; // Loggerを使用するために追加
+using Microsoft.UI.Xaml.Controls; // IMessengerを使用するために追加
+using System.Linq; // ToListを使用するために追加
+using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
 
 namespace Pivot.Services
 {
     public class SettingsService
     {
-        private readonly IConfiguration _configuration;
+        // private readonly IConfiguration _configuration; // 使用しないため削除
+        private readonly ILogger<SettingsService> _logger;
         private readonly MetadataService _metadataService;
-        private readonly ILogger<SettingsService> _logger; // Loggerを追加
+        private readonly IMessenger _messenger;
 
         // In-memory cache to avoid sync-over-async and improve UI responsiveness
-        private readonly UserSettings _cache = new UserSettings();
+        private UserSettings _cache; // Settingsをメモリにキャッシュ
 
-        public SettingsService(IConfiguration configuration, MetadataService metadataService, ILogger<SettingsService> logger) // Loggerを追加
+        public SettingsService(
+            ILogger<SettingsService> logger,
+            MetadataService metadataService,
+            IMessenger messenger)
         {
-            _configuration = configuration;
+            _logger = logger;
             _metadataService = metadataService;
-            _logger = logger; // Loggerを初期化
-            // Note: Do NOT block here. Call InitializeAsync from App startup sequence.
+            _messenger = messenger;
+            _cache = new UserSettings(); // 初期キャッシュ
         }
 
         private async Task EnsureDbAsync()
@@ -34,71 +41,158 @@ namespace Pivot.Services
             }
         }
 
-        // One-shot async initialization to load defaults and hydrate cache
         public async Task InitializeAsync()
         {
+            _logger.LogInformation("SettingsService: Initializing...");
             await EnsureDbAsync();
+            await LoadSettingsFromDbAsync();
+            _logger.LogInformation("SettingsService: Initialization complete. AssetDirectories count: {AssetCount}", _cache.AssetDirectories.Count);
+        }
 
-            _logger.LogDebug("[SettingsService] Initializing default settings...");
+        private async Task LoadSettingsFromDbAsync()
+        {
+            _logger.LogInformation("SettingsService: Loading settings from DB...");
 
-            // Ensure defaults
-            if (await _metadataService.GetPreferenceAsync("AppTheme") == null)
+            // AssetDirectories
+            var assetPref = await _metadataService.GetPreferenceAsync("AssetDirectories");
+            _cache.AssetDirectories = ParseDirectoriesValue(assetPref?.Value);
+            _logger.LogInformation("SettingsService: Loaded AssetDirectories count from DB (parsed): {Count}", _cache.AssetDirectories.Count);
+            await NormalizeAndPersistIfNeededAsync("AssetDirectories", assetPref?.Value, _cache.AssetDirectories);
+
+            // ImageDirectories
+            var imagePref = await _metadataService.GetPreferenceAsync("ImageDirectories");
+            _cache.ImageDirectories = ParseDirectoriesValue(imagePref?.Value);
+            _logger.LogInformation("SettingsService: Loaded ImageDirectories count from DB (parsed): {Count}", _cache.ImageDirectories.Count);
+            await NormalizeAndPersistIfNeededAsync("ImageDirectories", imagePref?.Value, _cache.ImageDirectories);
+
+            // ProjectDirectories
+            var projectPref = await _metadataService.GetPreferenceAsync("ProjectDirectories");
+            _cache.ProjectDirectories = ParseDirectoriesValue(projectPref?.Value);
+            _logger.LogInformation("SettingsService: Loaded ProjectDirectories count from DB (parsed): {Count}", _cache.ProjectDirectories.Count);
+            await NormalizeAndPersistIfNeededAsync("ProjectDirectories", projectPref?.Value, _cache.ProjectDirectories);
+
+            if (Enum.TryParse<ElementTheme>((await _metadataService.GetPreferenceAsync("AppTheme"))?.Value, out var theme))
             {
-                await SetTheme(ElementTheme.Default);
-                _logger.LogDebug("[SettingsService] Set default AppTheme to: {Theme}", ElementTheme.Default);
+                _cache.AppTheme = theme;
             }
-            if (await _metadataService.GetPreferenceAsync("AppBackdropType") == null)
+            else
             {
-                await SetBackdropType(BackdropType.Mica);
-                _logger.LogDebug("[SettingsService] Set default AppBackdropType to: {Backdrop}", BackdropType.Mica);
+                _cache.AppTheme = ElementTheme.Default;
             }
-            if (await _metadataService.GetPreferenceAsync("AssetDirectories") == null)
+            _logger.LogInformation("SettingsService: Loaded AppTheme: {Theme}", _cache.AppTheme);
+
+            if (Enum.TryParse<BackdropType>((await _metadataService.GetPreferenceAsync("AppBackdropType"))?.Value, out var backdrop))
             {
-                await _metadataService.UpsertPreferenceAsync("AssetDirectories", JsonSerializer.Serialize(new List<string>()));
-                _logger.LogDebug("[SettingsService] Set default AssetDirectories.");
+                _cache.AppBackdropType = backdrop;
             }
-            if (await _metadataService.GetPreferenceAsync("ImageDirectories") == null)
+            else
             {
-                await _metadataService.UpsertPreferenceAsync("ImageDirectories", JsonSerializer.Serialize(new List<string>()));
-                _logger.LogDebug("[SettingsService] Set default ImageDirectories.");
+                _cache.AppBackdropType = BackdropType.Mica;
             }
-            if (await _metadataService.GetPreferenceAsync("ProjectDirectories") == null)
+            _logger.LogInformation("SettingsService: Loaded AppBackdropType: {BackdropType}", _cache.AppBackdropType);
+        }
+
+        private static bool LooksLikeJsonArray(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var v = value.TrimStart();
+            return v.Length > 0 && v[0] == '[';
+        }
+
+        private List<string> ParseDirectoriesValue(string? storedValue)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrWhiteSpace(storedValue)) return result;
+
+            try
             {
-                await _metadataService.UpsertPreferenceAsync("ProjectDirectories", JsonSerializer.Serialize(new List<string>()));
-                _logger.LogDebug("[SettingsService] Set default ProjectDirectories.");
+                var value = storedValue.Trim();
+                if (LooksLikeJsonArray(value))
+                {
+                    AddFromJson(value, result, 0);
+                }
+                else
+                {
+                    // Legacy '|' delimited string
+                    result = value
+                        .Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(s => s.Trim())
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to parse directories value. Falling back to '|' split.");
+                result = (storedValue ?? string.Empty)
+                    .Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
             }
 
-            // Hydrate cache from DB
-            _logger.LogDebug("[SettingsService] Hydrating cache from DB...");
-            var themeEntry = await _metadataService.GetPreferenceAsync("AppTheme");
-            if (themeEntry != null)
+            // Final cleanup: drop empty and obvious garbage tokens
+            result = result
+                .Where(s => !string.IsNullOrWhiteSpace(s) && s != "[]")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return result;
+        }
+
+        private void AddFromJson(string json, List<string> dest, int depth)
+        {
+            if (depth > 6) return; // avoid endless unwrap
+            try
             {
-                _cache.AppTheme = Enum.Parse<ElementTheme>(themeEntry.Value);
+                var arr = JsonSerializer.Deserialize<List<string>>(json);
+                if (arr == null) return;
+
+                foreach (var item in arr)
+                {
+                    if (string.IsNullOrWhiteSpace(item)) continue;
+                    var t = item.Trim();
+                    if (LooksLikeJsonArray(t))
+                    {
+                        AddFromJson(t, dest, depth + 1);
+                    }
+                    else
+                    {
+                        dest.Add(t);
+                    }
+                }
             }
-            var backdropEntry = await _metadataService.GetPreferenceAsync("AppBackdropType");
-            if (backdropEntry != null)
+            catch (Exception ex)
             {
-                _cache.AppBackdropType = Enum.Parse<BackdropType>(backdropEntry.Value);
+                _logger.LogWarning(ex, "SettingsService: JSON parse error at depth {Depth}", depth);
             }
-            var assetDirsEntry = await _metadataService.GetPreferenceAsync("AssetDirectories");
-            if (assetDirsEntry != null)
+        }
+
+        private async Task NormalizeAndPersistIfNeededAsync(string key, string? originalStoredValue, List<string> directories)
+        {
+            try
             {
-                _cache.AssetDirectories = JsonSerializer.Deserialize<List<string>>(assetDirsEntry.Value) ?? new List<string>();
+                var normalized = JsonSerializer.Serialize(directories);
+                if (!string.Equals((originalStoredValue ?? string.Empty).Trim(), normalized, StringComparison.Ordinal))
+                {
+                    _logger.LogInformation("SettingsService: Normalizing and persisting {Key}. Old='{Old}', New='{New}'", key, originalStoredValue, normalized);
+                    await _metadataService.UpsertPreferenceAsync(key, normalized);
+                }
             }
-            var imageDirsEntry = await _metadataService.GetPreferenceAsync("ImageDirectories");
-            if (imageDirsEntry != null)
+            catch (Exception ex)
             {
-                _cache.ImageDirectories = JsonSerializer.Deserialize<List<string>>(imageDirsEntry.Value) ?? new List<string>();
-            }
-            var projectDirsEntry = await _metadataService.GetPreferenceAsync("ProjectDirectories");
-            if (projectDirsEntry != null)
-            {
-                _cache.ProjectDirectories = JsonSerializer.Deserialize<List<string>>(projectDirsEntry.Value) ?? new List<string>();
+                _logger.LogWarning(ex, "SettingsService: Failed to normalize/persist {Key}", key);
             }
         }
 
         // Synchronous getters now use in-memory cache
-        public UserSettings GetUserSettings() => _cache;
+        public UserSettings GetUserSettings()
+        {
+            _logger.LogDebug("SettingsService: GetUserSettings called. Current AssetDirectories count: {Count}", _cache.AssetDirectories.Count);
+            return _cache;
+        }
 
         public ElementTheme GetTheme() => _cache.AppTheme;
 

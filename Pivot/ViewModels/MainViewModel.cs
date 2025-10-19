@@ -10,14 +10,13 @@ using Microsoft.Extensions.Logging;
 using Pivot.Models;
 using Pivot.Services;
 using Pivot.Messages;
-using Pivot.Models;
 using System.Linq;
 
 namespace Pivot.ViewModels
 {
 	public partial class MainViewModel : ObservableObject
 	{
-		//private readonly ILogger<MainViewModel> _logger; // コメントアウト
+		private readonly ILogger<MainViewModel> _logger;
 		private readonly IConfiguration _configuration;
 		private readonly FileScannerService _fileScannerService;
 		private readonly MetadataService _metadataService;
@@ -33,26 +32,21 @@ namespace Pivot.ViewModels
 
 		public ObservableCollection<string> ScanDirectories { get; } = new ObservableCollection<string>(); // 新しいスキャン対象ディレクトリリスト
 
-		private bool _isScanning;
-		public bool IsScanning
-		{
-			get => _isScanning;
-			set => SetProperty(ref _isScanning, value);
-		}
+		[ObservableProperty]
+		[NotifyCanExecuteChangedFor(nameof(ScanCommand))]
+		private bool _isScanning; // _isScanning プロパティを再追加
 
-		private int _progress;
-		public int Progress
-		{
-			get => _progress;
-			set => SetProperty(ref _progress, value);
-		}
+		[ObservableProperty]
+		private int _progress; // _progress プロパティを再追加
 
-		public ObservableCollection<FileEntry> Files { get; } = new ObservableCollection<FileEntry>();
+		[ObservableProperty]
+		private ObservableCollection<FileEntry> _files = new();
 
 		private CancellationTokenSource? _scanCts;
 
         public IAsyncRelayCommand ScanCommand { get; }
         public IRelayCommand CancelScanCommand { get; }
+        public IRelayCommand TogglePreferencePaneCommand { get; }
         public IRelayCommand<NavigationRegion> RequestNavigateCommand { get; }
 
         // Directory preferences commands
@@ -62,28 +56,31 @@ namespace Pivot.ViewModels
         public IAsyncRelayCommand<string> RemoveDirectoryCommand { get; private set; }
 
 		[ObservableProperty]
+		[NotifyCanExecuteChangedFor(nameof(TogglePreferencePaneCommand))]
 		private bool _isPreferencePaneOpen;
 
         public MainViewModel(
-			//ILogger<MainViewModel> logger, // コメントアウト
+			ILogger<MainViewModel> logger,
 			IConfiguration configuration,
 			FileScannerService fileScannerService,
 			MetadataService metadataService,
             SettingsService settingsService,
-            IMessenger messenger) // SettingsServiceをDIに追加
+            IMessenger messenger)
 		{
-			//_logger = logger; // コメントアウト
+			_logger = logger;
 			_configuration = configuration;
 			_fileScannerService = fileScannerService;
 			_metadataService = metadataService;
-            _settingsService = settingsService; // SettingsServiceを初期化
+            _settingsService = settingsService;
             _messenger = messenger;
 
-			// _rootPath = _configuration["AppSettings:ScanRootFolder"] ?? string.Empty; // 削除
-			LoadScanDirectories(); // ディレクトリ設定を読み込む
+            // コンストラクタでのLoadScanDirectories呼び出しと自動スキャンロジックを削除
+            // LoadScanDirectories(); 
+            // _logger.LogInformation("LoadScanDirectories completed. Count: {Count}", ScanDirectories.Count);
 
             ScanCommand = new AsyncRelayCommand(ScanAsync, CanStartScan);
-			CancelScanCommand = new RelayCommand(CancelScan, () => IsScanning);
+            CancelScanCommand = new RelayCommand(() => _scanCts?.Cancel(), () => IsScanning);
+            TogglePreferencePaneCommand = new RelayCommand(TogglePreferencePane);
             RequestNavigateCommand = new RelayCommand<NavigationRegion>(region =>
             {
                 _messenger.Send(new NavigationRequestMessage(region));
@@ -92,68 +89,140 @@ namespace Pivot.ViewModels
             AddAssetDirectoryCommand = new AsyncRelayCommand<string>(async path =>
             {
                 if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
+                _logger.LogInformation("Adding Asset Directory: {Path}", path);
                 await _settingsService.AddDirectoryAsync(DirectoryCategory.Asset, path);
-                LoadScanDirectories();
+                LoadScanDirectories(); // ディレクトリ追加後に再度ロード
+                _logger.LogInformation("Asset Directory added. Triggering scan...");
+                _messenger.Send(new ScanStartedMessage(true));
+                await ScanAsync();
             });
-
             AddImageDirectoryCommand = new AsyncRelayCommand<string>(async path =>
             {
                 if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
+                _logger.LogInformation("Adding Image Directory: {Path}", path);
                 await _settingsService.AddDirectoryAsync(DirectoryCategory.Image, path);
-                LoadScanDirectories();
+                LoadScanDirectories(); // ディレクトリ追加後に再度ロード
+                _logger.LogInformation("Image Directory added. Triggering scan...");
+                _messenger.Send(new ScanStartedMessage(true));
+                await ScanAsync();
             });
-
             AddProjectDirectoryCommand = new AsyncRelayCommand<string>(async path =>
             {
                 if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
+                _logger.LogInformation("Adding Project Directory: {Path}", path);
                 await _settingsService.AddDirectoryAsync(DirectoryCategory.Project, path);
-                LoadScanDirectories();
+                LoadScanDirectories(); // ディレクトリ追加後に再度ロード
+                _logger.LogInformation("Project Directory added. Triggering scan...");
+                _messenger.Send(new ScanStartedMessage(true));
+                await ScanAsync();
             });
 
             RemoveDirectoryCommand = new AsyncRelayCommand<string>(async path =>
             {
                 if (string.IsNullOrWhiteSpace(path)) return;
+                _logger.LogInformation("Removing directory: {Path}", path);
+                // 全てのカテゴリから削除を試みる
                 await _settingsService.RemoveDirectoryAsync(DirectoryCategory.Asset, path);
                 await _settingsService.RemoveDirectoryAsync(DirectoryCategory.Image, path);
                 await _settingsService.RemoveDirectoryAsync(DirectoryCategory.Project, path);
-                LoadScanDirectories();
+                LoadScanDirectories(); // ディレクトリ削除後に再度ロード
+                _logger.LogInformation("Directory removed. Current ScanDirectories count: {Count}", ScanDirectories.Count);
             });
 
-			// PreferencePaneの初期状態を設定 (例: 起動時は開いておく)
-			IsPreferencePaneOpen = true;
+            IsPreferencePaneOpen = true;
+        }
+
+        /// <summary>
+        /// MainViewModelの初期化処理。
+        /// App.xaml.csでSettingsServiceの初期化後に呼び出されることを想定。
+        /// </summary>
+        public async Task InitializeAsync()
+        {
+            _logger.LogInformation("MainViewModel: Initializing asynchronously...");
+            LoadScanDirectories();
+            _logger.LogInformation("MainViewModel: LoadScanDirectories completed in InitializeAsync. Count: {Count}", ScanDirectories.Count);
+
+            if (CanStartScan())
+            {
+                _logger.LogInformation("MainViewModel: Auto-scan triggered from InitializeAsync.");
+                _messenger.Send(new ScanStartedMessage(true));
+                await ScanAsync();
+            }
+            else
+            {
+                _logger.LogWarning("MainViewModel: Auto-scan skipped in InitializeAsync: CanStartScan returned false. IsScanning={IsScanning}, ScanDirectories.Count={Count}", IsScanning, ScanDirectories.Count);
+            }
+        }
+
+		private async Task InitializeAndAutoScanAsync()
+		{
+			try
+			{
+				await Task.Delay(500); // UI 初期化を待つ
+				if (CanStartScan())
+				{
+					_messenger.Send(new ScanStartedMessage(true));
+					await ScanAsync();
+				}
+			}
+			catch (Exception)
+			{
+				//_logger?.LogError(ex, "Auto scan failed");
+			}
 		}
 
 		private bool CanStartScan()
 		{
-			// return !IsScanning && !string.IsNullOrWhiteSpace(RootPath); // 変更
-			return !IsScanning && ScanDirectories.Any(d => !string.IsNullOrWhiteSpace(d) && System.IO.Directory.Exists(d));
+			_logger.LogInformation("CanStartScan: Checking {Count} directories", ScanDirectories.Count);
+			foreach (var dir in ScanDirectories)
+			{
+				bool exists = System.IO.Directory.Exists(dir);
+				_logger.LogInformation("CanStartScan: Directory '{Directory}' exists: {Exists}", dir, exists);
+				if (!string.IsNullOrWhiteSpace(dir) && exists)
+				{
+					_logger.LogInformation("CanStartScan: Found valid directory, returning true");
+					return !IsScanning;
+				}
+			}
+			_logger.LogWarning("CanStartScan: No valid directories found");
+			return false;
 		}
 
 		private async Task ScanAsync()
 		{
-			if (!CanStartScan()) return;
+			_logger.LogInformation("ScanAsync called. CanStartScan={CanStartScan}", CanStartScan());
+			if (!CanStartScan()) 
+			{
+				_logger.LogWarning("ScanAsync returning early: CanStartScan is false");
+				return;
+			}
 			IsScanning = true;
 			Progress = 0;
-			Files.Clear();
+			Files.Clear(); // _files.Clear() を Files.Clear() に変更
 			_scanCts = new CancellationTokenSource();
 			var progress = new Progress<int>(value => Progress = value);
 			try
 			{
+				_logger.LogInformation("Starting scan for directories: {Directories}", string.Join(", ", ScanDirectories));
 				await _fileScannerService.ScanAsync(ScanDirectories, progress, _scanCts.Token);
 
 				var all = await _metadataService.GetFilesAsync(0, 1000);
 				foreach (var f in all)
 				{
-					Files.Add(f);
+					Files.Add(f); // _files.Add(f) を Files.Add(f) に変更
 				}
+
+				_logger.LogInformation("Scan completed successfully. Files found: {Count}", all.Count);
+				// スキャン完了メッセージを送信
+				_messenger.Send(new ScanCompletedMessage(true));
 			}
 			catch (OperationCanceledException)
 			{
-				//_logger.LogInformation("Scan cancelled."); // コメントアウト
+				_logger.LogInformation("Scan cancelled.");
 			}
 			catch (Exception ex)
 			{
-				//_logger.LogError(ex, "Scan failed."); // コメントアウト
+				_logger.LogError(ex, "Scan failed.");
 			}
 			finally
 			{
@@ -170,15 +239,25 @@ namespace Pivot.ViewModels
 
         public void LoadScanDirectories()
         {
+            _logger.LogInformation("MainViewModel: LoadScanDirectories called.");
             var settings = _settingsService.GetUserSettings();
+            _logger.LogInformation("MainViewModel: GetUserSettings returned. AssetDirectories count: {AssetCount}, ImageDirectories count: {ImageCount}, ProjectDirectories count: {ProjectCount}",
+                settings.AssetDirectories.Count, settings.ImageDirectories.Count, settings.ProjectDirectories.Count);
+            
             ScanDirectories.Clear();
             foreach (var dir in settings.AssetDirectories) ScanDirectories.Add(dir);
             foreach (var dir in settings.ImageDirectories) ScanDirectories.Add(dir);
             foreach (var dir in settings.ProjectDirectories) ScanDirectories.Add(dir);
 
+            _logger.LogInformation("MainViewModel: ScanDirectories updated. Total count: {Count}", ScanDirectories.Count);
             // ScanDirectoriesの変更をUIに通知し、CanExecuteChangedを呼び出す
             OnPropertyChanged(nameof(ScanDirectories));
             (ScanCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
         }
-	}
+
+        private void TogglePreferencePane()
+        {
+            IsPreferencePaneOpen = !IsPreferencePaneOpen;
+        }
+    }
 }

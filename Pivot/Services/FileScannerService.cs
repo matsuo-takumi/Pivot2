@@ -8,7 +8,9 @@ using System.Diagnostics;
 using System.Threading;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Models;
+using Pivot.Messages;
 
 namespace Pivot.Services
 {
@@ -16,6 +18,7 @@ namespace Pivot.Services
     {
         private readonly ILogger<FileScannerService> _logger;
         private readonly MetadataService _metadataService;
+        private readonly IMessenger _messenger;
         private FileSystemWatcher? _watcher;
         private string? _currentRootPath;
         private CancellationTokenSource? _watcherCts;
@@ -53,10 +56,11 @@ namespace Pivot.Services
         private SemaphoreSlim? _fileOpenSemaphore;
         private SemaphoreSlim? _hashSemaphore;
 
-        public FileScannerService(ILogger<FileScannerService> logger, MetadataService metadataService)
+        public FileScannerService(ILogger<FileScannerService> logger, MetadataService metadataService, IMessenger messenger)
         {
             _logger = logger;
             _metadataService = metadataService;
+            _messenger = messenger;
         }
 
         public async Task ScanAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
@@ -351,6 +355,17 @@ namespace Pivot.Services
                     await _metadataService.UpsertFileAsync(path, type, fileInfo.Length, fileInfo.LastWriteTimeUtc, hash);
                     _logger.LogInformation("Upserted metadata for: {Path}", path);
 
+                    // Update scan cache
+                    try
+                    {
+                        var cacheEntry = new ScanCacheEntry(path, hash, fileInfo.Length, fileInfo.LastWriteTimeUtc, _currentRootPath ?? string.Empty);
+                        await _metadataService.UpsertScanCacheAsync(cacheEntry);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to update scan cache for: {Path}", path);
+                    }
+
                     // Asset integration: create or update AssetEntry when file looks like an asset
                     try
                     {
@@ -369,6 +384,7 @@ namespace Pivot.Services
                                     existingAsset.File = fileEntry;
                                     existingAsset.UpdatedAt = DateTime.UtcNow;
                                     await _metadataService.UpdateAssetEntryAsync(existingAsset);
+                                    _messenger.Send(new AssetChangedMessage(new AssetChangedMessageData(AssetChangedMessageData.ChangeType.Updated, path)));
                                 }
                                 else
                                 {
@@ -384,6 +400,7 @@ namespace Pivot.Services
                                         UpdatedAt = DateTime.UtcNow
                                     };
                                     await _metadataService.AddAssetEntryAsync(newAsset);
+                                    _messenger.Send(new AssetChangedMessage(new AssetChangedMessageData(AssetChangedMessageData.ChangeType.Added, path)));
                                 }
                             }
                         }
@@ -401,11 +418,143 @@ namespace Pivot.Services
             }
         }
 
+        /// <summary>
+        /// ファイルが前回のスキャン結果と比較して変更されているかチェックします。
+        /// スキャンキャッシュを利用して、重複したハッシュ計算を避けます。
+        /// </summary>
+        private async Task<bool> HasFileChangedAsync(string path, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var fileInfo = new FileInfo(path);
+                var cacheEntry = await _metadataService.GetScanCacheAsync(path);
+
+                if (cacheEntry == null)
+                {
+                    _logger.LogDebug("No cache entry found for: {Path}", path);
+                    return true; // キャッシュなし = 新規ファイル = 変更あり
+                }
+
+                // サイズと最終更新時刻が同じなら、キャッシュされたハッシュを信頼
+                if (cacheEntry.Size == fileInfo.Length && cacheEntry.LastModifiedUtc == fileInfo.LastWriteTimeUtc)
+                {
+                    _logger.LogDebug("File unchanged (cache hit): {Path}", path);
+                    return false; // 変更なし
+                }
+
+                _logger.LogDebug("File changed (cache miss): {Path}, Size: {Size} -> {NewSize}, LastModified: {LastMod} -> {NewLastMod}", 
+                    path, cacheEntry.Size, fileInfo.Length, cacheEntry.LastModifiedUtc, fileInfo.LastWriteTimeUtc);
+                return true; // 変更あり
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error checking file cache status for: {Path}", path);
+                return true; // エラー時は安全側（変更ありとして処理）
+            }
+        }
+
+        /// <summary>
+        /// スキャン対象の全ファイルのうち、変更があったファイルのみを処理して高速化します。
+        /// </summary>
+        public async Task ScanWithCacheAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
+        {
+            StopWatching();
+
+            foreach (var rootPath in rootPaths)
+            {
+                if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
+                {
+                    _logger.LogWarning("Root path invalid: {rootPath}", rootPath);
+                    continue;
+                }
+
+                _currentRootPath = rootPath;
+                _logger.LogInformation("Starting scan with cache optimization for: {RootPath}", rootPath);
+
+                double mbps = 0;
+                try
+                {
+                    mbps = await ProbeThroughputMbPerSecAsync(rootPath, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Probe failed for {rootPath}, falling back to defaults", rootPath);
+                }
+
+                ConfigureForRoot(mbps, out int scanDop, out int hashDop);
+                _fileOpenSemaphore = new SemaphoreSlim(DefaultMaxOpenFiles);
+                _hashSemaphore = new SemaphoreSlim(hashDop);
+
+                var allFiles = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories).ToList();
+                int total = allFiles.Count;
+                int processed = 0;
+                int changedCount = 0;
+
+                // First pass: identify changed files using cache
+                var changedFiles = new System.Collections.Concurrent.ConcurrentBag<string>();
+                await Parallel.ForEachAsync(allFiles, new ParallelOptions { MaxDegreeOfParallelism = scanDop, CancellationToken = cancellationToken }, async (path, ct) =>
+                {
+                    try
+                    {
+                        if (await HasFileChangedAsync(path, ct))
+                        {
+                            changedFiles.Add(path);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error checking cache status for file: {path}", path);
+                    }
+                    finally
+                    {
+                        Interlocked.Increment(ref processed);
+                        if (total > 0)
+                        {
+                            int percent = (int)Math.Clamp(processed * 50.0 / total, 0, 50); // First 50% for cache check
+                            progress?.Report(percent);
+                        }
+                    }
+                });
+
+                // Second pass: process changed files
+                changedCount = changedFiles.Count;
+                _logger.LogInformation("Found {ChangedCount} changed files out of {TotalCount}", changedCount, total);
+                processed = 0;
+
+                await Parallel.ForEachAsync(changedFiles, new ParallelOptions { MaxDegreeOfParallelism = scanDop, CancellationToken = cancellationToken }, async (path, ct) =>
+                {
+                    try
+                    {
+                        await ProcessFileChange(path, WatcherChangeTypes.Created, null, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to process changed file: {path}", path);
+                    }
+                    finally
+                    {
+                        Interlocked.Increment(ref processed);
+                        if (changedCount > 0)
+                        {
+                            int percent = (int)Math.Clamp(50 + processed * 50.0 / changedCount, 50, 100); // Second 50% for processing
+                            progress?.Report(percent);
+                        }
+                    }
+                });
+
+                progress?.Report(100);
+                _logger.LogInformation("Scan with cache completed for {rootPath}. Processed {ChangedCount} changed files.", rootPath, changedCount);
+                StartWatching(rootPath);
+            }
+        }
+
         public void Dispose()
         {
             StopWatching();
             foreach (var cts in _delayTokens.Values) cts.Dispose();
             _delayTokens.Clear();
+            try { _fileOpenSemaphore?.Dispose(); } catch { }
+            try { _hashSemaphore?.Dispose(); } catch { }
             GC.SuppressFinalize(this);
         }
 

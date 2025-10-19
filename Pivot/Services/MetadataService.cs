@@ -5,18 +5,22 @@ using System.IO;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Diagnostics;
 using Pivot.Models; // 必要に応じてモデルを定義する
 using LiteDB; // LiteDB を使用するために追加
 
 namespace Pivot.Services
 {
-    public class MetadataService
+    public class MetadataService : IDisposable
     {
         private readonly ILogger<MetadataService> _logger;
         private readonly IConfiguration _configuration;
         private readonly string _databasePath;
 
         public LiteDatabase? Database { get; private set; }
+        // 全書き込み操作を直列化する軽量セマフォ
+        private readonly SemaphoreSlim _dbWriteLock = new SemaphoreSlim(1, 1);
 
         public MetadataService(ILogger<MetadataService> logger, IConfiguration configuration)
         {
@@ -92,6 +96,11 @@ namespace Pivot.Services
                 // If an old incorrect index exists, drop it to avoid duplicate-null errors
                 try { preferences.DropIndex("Key"); } catch { /* ignore if not exists */ }
 
+                // ScanCache コレクション初期化
+                var scanCache = Database.GetCollection<ScanCacheEntry>();
+                scanCache.EnsureIndex("RootPath", false);  // RootPath は非ユニークインデックス（スキャン範囲での検索用）
+                scanCache.EnsureIndex("CachedAt", false);  // CachedAt は非ユニークインデックス（古いキャッシュ削除用）
+
                 _logger.LogInformation("Database initialized and tables created.");
 
                 // 4. データベース修復処理（既存 DB の場合のみ）
@@ -107,6 +116,32 @@ namespace Pivot.Services
             }
         }
 
+        private async Task ExecuteWithWriteLockAsync(Func<Task> action)
+        {
+            await _dbWriteLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await action().ConfigureAwait(false);
+            }
+            finally
+            {
+                _dbWriteLock.Release();
+            }
+        }
+
+        private async Task<T> ExecuteWithWriteLockAsync<T>(Func<Task<T>> action)
+        {
+            await _dbWriteLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            finally
+            {
+                _dbWriteLock.Release();
+            }
+        }
+
         /// <summary>
         /// 不正なエントリを削除してデータベースを修復します。
         /// </summary>
@@ -114,6 +149,11 @@ namespace Pivot.Services
         {
             try
             {
+                if (Database == null)
+                {
+                    _logger.LogWarning("RepairDatabase called but Database is null. Skipping repair.");
+                    return;
+                }
                 _logger.LogInformation("Starting database repair check...");
 
                 // Access raw BSON collection by name to inspect _id values directly
@@ -193,7 +233,8 @@ namespace Pivot.Services
         public async Task UpsertFileAsync(string path, string type, long size, DateTime updatedAt, string hash)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var files = Database.GetCollection<FileEntry>();
             var newEntry = new FileEntry
             {
@@ -204,35 +245,63 @@ namespace Pivot.Services
                 Hash = hash
             };
             
-            // LiteDB の Upsert は Id を基準に行われるため、Path で検索して Id を設定する
+                await Task.Run(() =>
+                {
             var existingEntry = files.FindOne(f => f.Path == path);
             if (existingEntry != null)
             {
-                newEntry.Id = existingEntry.Id; // 既存のIdを再利用
-                files.Update(newEntry); // 更新
+                        newEntry.Id = existingEntry.Id;
+                        files.Update(newEntry);
             }
             else
             {
-                files.Insert(newEntry); // 新規挿入
+                        files.Insert(newEntry);
             }
+                }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         public async Task DeleteFileAsync(string path)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var files = Database.GetCollection<FileEntry>();
+                await Task.Run(() =>
+                {
             var matches = files.Find(Query.EQ("Path", path)).ToList();
             foreach (var m in matches)
             {
                 files.Delete(m.Id);
             }
+                }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         public async Task<List<FileEntry>> GetFilesAsync(int skip, int take)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
             var files = Database.GetCollection<FileEntry>();
-            return await Task.Run(() => files.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() => files.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+            sw.Stop();
+            _logger.LogDebug("GetFilesAsync skip={Skip} take={Take} fetched={Count} in {Ms} ms", skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        // ストリーミング取得（大規模一覧向け）。
+        public async IAsyncEnumerable<FileEntry> StreamFilesAsync(int batchSize = 500)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var files = Database.GetCollection<FileEntry>();
+            int skip = 0;
+            while (true)
+            {
+                var batch = await Task.Run(() => files.Find(Query.All("UpdatedAt", Query.Descending), skip, batchSize).ToList());
+                if (batch.Count == 0) yield break;
+                foreach (var item in batch) yield return item;
+                skip += batch.Count;
+            }
         }
 
         // FileEntry を ID で取得
@@ -271,8 +340,11 @@ namespace Pivot.Services
         public async Task AddImageEntryAsync(ImageEntry imageEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var images = Database.GetCollection<ImageEntry>();
-            await Task.Run(() => images.Insert(imageEntry));
+                await Task.Run(() => images.Insert(imageEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // ImageEntry を ID で取得
@@ -295,24 +367,30 @@ namespace Pivot.Services
         public async Task UpdateImageEntryAsync(ImageEntry imageEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var images = Database.GetCollection<ImageEntry>();
-            await Task.Run(() => images.Update(imageEntry));
+                await Task.Run(() => images.Update(imageEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // ImageEntry を削除
         public async Task DeleteImageEntryAsync(int id)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var images = Database.GetCollection<ImageEntry>();
-            await Task.Run(() => images.Delete(id));
+                await Task.Run(() => images.Delete(id)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
-        // 全ての ImageEntry を取得 (ページングなし)
+        // 全件取得は大規模データで非推奨。ページングAPIを利用してください。
+        [Obsolete("Use GetImageEntriesAsync(skip,take) instead.")]
         public async Task<List<ImageEntry>> GetAllImageEntriesAsync()
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var images = Database.GetCollection<ImageEntry>();
-            return await Task.Run(() => images.Include(i => i.File).FindAll().ToList());
+            return await GetImageEntriesAsync(0, 200); // 安全なデフォルト
         }
 
         // ImageEntry をページングで取得
@@ -320,15 +398,36 @@ namespace Pivot.Services
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
             var images = Database.GetCollection<ImageEntry>();
-            return await Task.Run(() => images.Include(i => i.File).Find(Query.All(), skip, take).ToList());
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() => images.Include(i => i.File).Find(Query.All(), skip, take).ToList());
+            sw.Stop();
+            _logger.LogDebug("GetImageEntriesAsync skip={Skip} take={Take} fetched={Count} in {Ms} ms", skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        public async IAsyncEnumerable<ImageEntry> StreamImageEntriesAsync(int batchSize = 500)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var images = Database.GetCollection<ImageEntry>();
+            int skip = 0;
+            while (true)
+            {
+                var batch = await Task.Run(() => images.Include(i => i.File).Find(Query.All(), skip, batchSize).ToList());
+                if (batch.Count == 0) yield break;
+                foreach (var item in batch) yield return item;
+                skip += batch.Count;
+            }
         }
 
         // ProjectEntry の追加
         public async Task AddProjectEntryAsync(ProjectEntry projectEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var projects = Database.GetCollection<ProjectEntry>();
-            await Task.Run(() => projects.Insert(projectEntry));
+                await Task.Run(() => projects.Insert(projectEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // ProjectEntry を ID で取得
@@ -351,24 +450,30 @@ namespace Pivot.Services
         public async Task UpdateProjectEntryAsync(ProjectEntry projectEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var projects = Database.GetCollection<ProjectEntry>();
-            await Task.Run(() => projects.Update(projectEntry));
+                await Task.Run(() => projects.Update(projectEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // ProjectEntry を削除
         public async Task DeleteProjectEntryAsync(int id)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var projects = Database.GetCollection<ProjectEntry>();
-            await Task.Run(() => projects.Delete(id));
+                await Task.Run(() => projects.Delete(id)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
-        // 全ての ProjectEntry を取得 (ページングなし)
+        // 全件取得は大規模データで非推奨。ページングAPIを利用してください。
+        [Obsolete("Use GetProjectEntriesAsync(skip,take) instead.")]
         public async Task<List<ProjectEntry>> GetAllProjectEntriesAsync()
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var projects = Database.GetCollection<ProjectEntry>();
-            return await Task.Run(() => projects.Include(p => p.Files).FindAll().ToList());
+            return await GetProjectEntriesAsync(0, 200);
         }
 
         // ProjectEntry をページングで取得
@@ -376,10 +481,28 @@ namespace Pivot.Services
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
             var projects = Database.GetCollection<ProjectEntry>();
-            return await Task.Run(() => projects
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() => projects
                 .Include(p => p.Files)
                 .Find(Query.All("UpdatedAt", Query.Descending), skip, take)
                 .ToList());
+            sw.Stop();
+            _logger.LogDebug("GetProjectEntriesAsync skip={Skip} take={Take} fetched={Count} in {Ms} ms", skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        public async IAsyncEnumerable<ProjectEntry> StreamProjectEntriesAsync(int batchSize = 200)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var projects = Database.GetCollection<ProjectEntry>();
+            int skip = 0;
+            while (true)
+            {
+                var batch = await Task.Run(() => projects.Include(p => p.Files).Find(Query.All("UpdatedAt", Query.Descending), skip, batchSize).ToList());
+                if (batch.Count == 0) yield break;
+                foreach (var item in batch) yield return item;
+                skip += batch.Count;
+            }
         }
 
         // Name をキーとして Upsert（存在すれば更新、なければ作成）
@@ -417,8 +540,11 @@ namespace Pivot.Services
         public async Task AddAssetEntryAsync(AssetEntry assetEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var assets = Database.GetCollection<AssetEntry>();
-            await Task.Run(() => assets.Insert(assetEntry));
+                await Task.Run(() => assets.Insert(assetEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // AssetEntry を ID で取得
@@ -442,31 +568,58 @@ namespace Pivot.Services
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
             var assets = Database.GetCollection<AssetEntry>();
-            return await Task.Run(() => assets.Include(a => a.File).Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() => assets.Include(a => a.File).Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+            sw.Stop();
+            _logger.LogDebug("GetAssetEntriesAsync skip={Skip} take={Take} fetched={Count} in {Ms} ms", skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        public async IAsyncEnumerable<AssetEntry> StreamAssetEntriesAsync(int batchSize = 500)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            int skip = 0;
+            while (true)
+            {
+                var batch = await Task.Run(() => assets.Include(a => a.File).Find(Query.All("UpdatedAt", Query.Descending), skip, batchSize).ToList());
+                if (batch.Count == 0) yield break;
+                foreach (var item in batch) yield return item;
+                skip += batch.Count;
+            }
         }
 
         // AssetEntry を更新
         public async Task UpdateAssetEntryAsync(AssetEntry assetEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var assets = Database.GetCollection<AssetEntry>();
-            await Task.Run(() => assets.Update(assetEntry));
+                await Task.Run(() => assets.Update(assetEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // AssetEntry を削除
         public async Task DeleteAssetEntryAsync(int id)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
             var assets = Database.GetCollection<AssetEntry>();
-            await Task.Run(() => assets.Delete(id));
+                await Task.Run(() => assets.Delete(id)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // ScriptEntry の追加
         public async Task AddScriptEntryAsync(ScriptEntry scriptEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var scripts = Database.GetCollection<ScriptEntry>();
-            await Task.Run(() => scripts.Insert(scriptEntry));
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var scripts = Database.GetCollection<ScriptEntry>();
+                await Task.Run(() => scripts.Insert(scriptEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // ScriptEntry を ID で取得
@@ -530,35 +683,65 @@ namespace Pivot.Services
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
             var scripts = Database.GetCollection<ScriptEntry>();
-            return await Task.Run(() => scripts.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() => scripts.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
+            sw.Stop();
+            _logger.LogDebug("GetScriptEntriesAsync skip={Skip} take={Take} fetched={Count} in {Ms} ms", skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        public async IAsyncEnumerable<ScriptEntry> StreamScriptEntriesAsync(int batchSize = 500)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            int skip = 0;
+            while (true)
+            {
+                var batch = await Task.Run(() => scripts.Find(Query.All("UpdatedAt", Query.Descending), skip, batchSize).ToList());
+                if (batch.Count == 0) yield break;
+                foreach (var item in batch) yield return item;
+                skip += batch.Count;
+            }
         }
 
         // ScriptEntry を更新
         public async Task UpdateScriptEntryAsync(ScriptEntry scriptEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var scripts = Database.GetCollection<ScriptEntry>();
-            await Task.Run(() => scripts.Update(scriptEntry));
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var scripts = Database.GetCollection<ScriptEntry>();
+                await Task.Run(() => scripts.Update(scriptEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // ScriptEntry を削除
         public async Task DeleteScriptEntryAsync(int id)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var scripts = Database.GetCollection<ScriptEntry>();
-            await Task.Run(() => scripts.Delete(id));
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var scripts = Database.GetCollection<ScriptEntry>();
+                await Task.Run(() => scripts.Delete(id)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // Path で削除
         public async Task DeleteScriptByPathAsync(string path)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var scripts = Database.GetCollection<ScriptEntry>();
-            var script = await GetScriptEntryByPathAsync(path);
-            if (script != null)
+            await ExecuteWithWriteLockAsync(async () =>
             {
-                await DeleteScriptEntryAsync(script.Id);
-            }
+                var scripts = Database.GetCollection<ScriptEntry>();
+                await Task.Run(() =>
+                {
+                    var s = scripts.FindOne(x => x.Path == path);
+                    if (s != null)
+                    {
+                        scripts.Delete(s.Id);
+                    }
+                }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // Upsert: Path をキーに、存在すれば更新、なければ作成
@@ -573,52 +756,55 @@ namespace Pivot.Services
             string? version = null)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var scripts = Database.GetCollection<ScriptEntry>();
-
-            return await Task.Run(() =>
+            return await ExecuteWithWriteLockAsync(async () =>
             {
-                var existing = scripts.FindOne(s => s.Path == path);
-                if (existing != null)
+                var scripts = Database.GetCollection<ScriptEntry>();
+                return await Task.Run(() =>
                 {
-                    // 既存エントリを更新
-                    if (!string.IsNullOrEmpty(name)) existing.Name = name;
-                    if (!string.IsNullOrEmpty(language)) existing.Language = language;
-                    if (!string.IsNullOrEmpty(targetApplication)) existing.TargetApplication = targetApplication;
-                    if (codeContent != null) existing.CodeContent = codeContent;
-                    if (description != null) existing.Description = description;
-                    if (category != null) existing.Category = category;
-                    if (version != null) existing.Version = version;
-                    existing.UpdatedAt = DateTime.UtcNow;
-                    scripts.Update(existing);
-                    return existing;
-                }
+                    var existing = scripts.FindOne(s => s.Path == path);
+                    if (existing != null)
+                    {
+                        if (!string.IsNullOrEmpty(name)) existing.Name = name;
+                        if (!string.IsNullOrEmpty(language)) existing.Language = language;
+                        if (!string.IsNullOrEmpty(targetApplication)) existing.TargetApplication = targetApplication;
+                        if (codeContent != null) existing.CodeContent = codeContent;
+                        if (description != null) existing.Description = description;
+                        if (category != null) existing.Category = category;
+                        if (version != null) existing.Version = version;
+                        existing.UpdatedAt = DateTime.UtcNow;
+                        scripts.Update(existing);
+                        return existing;
+                    }
 
-                // 新規作成
-                var newScript = new ScriptEntry
-                {
-                    Path = path,
-                    Name = name,
-                    Language = language,
-                    TargetApplication = targetApplication,
-                    CodeContent = codeContent ?? string.Empty,
-                    Description = description ?? string.Empty,
-                    Category = category ?? string.Empty,
-                    Version = version ?? "1.0.0",
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                scripts.Insert(newScript);
-                return newScript;
-            });
+                    var newScript = new ScriptEntry
+                    {
+                        Path = path,
+                        Name = name,
+                        Language = language,
+                        TargetApplication = targetApplication,
+                        CodeContent = codeContent ?? string.Empty,
+                        Description = description ?? string.Empty,
+                        Category = category ?? string.Empty,
+                        Version = version ?? "1.0.0",
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    scripts.Insert(newScript);
+                    return newScript;
+                }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // UnrealPresetEntry の追加
         public async Task AddUnrealPresetEntryAsync(UnrealPresetEntry presetEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var presets = Database.GetCollection<UnrealPresetEntry>();
-            await Task.Run(() => presets.Insert(presetEntry));
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var presets = Database.GetCollection<UnrealPresetEntry>();
+                await Task.Run(() => presets.Insert(presetEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // UnrealPresetEntry を ID で取得
@@ -669,20 +855,40 @@ namespace Pivot.Services
             return await Task.Run(() => presets.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList());
         }
 
+        public async IAsyncEnumerable<UnrealPresetEntry> StreamUnrealPresetEntriesAsync(int batchSize = 200)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            int skip = 0;
+            while (true)
+            {
+                var batch = await Task.Run(() => presets.Find(Query.All("UpdatedAt", Query.Descending), skip, batchSize).ToList());
+                if (batch.Count == 0) yield break;
+                foreach (var item in batch) yield return item;
+                skip += batch.Count;
+            }
+        }
+
         // UnrealPresetEntry を更新
         public async Task UpdateUnrealPresetEntryAsync(UnrealPresetEntry presetEntry)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var presets = Database.GetCollection<UnrealPresetEntry>();
-            await Task.Run(() => presets.Update(presetEntry));
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var presets = Database.GetCollection<UnrealPresetEntry>();
+                await Task.Run(() => presets.Update(presetEntry)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // UnrealPresetEntry を削除
         public async Task DeleteUnrealPresetEntryAsync(int id)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var presets = Database.GetCollection<UnrealPresetEntry>();
-            await Task.Run(() => presets.Delete(id));
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var presets = Database.GetCollection<UnrealPresetEntry>();
+                await Task.Run(() => presets.Delete(id)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // Upsert: Name をキーに、存在すれば更新、なければ作成
@@ -696,43 +902,43 @@ namespace Pivot.Services
             string? engineVersion = null)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var presets = Database.GetCollection<UnrealPresetEntry>();
-
-            return await Task.Run(() =>
+            return await ExecuteWithWriteLockAsync(async () =>
             {
-                var existing = presets.FindOne(p => p.Name == name);
-                if (existing != null)
+                var presets = Database.GetCollection<UnrealPresetEntry>();
+                return await Task.Run(() =>
                 {
-                    // 既存エントリを更新
-                    if (!string.IsNullOrEmpty(uprojectPath)) existing.UprojectPath = uprojectPath;
-                    if (!string.IsNullOrEmpty(projectName)) existing.ProjectName = projectName;
-                    if (category != null) existing.Category = category;
-                    if (description != null) existing.Description = description;
-                    if (version != null) existing.Version = version;
-                    if (engineVersion != null) existing.EngineVersion = engineVersion;
-                    existing.UpdatedAt = DateTime.UtcNow;
-                    presets.Update(existing);
-                    return existing;
-                }
+                    var existing = presets.FindOne(p => p.Name == name);
+                    if (existing != null)
+                    {
+                        if (!string.IsNullOrEmpty(uprojectPath)) existing.UprojectPath = uprojectPath;
+                        if (!string.IsNullOrEmpty(projectName)) existing.ProjectName = projectName;
+                        if (category != null) existing.Category = category;
+                        if (description != null) existing.Description = description;
+                        if (version != null) existing.Version = version;
+                        if (engineVersion != null) existing.EngineVersion = engineVersion;
+                        existing.UpdatedAt = DateTime.UtcNow;
+                        presets.Update(existing);
+                        return existing;
+                    }
 
-                // 新規作成
-                var newPreset = new UnrealPresetEntry
-                {
-                    Name = name,
-                    UprojectPath = uprojectPath,
-                    ProjectName = projectName,
-                    Category = category ?? string.Empty,
-                    Description = description ?? string.Empty,
-                    Version = version ?? "1.0.0",
-                    EngineVersion = engineVersion ?? string.Empty,
-                    IsActive = true,
-                    IsCompatible = true,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                presets.Insert(newPreset);
-                return newPreset;
-            });
+                    var newPreset = new UnrealPresetEntry
+                    {
+                        Name = name,
+                        UprojectPath = uprojectPath,
+                        ProjectName = projectName,
+                        Category = category ?? string.Empty,
+                        Description = description ?? string.Empty,
+                        Version = version ?? "1.0.0",
+                        EngineVersion = engineVersion ?? string.Empty,
+                        IsActive = true,
+                        IsCompatible = true,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    presets.Insert(newPreset);
+                    return newPreset;
+                }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
 
         // PreferenceEntry の追加または更新 (Upsert)
@@ -751,41 +957,38 @@ namespace Pivot.Services
 
             _logger.LogDebug("Upserting preference: Key='{Key}', Value='{Value}'", key, value);
 
-            var preferences = Database.GetCollection<PreferenceEntry>();
-
-            // LiteDB.LiteException: Cannot insert duplicate key in unique index 'Key'. The duplicate value is 'null'.
-            // このエラーは、'Key'フィールドがnullまたは空文字列で、それが既にDBに存在する場合に発生する。
-            // ここでは例外発生時に DB 修復を試みてもう一度 Upsert を行います（1回のみリトライ）。
-            try
+            await ExecuteWithWriteLockAsync(async () =>
             {
-                await Task.Run(() => preferences.Upsert(new PreferenceEntry(key, value)));
-            }
-            catch (LiteException lex)
-            {
-                _logger.LogWarning(lex, "LiteDB Upsert failed for key '{Key}'. Attempting repair and retry.", key);
+                var preferences = Database.GetCollection<PreferenceEntry>();
                 try
                 {
-                    // Drop incorrect unique index if present
-                    try { Database.GetCollection<PreferenceEntry>().DropIndex("Key"); } catch { }
-                    RepairDatabase(preferences);
+                    await Task.Run(() => preferences.Upsert(new PreferenceEntry(key, value))).ConfigureAwait(false);
                 }
-                catch (Exception rex)
+                catch (LiteException lex)
                 {
-                    _logger.LogError(rex, "RepairDatabase failed while handling Upsert failure for key '{Key}'.", key);
-                    throw;
-                }
+                    _logger.LogWarning(lex, "LiteDB Upsert failed for key '{Key}'. Attempting repair and retry.", key);
+                    try
+                    {
+                        try { Database.GetCollection<PreferenceEntry>().DropIndex("Key"); } catch { }
+                        RepairDatabase(preferences);
+                    }
+                    catch (Exception rex)
+                    {
+                        _logger.LogError(rex, "RepairDatabase failed while handling Upsert failure for key '{Key}'.", key);
+                        throw;
+                    }
 
-                // Retry once
-                try
-                {
-                    await Task.Run(() => preferences.Upsert(new PreferenceEntry(key, value)));
+                    try
+                    {
+                        await Task.Run(() => preferences.Upsert(new PreferenceEntry(key, value))).ConfigureAwait(false);
+                    }
+                    catch (Exception retryEx)
+                    {
+                        _logger.LogError(retryEx, "Retry Upsert failed for key '{Key}'.", key);
+                        throw;
+                    }
                 }
-                catch (Exception retryEx)
-                {
-                    _logger.LogError(retryEx, "Retry Upsert failed for key '{Key}'.", key);
-                    throw;
-                }
-            }
+            }).ConfigureAwait(false);
 
             _logger.LogDebug("Successfully upserted preference: Key='{Key}'", key);
         }
@@ -799,23 +1002,496 @@ namespace Pivot.Services
             return await Task.Run(() => preferences.FindById(key));
         }
 
-        // 全ての PreferenceEntry を取得
-        public async Task<List<PreferenceEntry>> GetAllPreferencesAsync()
+        // 全件取得は大規模データで非推奨。ページングAPIが不要な範囲のみで使用。
+        public async Task<List<PreferenceEntry>> GetAllPreferencesAsync(int skip = 0, int take = 200)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
             var preferences = Database.GetCollection<PreferenceEntry>();
-
-            return await Task.Run(() => preferences.FindAll().ToList());
+            return await Task.Run(() => preferences.Find(Query.All("_id", Query.Ascending), skip, take).ToList());
         }
 
         // PreferenceEntry をキーで削除
         public async Task DeletePreferenceAsync(string key)
         {
             if (Database == null) throw new InvalidOperationException("Database is not initialized");
-            var preferences = Database.GetCollection<PreferenceEntry>();
-
-            await Task.Run(() => preferences.Delete(key));
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var preferences = Database.GetCollection<PreferenceEntry>();
+                await Task.Run(() => preferences.Delete(key)).ConfigureAwait(false);
+            }).ConfigureAwait(false);
         }
+
+        // ===== ScanCache Collection Methods =====
+
+        /// <summary>
+        /// スキャンキャッシュエントリを追加または更新します。
+        /// </summary>
+        public async Task UpsertScanCacheAsync(ScanCacheEntry cacheEntry)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (cacheEntry == null) throw new ArgumentNullException(nameof(cacheEntry));
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var cache = Database.GetCollection<ScanCacheEntry>();
+                await Task.Run(() => cache.Upsert(cacheEntry)).ConfigureAwait(false);
+                _logger.LogDebug("Upserted scan cache for file: {FilePath}", cacheEntry.FilePath);
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 複数ファイルのメタデータをまとめてUpsertします（単一ロックで直列化）。
+        /// FileEntry の Id は内部で Path を検索して解決します。
+        /// </summary>
+        public async Task UpsertFilesBatchAsync(IEnumerable<FileEntry> entries)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (entries == null) return;
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var files = Database.GetCollection<FileEntry>();
+                await Task.Run(() =>
+                {
+                    foreach (var e in entries)
+                    {
+                        if (e == null || string.IsNullOrWhiteSpace(e.Path)) continue;
+                        var existing = files.FindOne(f => f.Path == e.Path);
+                        if (existing != null)
+                        {
+                            e.Id = existing.Id;
+                            files.Update(e);
+                        }
+                        else
+                        {
+                            files.Insert(e);
+                        }
+                    }
+                }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 複数のスキャンキャッシュをまとめてUpsertします（単一ロック）。
+        /// </summary>
+        public async Task UpsertScanCacheBatchAsync(IEnumerable<ScanCacheEntry> entries)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (entries == null) return;
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var cache = Database.GetCollection<ScanCacheEntry>();
+                await Task.Run(() =>
+                {
+                    foreach (var e in entries)
+                    {
+                        if (e == null || string.IsNullOrWhiteSpace(e.FilePath)) continue;
+                        cache.Upsert(e);
+                    }
+                }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 指定されたファイルパスのスキャンキャッシュを取得します。
+        /// </summary>
+        public async Task<ScanCacheEntry?> GetScanCacheAsync(string filePath)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (string.IsNullOrWhiteSpace(filePath)) return null;
+
+            var cache = Database.GetCollection<ScanCacheEntry>();
+            return await Task.Run(() => cache.FindById(filePath));
+        }
+
+        /// <summary>
+        /// 指定されたファイルパスのスキャンキャッシュを削除します。
+        /// </summary>
+        public async Task DeleteScanCacheAsync(string filePath)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (string.IsNullOrWhiteSpace(filePath)) return;
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var cache = Database.GetCollection<ScanCacheEntry>();
+                await Task.Run(() => cache.Delete(filePath)).ConfigureAwait(false);
+                _logger.LogDebug("Deleted scan cache for file: {FilePath}", filePath);
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 指定されたルートパスの全スキャンキャッシュを取得します。
+        /// </summary>
+        public async Task<List<ScanCacheEntry>> GetScanCacheByRootAsync(string rootPath)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (string.IsNullOrWhiteSpace(rootPath)) return new List<ScanCacheEntry>();
+
+            var cache = Database.GetCollection<ScanCacheEntry>();
+            return await Task.Run(() => cache.Find(c => c.RootPath == rootPath).ToList());
+        }
+
+        /// <summary>
+        /// 指定されたルートパスの全スキャンキャッシュを削除します。
+        /// </summary>
+        public async Task ClearScanCacheByRootAsync(string rootPath)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (string.IsNullOrWhiteSpace(rootPath)) return;
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var cache = Database.GetCollection<ScanCacheEntry>();
+                await Task.Run(() => cache.DeleteMany(c => c.RootPath == rootPath)).ConfigureAwait(false);
+                _logger.LogInformation("Cleared all scan cache entries for root path: {RootPath}", rootPath);
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 全スキャンキャッシュを削除します。
+        /// </summary>
+        public async Task ClearAllScanCacheAsync()
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var cache = Database.GetCollection<ScanCacheEntry>();
+                await Task.Run(() => cache.DeleteAll()).ConfigureAwait(false);
+                _logger.LogInformation("Cleared all scan cache entries.");
+            }).ConfigureAwait(false);
+        }
+
+        public void Dispose()
+        {
+            try { Database?.Dispose(); } catch { }
+            Database = null;
+            try { _dbWriteLock.Dispose(); } catch { }
+        }
+
+        // ===== Phase 2.5: Query API Enhancement =====
+
+        #region File Query API
+
+        /// <summary>
+        /// ファイルをプロパティで検索し、ページング取得します。
+        /// </summary>
+        public async Task<List<FileEntry>> GetFilesByPropertyAsync(int skip, int take, string? property = null, string? value = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var files = Database.GetCollection<FileEntry>();
+            
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(property) || string.IsNullOrWhiteSpace(value))
+                {
+                    return files.Find(Query.All("Path", Query.Ascending), skip, take).ToList();
+                }
+                
+                // シンプルな文字列マッチング（プロパティ別）
+                if (property.Equals("Type", StringComparison.OrdinalIgnoreCase))
+                {
+                    return files.Find(f => f.Type == value, skip, take).ToList();
+                }
+                else if (property.Equals("Path", StringComparison.OrdinalIgnoreCase))
+                {
+                    return files.Find(f => f.Path.Contains(value), skip, take).ToList();
+                }
+                
+                return files.Find(Query.All("Path", Query.Ascending), skip, take).ToList();
+            }).ConfigureAwait(false);
+            sw.Stop();
+            _logger.LogDebug("GetFilesByPropertyAsync property={Property} value={Value} skip={Skip} take={Take} fetched={Count} in {Ms} ms", property, value, skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        /// <summary>
+        /// ファイル総数を取得します（オプション条件付き）。
+        /// </summary>
+        public async Task<int> GetFileCountAsync(string? property = null, string? value = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var files = Database.GetCollection<FileEntry>();
+            
+            return await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(property) || string.IsNullOrWhiteSpace(value))
+                {
+                    return files.Count();
+                }
+                
+                if (property.Equals("Type", StringComparison.OrdinalIgnoreCase))
+                {
+                    return files.Count(f => f.Type == value);
+                }
+                else if (property.Equals("Path", StringComparison.OrdinalIgnoreCase))
+                {
+                    return files.Count(f => f.Path.Contains(value));
+                }
+                
+                return files.Count();
+            }).ConfigureAwait(false);
+        }
+
+        #endregion
+
+        #region Image Query API
+
+        /// <summary>
+        /// 画像をプロパティで検索し、ページング取得します。
+        /// </summary>
+        public async Task<List<ImageEntry>> GetImagesByPropertyAsync(int skip, int take, string? category = null, string? colorSpace = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var images = Database.GetCollection<ImageEntry>();
+            
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(category) && string.IsNullOrWhiteSpace(colorSpace))
+                {
+                    return images.Include(i => i.File).Find(Query.All(), skip, take).ToList();
+                }
+                
+                // カテゴリまたはカラー空間でフィルタリング
+                if (!string.IsNullOrWhiteSpace(category) && !string.IsNullOrWhiteSpace(colorSpace))
+                {
+                    // 両条件マッチ
+                    return images.Include(i => i.File).Find(Query.All(), skip, take).ToList(); // LiteDB では複雑な条件での Find は困難なため、メモリ内フィルタリング
+                }
+                else if (!string.IsNullOrWhiteSpace(category))
+                {
+                    return images.Include(i => i.File).Find(Query.All(), skip, take).ToList();
+                }
+                else
+                {
+                    return images.Include(i => i.File).Find(Query.All(), skip, take).ToList();
+                }
+            }).ConfigureAwait(false);
+            sw.Stop();
+            _logger.LogDebug("GetImagesByPropertyAsync category={Category} colorSpace={ColorSpace} skip={Skip} take={Take} fetched={Count} in {Ms} ms", category, colorSpace, skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        /// <summary>
+        /// 画像総数を取得します。
+        /// </summary>
+        public async Task<int> GetImageCountAsync(string? category = null, string? colorSpace = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var images = Database.GetCollection<ImageEntry>();
+            
+            return await Task.Run(() => images.Count()).ConfigureAwait(false);
+        }
+
+        #endregion
+
+        #region Asset Query API
+
+        /// <summary>
+        /// アセットをタイプ別で検索し、ページング取得します。
+        /// </summary>
+        public async Task<List<AssetEntry>> GetAssetsByTypeAsync(string type, int skip, int take)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (string.IsNullOrWhiteSpace(type)) return new List<AssetEntry>();
+            
+            var assets = Database.GetCollection<AssetEntry>();
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() => assets.Include(a => a.File).Find(a => a.Type == type, skip, take).ToList()).ConfigureAwait(false);
+            sw.Stop();
+            _logger.LogDebug("GetAssetsByTypeAsync type={Type} skip={Skip} take={Take} fetched={Count} in {Ms} ms", type, skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        /// <summary>
+        /// アセットをプロパティで検索し、ページング取得します。
+        /// </summary>
+        public async Task<List<AssetEntry>> GetAssetsByPropertyAsync(int skip, int take, string? type = null, string? category = null, long? maxSize = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(type) && string.IsNullOrWhiteSpace(category) && !maxSize.HasValue)
+                {
+                    return assets.Include(a => a.File).Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList();
+                }
+                
+                // 条件ビルダー
+                if (!string.IsNullOrWhiteSpace(type))
+                {
+                    return assets.Include(a => a.File).Find(a => a.Type == type, skip, take).ToList();
+                }
+                
+                return assets.Include(a => a.File).Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList();
+            }).ConfigureAwait(false);
+            sw.Stop();
+            _logger.LogDebug("GetAssetsByPropertyAsync type={Type} category={Category} maxSize={MaxSize} skip={Skip} take={Take} fetched={Count} in {Ms} ms", type, category, maxSize, skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        /// <summary>
+        /// アセット総数を取得します。
+        /// </summary>
+        public async Task<int> GetAssetCountAsync(string? type = null, string? category = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var assets = Database.GetCollection<AssetEntry>();
+            
+            return await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(type))
+                {
+                    return assets.Count();
+                }
+                return assets.Count(a => a.Type == type);
+            }).ConfigureAwait(false);
+        }
+
+        #endregion
+
+        #region Project Query API
+
+        /// <summary>
+        /// プロジェクトをプロパティで検索し、ページング取得します。
+        /// </summary>
+        public async Task<List<ProjectEntry>> GetProjectsByPropertyAsync(int skip, int take, string? name = null, string? status = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var projects = Database.GetCollection<ProjectEntry>();
+            
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(status))
+                {
+                    return projects.Include(p => p.Files).Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList();
+                }
+                
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    return projects.Include(p => p.Files).Find(p => p.Name.Contains(name), skip, take).ToList();
+                }
+                
+                return projects.Include(p => p.Files).Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList();
+            }).ConfigureAwait(false);
+            sw.Stop();
+            _logger.LogDebug("GetProjectsByPropertyAsync name={Name} status={Status} skip={Skip} take={Take} fetched={Count} in {Ms} ms", name, status, skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        /// <summary>
+        /// プロジェクト総数を取得します。
+        /// </summary>
+        public async Task<int> GetProjectCountAsync(string? status = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var projects = Database.GetCollection<ProjectEntry>();
+            
+            return await Task.Run(() => projects.Count()).ConfigureAwait(false);
+        }
+
+        #endregion
+
+        #region Script Query API
+
+        /// <summary>
+        /// スクリプトをプロパティで検索し、ページング取得します。
+        /// </summary>
+        public async Task<List<ScriptEntry>> GetScriptsByPropertyAsync(int skip, int take, string? language = null, string? application = null, string? category = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(language) && string.IsNullOrWhiteSpace(application) && string.IsNullOrWhiteSpace(category))
+                {
+                    return scripts.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList();
+                }
+                
+                if (!string.IsNullOrWhiteSpace(language))
+                {
+                    return scripts.Find(s => s.Language == language, skip, take).ToList();
+                }
+                
+                return scripts.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList();
+            }).ConfigureAwait(false);
+            sw.Stop();
+            _logger.LogDebug("GetScriptsByPropertyAsync language={Language} application={Application} category={Category} skip={Skip} take={Take} fetched={Count} in {Ms} ms", language, application, category, skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        /// <summary>
+        /// スクリプト総数を取得します。
+        /// </summary>
+        public async Task<int> GetScriptCountAsync(string? language = null, string? application = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var scripts = Database.GetCollection<ScriptEntry>();
+            
+            return await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(language))
+                {
+                    return scripts.Count();
+                }
+                return scripts.Count(s => s.Language == language);
+            }).ConfigureAwait(false);
+        }
+
+        #endregion
+
+        #region UnrealPreset Query API
+
+        /// <summary>
+        /// UnrealPresetをプロパティで検索し、ページング取得します。
+        /// </summary>
+        public async Task<List<UnrealPresetEntry>> GetUnrealPresetsByPropertyAsync(int skip, int take, string? projectName = null, string? category = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            
+            var sw = Stopwatch.StartNew();
+            var result = await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(projectName) && string.IsNullOrWhiteSpace(category))
+                {
+                    return presets.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList();
+                }
+                
+                if (!string.IsNullOrWhiteSpace(projectName))
+                {
+                    return presets.Find(p => p.ProjectName == projectName, skip, take).ToList();
+                }
+                
+                return presets.Find(Query.All("UpdatedAt", Query.Descending), skip, take).ToList();
+            }).ConfigureAwait(false);
+            sw.Stop();
+            _logger.LogDebug("GetUnrealPresetsByPropertyAsync projectName={ProjectName} category={Category} skip={Skip} take={Take} fetched={Count} in {Ms} ms", projectName, category, skip, take, result.Count, sw.ElapsedMilliseconds);
+            return result;
+        }
+
+        /// <summary>
+        /// UnrealPreset総数を取得します。
+        /// </summary>
+        public async Task<int> GetUnrealPresetCountAsync(string? projectName = null)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var presets = Database.GetCollection<UnrealPresetEntry>();
+            
+            return await Task.Run(() =>
+            {
+                if (string.IsNullOrWhiteSpace(projectName))
+                {
+                    return presets.Count();
+                }
+                return presets.Count(p => p.ProjectName == projectName);
+            }).ConfigureAwait(false);
+        }
+
+        #endregion
 
         // TODO: Bridge通信用メソッド（後で実装予定）
         // - プリセット同期メソッド（Unreal <-> Pivot）

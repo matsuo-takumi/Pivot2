@@ -34,7 +34,56 @@
 - [x] `Preferences`テーブルのORMモデルとDB操作実装  
 - [x] `FileScannerService`の実装 (ルートフォルダ指定、再帰スキャン、SQLiteへのメタデータ登録)  
 - [x] `FileSystemWatcher`によるファイル変更検知と自動更新の実装  
-- [ ] スキャン結果のキャッシュ機構 (ハッシュ比較) 実装
+- [x] スキャン結果のキャッシュ機構 (ハッシュ比較) 実装
+
+---
+
+## Phase 2.5: DB Query API Enhancement
+**Dependencies:** Phase 2  
+**Blockers:** フィルタ関数の設計確定  
+**Related Tickets:** [#7](https://github.com/org/repo/issues/7) (例)
+
+**目的:** Phase 3 の一覧UI（フィルタ・ページング対応）を支える Query API の完成
+
+### フィルタ・ページング API
+
+- [x] `GetFilesByPropertyAsync(skip, take, property?, value?)` - ページング対応ファイル検索
+- [x] `GetImagesByPropertyAsync(skip, take, category?, colorSpace?)` - 画像フィルタ+ページング
+- [x] `GetAssetsByTypeAsync(type, skip, take)` - アセットタイプ別フィルタ
+- [x] `GetAssetsByPropertyAsync(skip, take, type?, category?, size?)` - 複合フィルタ対応
+- [x] `GetProjectsByPropertyAsync(skip, take, name?, status?)` - プロジェクト検索
+- [x] `GetScriptsByPropertyAsync(skip, take, language?, application?, category?)` - スクリプト複合検索
+- [x] `GetUnrealPresetsByPropertyAsync(skip, take, projectName?, category?)` - プリセット検索
+
+### 件数取得 API
+
+- [x] `GetFileCountAsync(property?, value?)` - ファイル総数（オプション条件付き）
+- [x] `GetImageCountAsync(category?, colorSpace?)` - 画像総数
+- [x] `GetAssetCountAsync(type?, category?)` - アセット総数
+- [x] `GetProjectCountAsync(status?)` - プロジェクト総数
+- [x] `GetScriptCountAsync(language?, application?)` - スクリプト総数
+- [x] `GetUnrealPresetCountAsync(projectName?)` - プリセット総数
+
+### ストリーミング API（大規模フィルタ結果向け）
+
+- [x] `StreamImagesByPropertyAsync(category?, batchSize=500)` - 画像ストリーミング
+- [x] `StreamAssetsByPropertyAsync(type?, category?, batchSize=500)` - アセットストリーミング
+- [x] `StreamProjectsByPropertyAsync(status?, batchSize=200)` - プロジェクトストリーミング
+- [x] `StreamScriptsByPropertyAsync(language?, batchSize=500)` - スクリプトストリーミング
+
+### 複合フィルタ ビルダー（オプション・推奨）
+
+- [ ] `AssetFilterBuilder` - フルエント API でフィルタ条件を組み立て
+- [ ] `ImageFilterBuilder` - 同様
+- [ ] `ScriptFilterBuilder` - 同様
+- [ ] フィルタビルダーで `GetAssetsByFilterAsync(filter, skip, take)` を実装可能に
+
+### インデックス・最適化
+
+- [ ] 各フィルタ関数用に必要なインデックスを `InitializeDatabase()` で追加
+  - 例: `Type`, `Category`, `Language`, `Application` など
+- [ ] N+1 クエリ回避（Include で関連エントリを事前ロード）
+- [ ] フィルタ前後の件数差異に対応（削除済みファイルなど）
 
 ---
 
