@@ -21,7 +21,6 @@ namespace Pivot.ViewModels
 
         private const int PageSize = 50;
 
-        // UI バインディング用プロパティ
         public ObservableCollection<AssetEntry> Assets { get; } = new ObservableCollection<AssetEntry>();
 
         private int _currentPage = 0;
@@ -52,7 +51,10 @@ namespace Pivot.ViewModels
             set => SetProperty(ref _isLoadingMore, value);
         }
 
-        // フィルタプロパティ
+        private bool _isLoadingAssets = false;
+        private bool _isLoadingMoreAssets = false;
+        private bool _isLoadingFilterOptions = false;
+
         private string? _selectedAssetType;
         public string? SelectedAssetType
         {
@@ -79,11 +81,9 @@ namespace Pivot.ViewModels
             }
         }
 
-        // フィルタオプション
         public ObservableCollection<string> AssetTypes { get; } = new ObservableCollection<string>();
         public ObservableCollection<string> Categories { get; } = new ObservableCollection<string>();
 
-        // コマンド
         public IAsyncRelayCommand LoadAssetsCommand { get; }
         public IAsyncRelayCommand LoadMoreAssetsCommand { get; }
         public IAsyncRelayCommand ResetFiltersCommand { get; }
@@ -158,23 +158,29 @@ namespace Pivot.ViewModels
         {
             try
             {
-                await LoadFilterOptionsAsync();
-                // 設定の復元
                 SelectedDisplayMode = _settingsService.GetAssetDisplayMode();
                 ShowMetadata = _settingsService.GetShowAssetMetadata();
-                await LoadAssetsAsync();
+                
+                // ????????????????????????????????                await LoadAssetsAsync();
 
-                // スキャン完了メッセージをリッスン
+                // ????????????????????????????????????????????                _ = LoadFilterOptionsAsync();
+
+                // ????????????????
                 _messenger.Register<AssetViewModel, ScanCompletedMessage>(this, (r, m) =>
                 {
-                    _ = r.LoadAssetsAsync();
+                    if (!r._isLoadingAssets && !r.IsLoading)
+                    {
+                        _ = r.LoadAssetsAsync();
+                    }
                 });
 
-                // Asset 変更メッセージをリッスン
                 _messenger.Register<AssetViewModel, AssetChangedMessage>(this, (r, m) =>
                 {
-                    _logger.LogInformation($"Asset changed: {m.Value.Type} - {m.Value.FilePath}");
-                    _ = r.LoadAssetsAsync();
+                    _logger.LogInformation("Asset changed: {0} - {1}", m.Value.Type, m.Value.FilePath);
+                    if (!r._isLoadingAssets && !r.IsLoading)
+                    {
+                        _ = r.LoadAssetsAsync();
+                    }
                 });
             }
             catch (Exception ex)
@@ -185,18 +191,27 @@ namespace Pivot.ViewModels
 
         private async Task LoadFilterOptionsAsync()
         {
+            if (_isLoadingFilterOptions) return;
+
             try
             {
-                AssetTypes.Clear();
-                Categories.Clear();
+                _isLoadingFilterOptions = true;
 
-                // データベースから利用可能なタイプとカテゴリを取得
-                var allAssets = await _metadataService.GetAssetsByPropertyAsync(0, int.MaxValue);
+                var settings = _settingsService.GetUserSettings();
+                var assetDirectories = settings.AssetDirectories;
+
+                if (assetDirectories.Count == 0)
+                {
+                    _logger.LogInformation("No asset directories configured");
+                    return;
+                }
+
+                // ????5000????????????????????????????????                var allAssets = await _metadataService.GetAssetsByDirectoriesAsync(0, 5000, assetDirectories);
                 
                 var types = allAssets.Select(a => a.Type).Distinct().OrderBy(t => t).ToList();
                 foreach (var type in types)
                 {
-                    if (!string.IsNullOrEmpty(type))
+                    if (!string.IsNullOrEmpty(type) && !AssetTypes.Contains(type))
                     {
                         AssetTypes.Add(type);
                     }
@@ -205,32 +220,55 @@ namespace Pivot.ViewModels
                 var categories = allAssets.Select(a => a.TagsJson).Distinct().OrderBy(c => c).ToList();
                 foreach (var category in categories)
                 {
-                    if (!string.IsNullOrEmpty(category))
+                    if (!string.IsNullOrEmpty(category) && !Categories.Contains(category))
                     {
                         Categories.Add(category);
                     }
                 }
+
+                _logger.LogInformation("LoadFilterOptionsAsync: Loaded filter options for {TypeCount} types and {CategoryCount} categories", AssetTypes.Count, Categories.Count);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading filter options");
             }
+            finally
+            {
+                _isLoadingFilterOptions = false;
+            }
         }
 
         private async Task LoadAssetsAsync()
         {
-            if (IsLoading)
+            if (_isLoadingAssets || IsLoading)
+            {
+                _logger.LogDebug("LoadAssetsAsync: Already loading, skipping duplicate request");
                 return;
+            }
 
             try
             {
+                _isLoadingAssets = true;
                 IsLoading = true;
                 CurrentPage = 0;
 
-                // フィルタ条件を適用して最初のページを取得
-                var assets = await _metadataService.GetAssetsByPropertyAsync(
+                var settings = _settingsService.GetUserSettings();
+                var assetDirectories = settings.AssetDirectories;
+
+                if (assetDirectories.Count == 0)
+                {
+                    _logger.LogInformation("No asset directories configured");
+                    Assets.Clear();
+                    TotalCount = 0;
+                    CurrentPage = 1;
+                    return;
+                }
+
+                // ????????????????????
+                var assets = await _metadataService.GetAssetsByDirectoriesAsync(
                     skip: 0,
                     take: PageSize,
+                    directories: assetDirectories,
                     type: SelectedAssetType,
                     category: SelectedCategory
                 );
@@ -241,14 +279,14 @@ namespace Pivot.ViewModels
                     Assets.Add(asset);
                 }
 
-                // 総数を取得
-                TotalCount = await _metadataService.GetAssetCountAsync(
+                // ????????????????????????                TotalCount = await _metadataService.GetAssetCountByDirectoriesAsync(
+                    directories: assetDirectories,
                     type: SelectedAssetType,
                     category: SelectedCategory
                 );
 
                 CurrentPage = 1;
-                _logger.LogInformation($"Loaded {assets.Count} assets. Total: {TotalCount}");
+                _logger.LogInformation("Loaded {Count} assets in configured directories. Total: {Total}", assets.Count, TotalCount);
             }
             catch (Exception ex)
             {
@@ -257,15 +295,18 @@ namespace Pivot.ViewModels
             finally
             {
                 IsLoading = false;
+                _isLoadingAssets = false;
             }
         }
 
         public async Task LoadMoreAssetsAsync()
         {
-            if (IsLoadingMore || IsLoading)
+            if (_isLoadingMoreAssets || IsLoadingMore || IsLoading)
+            {
+                _logger.LogDebug("LoadMoreAssetsAsync: Already loading, skipping duplicate request");
                 return;
+            }
 
-            // すべてのアセットがロード済みかチェック
             if (Assets.Count >= TotalCount)
             {
                 _logger.LogInformation("All assets already loaded");
@@ -274,12 +315,23 @@ namespace Pivot.ViewModels
 
             try
             {
+                _isLoadingMoreAssets = true;
                 IsLoadingMore = true;
 
+                var settings = _settingsService.GetUserSettings();
+                var assetDirectories = settings.AssetDirectories;
+
+                if (assetDirectories.Count == 0)
+                {
+                    _logger.LogInformation("No asset directories configured");
+                    return;
+                }
+
                 var skip = CurrentPage * PageSize;
-                var assets = await _metadataService.GetAssetsByPropertyAsync(
+                var assets = await _metadataService.GetAssetsByDirectoriesAsync(
                     skip: skip,
                     take: PageSize,
+                    directories: assetDirectories,
                     type: SelectedAssetType,
                     category: SelectedCategory
                 );
@@ -292,7 +344,7 @@ namespace Pivot.ViewModels
                     }
 
                     CurrentPage++;
-                    _logger.LogInformation($"Loaded more assets. Total in view: {Assets.Count}");
+                    _logger.LogInformation("Loaded more assets. Total in view: {Count}", Assets.Count);
                 }
             }
             catch (Exception ex)
@@ -302,6 +354,7 @@ namespace Pivot.ViewModels
             finally
             {
                 IsLoadingMore = false;
+                _isLoadingMoreAssets = false;
             }
         }
 

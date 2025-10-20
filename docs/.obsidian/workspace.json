@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Tasks/ImplementationTasks.md",
-                "mode": "source",
+                "file": "Tasks/db.plan.md",
+                "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "ImplementationTasks"
+              "title": "db.plan"
             }
           }
         ]
@@ -169,11 +169,11 @@
       "bases:Create new base": false
     }
   },
-  "active": "b5c0334a7eb85fb8",
+  "active": "56e8779befa31e42",
   "lastOpenFiles": [
+    "Tasks/ImplementationTasks.md",
     "Tasks/db.plan.md",
     "Tasks/BridgeImplementationTasks.md",
-    "Tasks/ImplementationTasks.md",
     "Tasks/UI_Animation_Specification.md",
     "ImplementationTasks.md",
     "UI_Animation_Specification.md",
