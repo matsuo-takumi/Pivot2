@@ -16,6 +16,9 @@ namespace Pivot.Models
         public AssetDisplayMode AssetDisplayMode { get; set; } = AssetDisplayMode.List;
         public bool ShowAssetMetadata { get; set; } = true;
 
+        // スキャン戦略
+        public bool ForceFullScan { get; set; } = false;
+
         // (カスタムAcrylic/Luminosity設定は削除)
     }
 }

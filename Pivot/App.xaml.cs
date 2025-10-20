@@ -127,10 +127,10 @@ namespace Pivot
                 {
                     try
                     {
-                        var md = Services.GetService(typeof(Pivot.Services.MetadataService)) as Pivot.Services.MetadataService;
-                        md?.Dispose();
                         var fs = Services.GetService(typeof(Pivot.Services.FileScannerService)) as Pivot.Services.FileScannerService;
                         fs?.Dispose();
+                        var md = Services.GetService(typeof(Pivot.Services.MetadataService)) as Pivot.Services.MetadataService;
+                        md?.Dispose();
                     }
                     catch { }
                 };
@@ -181,11 +181,10 @@ namespace Pivot
             });
 
             // MainViewModelを初期化し、自動スキャンを開始 (SettingsService初期化後に実行)
-            // ここで MainViewModel が生成され、コンストラクタ内で LoadScanDirectories() が呼ばれる。
-            // この時点では settingsService は完全に初期化されている。
+            // この処理は起動UIをブロックしないよう非同期で開始する
             var mainViewModel = Services.GetRequiredService<MainViewModel>();
-            await mainViewModel.InitializeAsync(); // MainViewModelの初期化を待つ
-            
+            _ = mainViewModel.InitializeAsync(); // awaitしない
+
             _window?.Activate();
         }
 

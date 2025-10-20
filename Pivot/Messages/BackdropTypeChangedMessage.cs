@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Messaging.Messages;
+using System.Collections.Generic;
 using Pivot.Models; // BackdropType moved to Models
 
 namespace Pivot.Messages
@@ -47,6 +48,28 @@ namespace Pivot.Messages
     public class ScanStartedMessage : ValueChangedMessage<bool>
     {
         public ScanStartedMessage(bool value) : base(value)
+        {
+        }
+    }
+
+    // ===== Generic bulk change messaging (Phase 1) =====
+    public class ItemChangeData<T>
+    {
+        public enum ChangeType { Added, Updated, Deleted }
+
+        public ChangeType Type { get; set; }
+        public T Item { get; set; }
+
+        public ItemChangeData(ChangeType type, T item)
+        {
+            Type = type;
+            Item = item;
+        }
+    }
+
+    public class BulkItemsChangedMessage<T> : ValueChangedMessage<List<ItemChangeData<T>>>
+    {
+        public BulkItemsChangedMessage(List<ItemChangeData<T>> value) : base(value)
         {
         }
     }

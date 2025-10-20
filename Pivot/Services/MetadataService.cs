@@ -1090,6 +1090,58 @@ namespace Pivot.Services
             }).ConfigureAwait(false);
         }
 
+        // ===== Phase 3: Batch APIs =====
+        public async Task UpsertAssetEntriesBatchAsync(List<AssetEntry> entries)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            if (entries == null || entries.Count == 0) return;
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var assets = Database.GetCollection<AssetEntry>();
+                await Task.Run(() =>
+                {
+                    foreach (var e in entries)
+                    {
+                        if (e == null || string.IsNullOrWhiteSpace(e.Path)) continue;
+                        var existing = assets.FindOne(a => a.Path == e.Path);
+                        if (existing != null)
+                        {
+                            e.Id = existing.Id;
+                            assets.Update(e);
+                        }
+                        else
+                        {
+                            assets.Insert(e);
+                        }
+                    }
+                }).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        }
+
+        public async Task<List<string>> DeleteEntriesByRootAsync(string rootPath)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var deletedPaths = new List<string>();
+            if (string.IsNullOrWhiteSpace(rootPath)) return deletedPaths;
+
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var files = Database.GetCollection<FileEntry>();
+                var assets = Database.GetCollection<AssetEntry>();
+                var cache = Database.GetCollection<ScanCacheEntry>();
+
+                var matchedFiles = await Task.Run(() => files.Find(f => f.Path.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase)).ToList()).ConfigureAwait(false);
+                foreach (var f in matchedFiles) deletedPaths.Add(f.Path);
+
+                await Task.Run(() => assets.DeleteMany(a => a.Path.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))).ConfigureAwait(false);
+                await Task.Run(() => files.DeleteMany(f => f.Path.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))).ConfigureAwait(false);
+                await Task.Run(() => cache.DeleteMany(c => c.FilePath.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+
+            _logger.LogInformation("DeleteEntriesByRootAsync: removed {Count} entries under {Root}", deletedPaths.Count, rootPath);
+            return deletedPaths;
+        }
+
         /// <summary>
         /// 指定されたファイルパスのスキャンキャッシュを取得します。
         /// </summary>
@@ -1155,6 +1207,21 @@ namespace Pivot.Services
                 var cache = Database.GetCollection<ScanCacheEntry>();
                 await Task.Run(() => cache.DeleteAll()).ConfigureAwait(false);
                 _logger.LogInformation("Cleared all scan cache entries.");
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 古いスキャンキャッシュを削除します（既定: 30日未アクセス）。
+        /// </summary>
+        public async Task CleanupStaleScanCacheAsync(int retentionDays = 30)
+        {
+            if (Database == null) throw new InvalidOperationException("Database is not initialized");
+            var cutoff = DateTime.UtcNow.AddDays(-retentionDays);
+            await ExecuteWithWriteLockAsync(async () =>
+            {
+                var cache = Database.GetCollection<ScanCacheEntry>();
+                await Task.Run(() => cache.DeleteMany(c => c.CachedAt < cutoff)).ConfigureAwait(false);
+                _logger.LogInformation("CleanupStaleScanCache: removed entries older than {Cutoff}", cutoff);
             }).ConfigureAwait(false);
         }
 

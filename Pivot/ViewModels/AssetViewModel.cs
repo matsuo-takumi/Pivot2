@@ -171,10 +171,58 @@ namespace Pivot.ViewModels
                 });
 
                 // Asset 変更メッセージをリッスン
-                _messenger.Register<AssetViewModel, AssetChangedMessage>(this, (r, m) =>
+                _messenger.Register<AssetViewModel, AssetChangedMessage>(this, async (r, m) =>
                 {
-                    _logger.LogInformation($"Asset changed: {m.Value.Type} - {m.Value.FilePath}");
-                    _ = r.LoadAssetsAsync();
+                    try
+                    {
+                        _logger.LogInformation($"Asset changed: {m.Value.Type} - {m.Value.FilePath}");
+                        var path = m.Value.FilePath;
+                        switch (m.Value.Type)
+                        {
+                            case AssetChangedMessageData.ChangeType.Added:
+                            case AssetChangedMessageData.ChangeType.Updated:
+                            {
+                                var entry = await _metadataService.GetAssetEntryByPathAsync(path);
+                                if (entry == null) break;
+
+                                // 既存アイテム検索
+                                var existing = Assets.FirstOrDefault(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase));
+                                if (existing == null)
+                                {
+                                    // フィルタ条件に合致する場合のみ追加
+                                    if ((SelectedAssetType == null || string.Equals(entry.Type, SelectedAssetType, StringComparison.OrdinalIgnoreCase)) &&
+                                        (SelectedCategory == null || string.Equals(entry.TagsJson, SelectedCategory, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        Assets.Insert(0, entry);
+                                        TotalCount++;
+                                    }
+                                }
+                                else
+                                {
+                                    var index = Assets.IndexOf(existing);
+                                    if (index >= 0)
+                                    {
+                                        Assets[index] = entry;
+                                    }
+                                }
+                                break;
+                            }
+                            case AssetChangedMessageData.ChangeType.Deleted:
+                            {
+                                var existing = Assets.FirstOrDefault(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase));
+                                if (existing != null)
+                                {
+                                    Assets.Remove(existing);
+                                    TotalCount = Math.Max(0, TotalCount - 1);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error applying incremental asset update for {Path}", m.Value.FilePath);
+                    }
                 });
             }
             catch (Exception ex)

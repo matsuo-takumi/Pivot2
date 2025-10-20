@@ -130,6 +130,26 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load ShowAssetMetadata. Using default.");
                 _cache.ShowAssetMetadata = true;
             }
+
+            // スキャン戦略: ForceFullScan
+            try
+            {
+                var forceFullStr = (await _metadataService.GetPreferenceAsync("Scan.ForceFull"))?.Value;
+                if (bool.TryParse(forceFullStr, out var force))
+                {
+                    _cache.ForceFullScan = force;
+                }
+                else
+                {
+                    _cache.ForceFullScan = false;
+                }
+                _logger.LogInformation("SettingsService: Loaded ForceFullScan: {Force}", _cache.ForceFullScan);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load ForceFullScan. Using default (false).");
+                _cache.ForceFullScan = false;
+            }
         }
 
         private static bool LooksLikeJsonArray(string value)
@@ -269,6 +289,16 @@ namespace Pivot.Services
             await EnsureDbAsync();
             _cache.ShowAssetMetadata = show;
             await _metadataService.UpsertPreferenceAsync("ShowAssetMetadata", show.ToString());
+        }
+
+        // スキャン戦略設定
+        public bool GetForceFullScan() => _cache.ForceFullScan;
+
+        public async Task SetForceFullScanAsync(bool force)
+        {
+            await EnsureDbAsync();
+            _cache.ForceFullScan = force;
+            await _metadataService.UpsertPreferenceAsync("Scan.ForceFull", force.ToString());
         }
 
         public async Task AddDirectoryAsync(DirectoryCategory category, string path)

@@ -92,29 +92,66 @@ namespace Pivot.ViewModels
                 _logger.LogInformation("Adding Asset Directory: {Path}", path);
                 await _settingsService.AddDirectoryAsync(DirectoryCategory.Asset, path);
                 LoadScanDirectories(); // ディレクトリ追加後に再度ロード
-                _logger.LogInformation("Asset Directory added. Triggering scan...");
+
+                // 監視を更新
+                try { _fileScannerService.EnsureWatchers(ScanDirectories); }
+                catch (Exception ex) { _logger.LogWarning(ex, "EnsureWatchers failed after adding asset directory: {Path}", path); }
+
+                // 即時ストリーム表示（先頭500件）
+                try
+                {
+                    var immediate = System.IO.Directory.EnumerateFiles(path, "*", System.IO.SearchOption.AllDirectories)
+                        .Take(500)
+                        .Select(p => new FileEntry { Path = p, Type = string.Empty, Size = 0, Hash = string.Empty, UpdatedAt = DateTime.UtcNow })
+                        .ToList();
+                    foreach (var f in immediate) { Files.Add(f); }
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Immediate listing failed for: {Path}", path); }
+
+                // バックグラウンドで対象ルートのみ増分スキャン
+                _logger.LogInformation("Asset Directory added. Triggering background scan for: {Path}", path);
                 _messenger.Send(new ScanStartedMessage(true));
-                await ScanAsync();
+                _ = _fileScannerService.ScanWithCacheAsync(new[] { path }, null, CancellationToken.None);
             });
             AddImageDirectoryCommand = new AsyncRelayCommand<string>(async path =>
             {
                 if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
                 _logger.LogInformation("Adding Image Directory: {Path}", path);
                 await _settingsService.AddDirectoryAsync(DirectoryCategory.Image, path);
-                LoadScanDirectories(); // ディレクトリ追加後に再度ロード
-                _logger.LogInformation("Image Directory added. Triggering scan...");
+                LoadScanDirectories();
+                try { _fileScannerService.EnsureWatchers(ScanDirectories); } catch (Exception ex) { _logger.LogWarning(ex, "EnsureWatchers failed after adding image directory: {Path}", path); }
+                try
+                {
+                    var immediate = System.IO.Directory.EnumerateFiles(path, "*", System.IO.SearchOption.AllDirectories)
+                        .Take(500)
+                        .Select(p => new FileEntry { Path = p, Type = string.Empty, Size = 0, Hash = string.Empty, UpdatedAt = DateTime.UtcNow })
+                        .ToList();
+                    foreach (var f in immediate) { Files.Add(f); }
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Immediate listing failed for: {Path}", path); }
+                _logger.LogInformation("Image Directory added. Triggering background scan for: {Path}", path);
                 _messenger.Send(new ScanStartedMessage(true));
-                await ScanAsync();
+                _ = _fileScannerService.ScanWithCacheAsync(new[] { path }, null, CancellationToken.None);
             });
             AddProjectDirectoryCommand = new AsyncRelayCommand<string>(async path =>
             {
                 if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
                 _logger.LogInformation("Adding Project Directory: {Path}", path);
                 await _settingsService.AddDirectoryAsync(DirectoryCategory.Project, path);
-                LoadScanDirectories(); // ディレクトリ追加後に再度ロード
-                _logger.LogInformation("Project Directory added. Triggering scan...");
+                LoadScanDirectories();
+                try { _fileScannerService.EnsureWatchers(ScanDirectories); } catch (Exception ex) { _logger.LogWarning(ex, "EnsureWatchers failed after adding project directory: {Path}", path); }
+                try
+                {
+                    var immediate = System.IO.Directory.EnumerateFiles(path, "*", System.IO.SearchOption.AllDirectories)
+                        .Take(500)
+                        .Select(p => new FileEntry { Path = p, Type = string.Empty, Size = 0, Hash = string.Empty, UpdatedAt = DateTime.UtcNow })
+                        .ToList();
+                    foreach (var f in immediate) { Files.Add(f); }
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Immediate listing failed for: {Path}", path); }
+                _logger.LogInformation("Project Directory added. Triggering background scan for: {Path}", path);
                 _messenger.Send(new ScanStartedMessage(true));
-                await ScanAsync();
+                _ = _fileScannerService.ScanWithCacheAsync(new[] { path }, null, CancellationToken.None);
             });
 
             RemoveDirectoryCommand = new AsyncRelayCommand<string>(async path =>
@@ -126,6 +163,26 @@ namespace Pivot.ViewModels
                 await _settingsService.RemoveDirectoryAsync(DirectoryCategory.Image, path);
                 await _settingsService.RemoveDirectoryAsync(DirectoryCategory.Project, path);
                 LoadScanDirectories(); // ディレクトリ削除後に再度ロード
+                try { _fileScannerService.EnsureWatchers(ScanDirectories); } catch (Exception ex) { _logger.LogWarning(ex, "EnsureWatchers failed after removing directory: {Path}", path); }
+
+                // DB側クリーンアップと集約通知（バックグラウンド）
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var deletedPaths = await _metadataService.DeleteEntriesByRootAsync(path);
+                        var batch = deletedPaths.Select(p => new ItemChangeData<AssetEntry>(ItemChangeData<AssetEntry>.ChangeType.Deleted, new AssetEntry { Path = p })).ToList();
+                        if (batch.Count > 0)
+                        {
+                            _messenger.Send(new BulkItemsChangedMessage<AssetEntry>(batch));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error during DB cleanup for removed directory: {Path}", path);
+                    }
+                });
+
                 _logger.LogInformation("Directory removed. Current ScanDirectories count: {Count}", ScanDirectories.Count);
             });
 
@@ -142,11 +199,25 @@ namespace Pivot.ViewModels
             LoadScanDirectories();
             _logger.LogInformation("MainViewModel: LoadScanDirectories completed in InitializeAsync. Count: {Count}", ScanDirectories.Count);
 
+            // 起動直後はDBにある既存データを即時表示（UIブロックを避けつつ逐次追加）
+            try
+            {
+                await foreach (var f in _metadataService.StreamFilesAsync(200))
+                {
+                    Files.Add(f);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "MainViewModel: Streaming existing files failed.");
+            }
+
             if (CanStartScan())
             {
                 _logger.LogInformation("MainViewModel: Auto-scan triggered from InitializeAsync.");
                 _messenger.Send(new ScanStartedMessage(true));
-                await ScanAsync();
+                // スキャンはバックグラウンドで開始（起動をブロックしない）
+                _ = ScanAsync();
             }
             else
             {
@@ -198,15 +269,28 @@ namespace Pivot.ViewModels
 			}
 			IsScanning = true;
 			Progress = 0;
-			Files.Clear(); // _files.Clear() を Files.Clear() に変更
+            // 起動時の即時表示を維持するため、開始時点ではクリアしない
 			_scanCts = new CancellationTokenSource();
 			var progress = new Progress<int>(value => Progress = value);
 			try
 			{
 				_logger.LogInformation("Starting scan for directories: {Directories}", string.Join(", ", ScanDirectories));
-				await _fileScannerService.ScanAsync(ScanDirectories, progress, _scanCts.Token);
+                // スキャンキャッシュの定期クリーンアップ
+                try { await _metadataService.CleanupStaleScanCacheAsync(30); } catch { }
 
-				var all = await _metadataService.GetFilesAsync(0, 1000);
+                // 設定に応じて増分スキャンをデフォルト使用
+                if (_settingsService.GetForceFullScan())
+                {
+                    await _fileScannerService.ScanAsync(ScanDirectories, progress, _scanCts.Token);
+                }
+                else
+                {
+                    await _fileScannerService.ScanWithCacheAsync(ScanDirectories, progress, _scanCts.Token);
+                }
+
+                var all = await _metadataService.GetFilesAsync(0, 1000);
+                // スキャン完了時に最新のDB内容で一覧をリフレッシュ
+                Files.Clear();
 				foreach (var f in all)
 				{
 					Files.Add(f); // _files.Add(f) を Files.Add(f) に変更
