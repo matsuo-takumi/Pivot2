@@ -33,7 +33,7 @@
             </NavigationViewItem>
             <NavigationViewItem Content="Window" Tag="WindowPage" x:Name="WindowItem">
                 <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Window" />
+                    <SymbolIcon Symbol="Globe" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
             <NavigationViewItem Content="Directories" Tag="DirectoryPage" x:Name="DirectoryItem">
