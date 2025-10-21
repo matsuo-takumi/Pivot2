@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Pivot.ViewModels;
 using Microsoft.UI.Xaml; // for RoutedEventHandler
 using Microsoft.UI.Xaml.Media.Animation; // for SuppressNavigationTransitionInfo
+using Pivot.Models;
 
 namespace Pivot.Views
 {
@@ -28,6 +29,12 @@ namespace Pivot.Views
             {
                 contentFrame.Navigate(typeof(ThemePage), null, new EntranceNavigationTransitionInfo());
             }
+
+            // 初期メニュー表示モードを適用
+            UpdateMenuDisplayMode();
+
+            // ContentFrame のナビゲーション完了時にメニュー表示モードを更新
+            contentFrame.NavigationFailed += ContentFrame_NavigationFailed;
         }
 
         private void NavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -43,12 +50,30 @@ namespace Pivot.Views
                     case "ThemePage":
                         contentFrame.Navigate(typeof(ThemePage), null, new EntranceNavigationTransitionInfo());
                         break;
+                    case "WindowPage":
+                        contentFrame.Navigate(typeof(WindowPage), null, new EntranceNavigationTransitionInfo());
+                        break;
                     case "DirectoryPage":
                         contentFrame.Navigate(typeof(DirectoryPage), null, new EntranceNavigationTransitionInfo());
                         break;
                     // 他のメニュー項目に対するナビゲーションロジック
                 }
             }
+        }
+
+        private void UpdateMenuDisplayMode()
+        {
+            var settingsService = App.Current.Services.GetRequiredService<Pivot.Services.SettingsService>();
+            var mode = settingsService.GetMenuDisplayMode();
+            
+            nvSample.PaneDisplayMode = mode == MenuDisplayMode.Wide ?
+                NavigationViewPaneDisplayMode.Left :
+                NavigationViewPaneDisplayMode.LeftCompact;
+        }
+
+        private void ContentFrame_NavigationFailed(object sender, NavigationFailedEventArgs e)
+        {
+            // ナビゲーション失敗時の処理
         }
     }
 }

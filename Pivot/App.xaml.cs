@@ -96,6 +96,7 @@ namespace Pivot
                     services.AddSingleton<MainViewModel>();
                     services.AddSingleton<DirectoryViewModel>(); // DirectoryViewModelを追加
                     services.AddSingleton<ThemeViewModel>(); // ThemeViewModelを追加
+                    services.AddSingleton<WindowViewModel>(); // WindowViewModelを追加
                     services.AddSingleton<AssetViewModel>(); // AssetViewModelの追加
                     services.AddSingleton<ImageViewModel>(); // ImageViewModelの追加
 

@@ -31,6 +31,11 @@
                     <SymbolIcon Symbol="Setting" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
+            <NavigationViewItem Content="Window" Tag="WindowPage" x:Name="WindowItem">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Window" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
             <NavigationViewItem Content="Directories" Tag="DirectoryPage" x:Name="DirectoryItem">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Folder" />

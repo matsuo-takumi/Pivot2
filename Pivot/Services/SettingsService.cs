@@ -150,6 +150,26 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load ForceFullScan. Using default (false).");
                 _cache.ForceFullScan = false;
             }
+
+            // メニュー表示モード
+            try
+            {
+                var modeStr = (await _metadataService.GetPreferenceAsync("MenuDisplayMode"))?.Value;
+                if (Enum.TryParse<MenuDisplayMode>(modeStr, out var mode))
+                {
+                    _cache.MenuDisplayMode = mode;
+                }
+                else
+                {
+                    _cache.MenuDisplayMode = MenuDisplayMode.Compact;
+                }
+                _logger.LogInformation("SettingsService: Loaded MenuDisplayMode: {Mode}", _cache.MenuDisplayMode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load MenuDisplayMode. Using default (Compact).");
+                _cache.MenuDisplayMode = MenuDisplayMode.Compact;
+            }
         }
 
         private static bool LooksLikeJsonArray(string value)
@@ -374,6 +394,15 @@ namespace Pivot.Services
             {
                 _logger.LogDebug("[SettingsService] RemoveDirectoryAsync: Path '{Path}' not found in cache for {Key}.", path, key);
             }
+        }
+
+        public MenuDisplayMode GetMenuDisplayMode() => _cache.MenuDisplayMode;
+
+        public async Task SetMenuDisplayModeAsync(MenuDisplayMode mode)
+        {
+            await EnsureDbAsync();
+            _cache.MenuDisplayMode = mode;
+            await _metadataService.UpsertPreferenceAsync("MenuDisplayMode", mode.ToString());
         }
     }
 }

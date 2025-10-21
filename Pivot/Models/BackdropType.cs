@@ -8,6 +8,12 @@ namespace Pivot.Models
         Acrylic,
         AcrylicThin
     }
+
+    public enum MenuDisplayMode
+    {
+        Compact,
+        Wide
+    }
 }
 
 

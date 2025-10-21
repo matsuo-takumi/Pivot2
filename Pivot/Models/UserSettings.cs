@@ -19,6 +19,9 @@ namespace Pivot.Models
         // スキャン戦略
         public bool ForceFullScan { get; set; } = false;
 
+        // ウィンドウ設定
+        public MenuDisplayMode MenuDisplayMode { get; set; } = MenuDisplayMode.Compact;
+
         // (カスタムAcrylic/Luminosity設定は削除)
     }
 }
