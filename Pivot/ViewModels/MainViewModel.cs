@@ -46,7 +46,6 @@ namespace Pivot.ViewModels
 
         public IAsyncRelayCommand ScanCommand { get; }
         public IRelayCommand CancelScanCommand { get; }
-        public IRelayCommand TogglePreferencePaneCommand { get; }
         public IRelayCommand<NavigationRegion> RequestNavigateCommand { get; }
 
         // Directory preferences commands
@@ -54,10 +53,6 @@ namespace Pivot.ViewModels
         public IAsyncRelayCommand<string> AddImageDirectoryCommand { get; private set; }
         public IAsyncRelayCommand<string> AddProjectDirectoryCommand { get; private set; }
         public IAsyncRelayCommand<string> RemoveDirectoryCommand { get; private set; }
-
-		[ObservableProperty]
-		[NotifyCanExecuteChangedFor(nameof(TogglePreferencePaneCommand))]
-		private bool _isPreferencePaneOpen;
 
         public MainViewModel(
 			ILogger<MainViewModel> logger,
@@ -80,7 +75,6 @@ namespace Pivot.ViewModels
 
             ScanCommand = new AsyncRelayCommand(ScanAsync, CanStartScan);
             CancelScanCommand = new RelayCommand(() => _scanCts?.Cancel(), () => IsScanning);
-            TogglePreferencePaneCommand = new RelayCommand(TogglePreferencePane);
             RequestNavigateCommand = new RelayCommand<NavigationRegion>(region =>
             {
                 _messenger.Send(new NavigationRequestMessage(region));
@@ -186,7 +180,7 @@ namespace Pivot.ViewModels
                 _logger.LogInformation("Directory removed. Current ScanDirectories count: {Count}", ScanDirectories.Count);
             });
 
-            IsPreferencePaneOpen = true;
+            // IsPreferencePaneOpen = true; // Removed as per edit hint
         }
 
         /// <summary>
@@ -337,11 +331,6 @@ namespace Pivot.ViewModels
             // ScanDirectoriesの変更をUIに通知し、CanExecuteChangedを呼び出す
             OnPropertyChanged(nameof(ScanDirectories));
             (ScanCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
-        }
-
-        private void TogglePreferencePane()
-        {
-            IsPreferencePaneOpen = !IsPreferencePaneOpen;
         }
     }
 }

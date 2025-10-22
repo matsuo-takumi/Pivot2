@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml; // for RoutedEventHandler
 using Microsoft.UI.Xaml.Media.Animation; // for SuppressNavigationTransitionInfo
 using Pivot.Models;
 using Microsoft.UI.Xaml.Navigation;
+using System;
 
 namespace Pivot.Views
 {
@@ -14,45 +15,61 @@ namespace Pivot.Views
         {
             this.InitializeComponent();
             this.DataContext = App.Current.Services.GetRequiredService<MainViewModel>(); // MainViewModel に修正
-
-            // 初回表示時に確実に初期化
-            this.Loaded += PreferencePage_Loaded;
         }
 
-        private void PreferencePage_Loaded(object sender, RoutedEventArgs e)
+        private void nvSample_Loaded(object sender, RoutedEventArgs e)
         {
-            if (nvSample.SelectedItem == null)
+            try
             {
+                // 初期選択をThemeに設定
                 nvSample.SelectedItem = ThemeItem;
-            }
+                // 最初のページへ遷移（FrameはNavigationView外なので再親化の影響を受けない）
+                PreferenceContentFrame.Navigate(typeof(ThemePage), null, new SuppressNavigationTransitionInfo());
 
-            if (contentFrame.Content == null)
+                // Pane状態に応じて左カラムの幅をPane長に合わせる
+                UpdatePaneColumnWidth();
+            }
+            catch
             {
-                contentFrame.Navigate(typeof(ThemePage), null, new EntranceNavigationTransitionInfo());
+                // ignore
             }
         }
 
-        private void NvSample_ItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
+        private void nvSample_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
         {
-            if (args.IsSettingsInvoked)
+            if (args.SelectedItemContainer == null) return;
+            var tag = args.SelectedItemContainer.Tag as string;
+            if (string.IsNullOrEmpty(tag)) return;
+
+            Type? pageType = tag switch
             {
-                // 設定項目が選択された場合の処理 (今回は使わない)
+                "ThemePage" => typeof(ThemePage),
+                "DirectoryPage" => typeof(DirectoryPage),
+                _ => null
+            };
+
+            if (pageType != null && PreferenceContentFrame.CurrentSourcePageType != pageType)
+            {
+                PreferenceContentFrame.Navigate(pageType, null, new EntranceNavigationTransitionInfo());
             }
-            else if (args.InvokedItemContainer is NavigationViewItem selectedItem)
+        }
+
+        private void nvSample_PaneOpened(NavigationView sender, object args)
+        {
+            UpdatePaneColumnWidth();
+        }
+
+        private void nvSample_PaneClosed(NavigationView sender, object args)
+        {
+            UpdatePaneColumnWidth();
+        }
+
+        private void UpdatePaneColumnWidth()
+        {
+            if (this.Content is Grid grid && grid.ColumnDefinitions.Count >= 1)
             {
-                switch (selectedItem.Tag?.ToString())
-                {
-                    case "ThemePage":
-                        contentFrame.Navigate(typeof(ThemePage), null, new EntranceNavigationTransitionInfo());
-                        break;
-                    case "WindowPage":
-                        contentFrame.Navigate(typeof(WindowPage), null, new EntranceNavigationTransitionInfo());
-                        break;
-                    case "DirectoryPage":
-                        contentFrame.Navigate(typeof(DirectoryPage), null, new EntranceNavigationTransitionInfo());
-                        break;
-                    // 他のメニュー項目に対するナビゲーションロジック
-                }
+                var targetWidth = nvSample.IsPaneOpen ? nvSample.OpenPaneLength : nvSample.CompactPaneLength;
+                grid.ColumnDefinitions[0].Width = new GridLength(targetWidth);
             }
         }
 

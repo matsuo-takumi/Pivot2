@@ -11,66 +11,71 @@
     Background="Transparent"
     x:DataType="viewmodels:MainViewModel">
 
-    <NavigationView x:Name="nvSample"
-    Background="Transparent"
-    IsSettingsVisible="False"
-    IsBackButtonVisible="Collapsed"
-    IsBackEnabled="False"
-    IsPaneOpen="{Binding IsPreferencePaneOpen, Mode=TwoWay}"
-    ItemInvoked="NvSample_ItemInvoked"
-    Header="{Binding ElementName=nvSample, Path=SelectedItem.(NavigationViewItem.Content)}"
-    AlwaysShowHeader="True"
-    PaneDisplayMode="LeftCompact"
-    ExpandedModeThresholdWidth="500"
-    SelectionFollowsFocus="Enabled"
-    IsTabStop="False">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <NavigationView.MenuItems>
-            <NavigationViewItem Content="Theme Settings" Tag="ThemePage" x:Name="ThemeItem">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Setting" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="Window" Tag="WindowPage" x:Name="WindowItem">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Globe" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="Directories" Tag="DirectoryPage" x:Name="DirectoryItem">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Folder" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItemHeader Content="Actions"/>
-            <NavigationViewItem Content="Menu Item2" Tag="SamplePage2" x:Name="SamplePage2Item" SelectsOnInvoked="True">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Save" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="Menu Item3" Tag="SamplePage3" x:Name="SamplePage3Item">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Refresh" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-        </NavigationView.MenuItems>
+        <!-- NavigationView は Pane のみを表示する想定とし、幅は Pane に合わせてコードビハインドで制御 -->
+        <NavigationView x:Name="nvSample"
+        Grid.Column="0"
+        Background="Transparent"
+        IsSettingsVisible="False"
+        IsBackButtonVisible="Collapsed"
+        IsBackEnabled="False"
+        Header="{Binding ElementName=nvSample, Path=SelectedItem.(NavigationViewItem.Content)}"
+        AlwaysShowHeader="True"
+        PaneDisplayMode="Auto"
+        ExpandedModeThresholdWidth="500"
+        SelectionFollowsFocus="Enabled"
+        IsTabStop="False"
+        SelectionChanged="nvSample_SelectionChanged"
+        PaneOpened="nvSample_PaneOpened"
+        PaneClosed="nvSample_PaneClosed"
+        Loaded="nvSample_Loaded">
 
-        <NavigationView.PaneCustomContent>
-            <HyperlinkButton x:Name="PaneHyperlink" Content="More info" Margin="12,0" Visibility="Collapsed" />
-        </NavigationView.PaneCustomContent>
-        
-        <NavigationView.AutoSuggestBox> 
-            <AutoSuggestBox QueryIcon="Find" AutomationProperties.Name="Search" /> 
-        </NavigationView.AutoSuggestBox> 
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Theme Settings" Tag="ThemePage" x:Name="ThemeItem">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Setting" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Directories" Tag="DirectoryPage" x:Name="DirectoryItem">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Folder" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItemHeader Content="Actions"/>
+                <NavigationViewItem Content="Menu Item2" Tag="SamplePage2" x:Name="SamplePage2Item" SelectsOnInvoked="True">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Save" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Menu Item3" Tag="SamplePage3" x:Name="SamplePage3Item">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Refresh" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
 
-        <NavigationView.PaneFooter>
-            <StackPanel x:Name="FooterStackPanel" Orientation="Vertical" Visibility="Collapsed">
-                <NavigationViewItem Icon="Download" AutomationProperties.Name="download" />
-                <NavigationViewItem Icon="Favorite" AutomationProperties.Name="favorite" />
-            </StackPanel>
-        </NavigationView.PaneFooter>
+            <NavigationView.PaneCustomContent>
+                <HyperlinkButton x:Name="PaneHyperlink" Content="More info" Margin="12,0" Visibility="Collapsed" />
+            </NavigationView.PaneCustomContent>
+            
+            <NavigationView.AutoSuggestBox> 
+                <AutoSuggestBox QueryIcon="Find" AutomationProperties.Name="Search" /> 
+            </NavigationView.AutoSuggestBox> 
 
-        <Grid>
-            <Frame x:Name="contentFrame" />
-        </Grid>
-    </NavigationView>
+            <NavigationView.PaneFooter>
+                <StackPanel x:Name="FooterStackPanel" Orientation="Vertical" Visibility="Collapsed">
+                    <NavigationViewItem Icon="Download" AutomationProperties.Name="download" />
+                    <NavigationViewItem Icon="Favorite" AutomationProperties.Name="favorite" />
+                </StackPanel>
+            </NavigationView.PaneFooter>
+        </NavigationView>
+
+        <!-- Navigation content is hosted OUTSIDE the NavigationView to avoid reparenting issues -->
+        <Frame x:Name="PreferenceContentFrame" Grid.Column="1" />
+    </Grid>
 </Page>
