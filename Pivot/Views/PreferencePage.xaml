@@ -6,76 +6,34 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:viewmodels="using:Pivot.ViewModels" 
-    xmlns:services="using:Pivot.Services"
     mc:Ignorable="d"
     Background="Transparent"
-    x:DataType="viewmodels:MainViewModel">
+    x:DataType="viewmodels:PreferencePageViewModel">
 
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-
-        <!-- NavigationView は Pane のみを表示する想定とし、幅は Pane に合わせてコードビハインドで制御 -->
-        <NavigationView x:Name="nvSample"
-        Grid.Column="0"
-        Background="Transparent"
-        IsSettingsVisible="False"
-        IsBackButtonVisible="Collapsed"
-        IsBackEnabled="False"
-        Header="{Binding ElementName=nvSample, Path=SelectedItem.(NavigationViewItem.Content)}"
-        AlwaysShowHeader="True"
-        PaneDisplayMode="Auto"
-        ExpandedModeThresholdWidth="500"
-        SelectionFollowsFocus="Enabled"
-        IsTabStop="False"
-        SelectionChanged="nvSample_SelectionChanged"
-        PaneOpened="nvSample_PaneOpened"
-        PaneClosed="nvSample_PaneClosed"
-        Loaded="nvSample_Loaded">
-
+        
+        <NavigationView x:Name="nvSample" 
+            SelectionChanged="nvSample_SelectionChanged"
+            PaneDisplayMode="Auto"
+            CompactModeThresholdWidth="600"
+            ExpandedModeThresholdWidth="900"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            IsPaneOpen="True"
+            SelectionFollowsFocus="Enabled"
+            Grid.Column="0"
+            Grid.ColumnSpan="2">
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="Theme Settings" Tag="ThemePage" x:Name="ThemeItem">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Setting" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Directories" Tag="DirectoryPage" x:Name="DirectoryItem">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Folder" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItemHeader Content="Actions"/>
-                <NavigationViewItem Content="Menu Item2" Tag="SamplePage2" x:Name="SamplePage2Item" SelectsOnInvoked="True">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Save" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="Menu Item3" Tag="SamplePage3" x:Name="SamplePage3Item">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Refresh" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
+                <NavigationViewItem Icon="Setting" Content="Theme" Tag="Theme" />
+                <NavigationViewItem Icon="Save" Content="Menu Item2" Tag="MenuItem2" />
+                <NavigationViewItem Icon="Refresh" Content="Menu Item3" Tag="MenuItem3" />
+                <NavigationViewItem Icon="Download" Content="Menu Item4" Tag="MenuItem4" />
             </NavigationView.MenuItems>
-
-            <NavigationView.PaneCustomContent>
-                <HyperlinkButton x:Name="PaneHyperlink" Content="More info" Margin="12,0" Visibility="Collapsed" />
-            </NavigationView.PaneCustomContent>
-            
-            <NavigationView.AutoSuggestBox> 
-                <AutoSuggestBox QueryIcon="Find" AutomationProperties.Name="Search" /> 
-            </NavigationView.AutoSuggestBox> 
-
-            <NavigationView.PaneFooter>
-                <StackPanel x:Name="FooterStackPanel" Orientation="Vertical" Visibility="Collapsed">
-                    <NavigationViewItem Icon="Download" AutomationProperties.Name="download" />
-                    <NavigationViewItem Icon="Favorite" AutomationProperties.Name="favorite" />
-                </StackPanel>
-            </NavigationView.PaneFooter>
+            <ContentControl Content="{Binding CurrentContent}" />
         </NavigationView>
-
-        <!-- Navigation content is hosted OUTSIDE the NavigationView to avoid reparenting issues -->
-        <Frame x:Name="PreferenceContentFrame" Grid.Column="1" />
     </Grid>
 </Page>
