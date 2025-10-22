@@ -19,22 +19,27 @@
                     <Button Content="None" 
                         Tag="None"
                         Click="BackdropButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                     <Button Content="Mica" 
                         Tag="Mica"
                         Click="BackdropButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                     <Button Content="Mica Alt" 
                         Tag="MicaAlt"
                         Click="BackdropButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                     <Button Content="Acrylic" 
                         Tag="Acrylic"
                         Click="BackdropButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                     <Button Content="Acrylic Thin" 
                         Tag="AcrylicThin"
                         Click="BackdropButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                 </StackPanel>
             </StackPanel>
@@ -46,14 +51,17 @@
                     <Button Content="Light" 
                         Tag="Light"
                         Click="ThemeButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                     <Button Content="Dark" 
                         Tag="Dark"
                         Click="ThemeButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                     <Button Content="Default" 
                         Tag="Default"
                         Click="ThemeButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                 </StackPanel>
             </StackPanel>
