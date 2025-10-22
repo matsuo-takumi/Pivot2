@@ -30,57 +30,15 @@ namespace Pivot.Views
             {
                 contentFrame.Navigate(typeof(ThemePage), null, new EntranceNavigationTransitionInfo());
             }
-
-            // 初期メニュー表示モードを適用
-            UpdateMenuDisplayMode();
-
-            // ContentFrame のナビゲーション完了時にメニュー表示モードを更新
-            contentFrame.NavigationFailed += ContentFrame_NavigationFailed;
-
-            // ハンバーガーメニュー開閉に応じて表示モードを調整
-            nvSample.PaneOpening += NvSample_PaneOpening;
-            nvSample.PaneClosing += NvSample_PaneClosing;
-
-            // アンロード時にイベントを解除
-            this.Unloaded += PreferencePage_Unloaded;
         }
 
-        private void PreferencePage_Unloaded(object sender, RoutedEventArgs e)
+        private void NvSample_ItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
         {
-            contentFrame.NavigationFailed -= ContentFrame_NavigationFailed;
-            nvSample.PaneOpening -= NvSample_PaneOpening;
-            nvSample.PaneClosing -= NvSample_PaneClosing;
-            this.Unloaded -= PreferencePage_Unloaded;
-        }
-
-        private void NvSample_PaneOpening(NavigationView sender, object args)
-        {
-            // 開くときはフルメニュー表示（Left）にして開く
-            if (nvSample.PaneDisplayMode != NavigationViewPaneDisplayMode.Left)
-            {
-                nvSample.PaneDisplayMode = NavigationViewPaneDisplayMode.Left;
-            }
-            nvSample.IsPaneOpen = true;
-        }
-
-        private void NvSample_PaneClosing(NavigationView sender, NavigationViewPaneClosingEventArgs args)
-        {
-            // 既定の閉じる動作をキャンセルし、アイコンのみ（LeftCompact）に切替
-            args.Cancel = true;
-            if (nvSample.PaneDisplayMode != NavigationViewPaneDisplayMode.LeftCompact)
-            {
-                nvSample.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftCompact;
-            }
-            nvSample.IsPaneOpen = false;
-        }
-
-        private void NavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
-        {
-            if (args.IsSettingsSelected)
+            if (args.IsSettingsInvoked)
             {
                 // 設定項目が選択された場合の処理 (今回は使わない)
             }
-            else if (args.SelectedItem is NavigationViewItem selectedItem)
+            else if (args.InvokedItemContainer is NavigationViewItem selectedItem)
             {
                 switch (selectedItem.Tag?.ToString())
                 {
@@ -96,20 +54,6 @@ namespace Pivot.Views
                     // 他のメニュー項目に対するナビゲーションロジック
                 }
             }
-        }
-
-        private void UpdateMenuDisplayMode()
-        {
-            var settingsService = App.Current.Services.GetRequiredService<Pivot.Services.SettingsService>();
-            var mode = settingsService.GetMenuDisplayMode();
-            
-            nvSample.PaneDisplayMode = mode == MenuDisplayMode.Wide ?
-                NavigationViewPaneDisplayMode.Left :
-                NavigationViewPaneDisplayMode.LeftCompact;
-
-            // 表示モードに合わせて開閉状態も同期
-            nvSample.IsPaneOpen = mode == MenuDisplayMode.Wide;
-            nvSample.IsPaneToggleButtonVisible = true;
         }
 
         private void ContentFrame_NavigationFailed(object sender, NavigationFailedEventArgs e)

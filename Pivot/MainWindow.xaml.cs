@@ -33,7 +33,7 @@ namespace Pivot
     /// <summary>
     /// An empty window that can be used on its own or navigated to within a Frame.
     /// </summary>
-    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<NavigationRequestMessage>
+    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<NavigationRequestMessage>, IRecipient<MenuDisplayModeChangedMessage>
     {
         // Provide an implicit conversion so generated binding code can pass 'this' (MainWindow)
         // to APIs that expect a FrameworkElement (the generated code calls SetConverterLookupRoot(this)).
@@ -87,11 +87,21 @@ namespace Pivot
 
             // ナビゲーション要求購読
             _messenger.Register<NavigationRequestMessage>(this);
+            _messenger.Register<MenuDisplayModeChangedMessage>(this);
         }
 
         public void Receive(BackdropTypeChangedMessage message)
         {
             SetSystemBackdrop(message.Value);
+        }
+
+        public void Receive(MenuDisplayModeChangedMessage message)
+        {
+            // PreferenceFrame が現在表示されている場合、ナビゲーションビューの表示モードを更新
+            // if (PreferenceFrame.Content is Views.PreferencePage preferencePage)
+            // {
+            //     preferencePage.UpdateMenuDisplayModeFromMessage(message.Value);
+            // }
         }
 
         public void SetSystemBackdrop(BackdropType type)

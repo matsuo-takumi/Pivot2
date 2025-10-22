@@ -17,7 +17,7 @@
     IsBackButtonVisible="Collapsed"
     IsBackEnabled="False"
     IsPaneOpen="{Binding IsPreferencePaneOpen, Mode=TwoWay}"
-    SelectionChanged="NavigationView_SelectionChanged"
+    ItemInvoked="NvSample_ItemInvoked"
     Header="{Binding ElementName=nvSample, Path=SelectedItem.(NavigationViewItem.Content)}"
     AlwaysShowHeader="True"
     PaneDisplayMode="LeftCompact"
