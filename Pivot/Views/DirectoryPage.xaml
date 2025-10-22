@@ -1,4 +1,4 @@
-<Page
+<UserControl
     x:Class="Pivot.Views.DirectoryPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -8,160 +8,46 @@
     xmlns:viewmodels="using:Pivot.ViewModels"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
-    x:DataType="local:DirectoryPage"
+    x:DataType="viewmodels:DirectoryViewModel"
     x:Name="DirectoryPageRoot">
 
-    <Grid Padding="20">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1*"/>
-            <ColumnDefinition Width="1*"/>
-            <ColumnDefinition Width="1*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- Asset Directories Section (Column 1) -->
-        <StackPanel Spacing="12" Grid.Column="0">
-            <TextBlock Text="Asset Directories" Style="{StaticResource SubtitleTextBlockStyle}"/>
-            
-            <!-- Add Button -->
-            <Button Content="+" 
-                    Command="{Binding SelectAssetDirectoryCommand}" 
-                    Width="40" 
-                    Height="40"
-                    HorizontalAlignment="Left"
-                    CornerRadius="4"
-                    FontSize="18"
-                    Padding="0"/>
-            
-            <!-- Directory List -->
-            <ItemsControl ItemsSource="{Binding AssetDirectories}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Spacing="4"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="x:String">
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{Binding}" 
-                                       Grid.Column="0"
-                                       VerticalAlignment="Center" 
-                                       TextWrapping="WrapWholeWords"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       FontSize="13"/>
-                            <Button Content="−" 
-                                    Command="{Binding ElementName=DirectoryPageRoot, Path=DataContext.RemoveDirectoryCommand}" 
-                                    CommandParameter="{Binding}"
-                                    Grid.Column="1"
-                                    Width="32" 
-                                    Height="32"
-                                    CornerRadius="4" 
-                                    Padding="0"/>
-                        </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </StackPanel>
-
-        <!-- Image Directories Section (Column 2) -->
-        <StackPanel Spacing="12" Grid.Column="1" Margin="20,0,0,0">
-            <TextBlock Text="Image Directories" Style="{StaticResource SubtitleTextBlockStyle}"/>
-            
-            <!-- Add Button -->
-            <Button Content="+" 
-                    Command="{Binding SelectImageDirectoryCommand}" 
-                    Width="40" 
-                    Height="40"
-                    HorizontalAlignment="Left"
-                    CornerRadius="4"
-                    FontSize="18"
-                    Padding="0"/>
-            
-            <!-- Directory List -->
-            <ItemsControl ItemsSource="{Binding ImageDirectories}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Spacing="4"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="x:String">
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{Binding}" 
-                                       Grid.Column="0"
-                                       VerticalAlignment="Center" 
-                                       TextWrapping="WrapWholeWords"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       FontSize="13"/>
-                            <Button Content="−" 
-                                    Command="{Binding ElementName=DirectoryPageRoot, Path=DataContext.RemoveDirectoryCommand}" 
-                                    CommandParameter="{Binding}"
-                                    Grid.Column="1"
-                                    Width="32" 
-                                    Height="32"
-                                    CornerRadius="4" 
-                                    Padding="0"/>
-                        </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </StackPanel>
-
-        <!-- Project Directories Section (Column 3) -->
-        <StackPanel Spacing="12" Grid.Column="2" Margin="20,0,0,0">
-            <TextBlock Text="Project Directories" Style="{StaticResource SubtitleTextBlockStyle}"/>
-            
-            <!-- Add Button -->
-            <Button Content="+" 
-                    Command="{Binding SelectProjectDirectoryCommand}" 
-                    Width="40" 
-                    Height="40"
-                    HorizontalAlignment="Left"
-                    CornerRadius="4"
-                    FontSize="18"
-                    Padding="0"/>
-            
-            <!-- Directory List -->
-            <ItemsControl ItemsSource="{Binding ProjectDirectories}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Spacing="4"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="x:String">
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{Binding}" 
-                                       Grid.Column="0"
-                                       VerticalAlignment="Center" 
-                                       TextWrapping="WrapWholeWords"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       FontSize="13"/>
-                            <Button Content="−" 
-                                    Command="{Binding ElementName=DirectoryPageRoot, Path=DataContext.RemoveDirectoryCommand}" 
-                                    CommandParameter="{Binding}"
-                                    Grid.Column="1"
-                                    Width="32" 
-                                    Height="32"
-                                    CornerRadius="4" 
-                                    Padding="0"/>
-                        </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </StackPanel>
+    <Grid Padding="40">
+        <!-- Use ItemsRepeater to render sections dynamically -->
+        <ItemsRepeater ItemsSource="{Binding Sections}">
+            <ItemsRepeater.Layout>
+                <UniformGridLayout DesiredColumnCount="3" MinColumnSpacing="40" MinRowSpacing="20"/>
+            </ItemsRepeater.Layout>
+            <ItemsRepeater.ItemTemplate>
+                <DataTemplate x:DataType="local:DirectorySection">
+                    <Border Padding="16" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" CornerRadius="8">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                            <Button Content="+" Command="{Binding AddCommand}" Width="40" Height="40" CornerRadius="4"/>
+                            <ItemsControl ItemsSource="{Binding Items}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="8"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding}" Grid.Column="0" VerticalAlignment="Center" TextWrapping="WrapWholeWords" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="13"/>
+                                            <Button Content="−" Command="{Binding ElementName=DirectoryPageRoot, Path=DataContext.RemoveDirectoryCommand}" CommandParameter="{Binding}" Grid.Column="1" Width="32" Height="32" CornerRadius="4"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsRepeater.ItemTemplate>
+        </ItemsRepeater>
     </Grid>
-</Page>
+</UserControl>
 
 

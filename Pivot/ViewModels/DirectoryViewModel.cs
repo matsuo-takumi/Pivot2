@@ -18,6 +18,17 @@ namespace Pivot.ViewModels
         //private readonly ILogger<DirectoryViewModel> _logger; // コメントアウト
         private readonly SettingsService? _settingsService;
 
+        // Dynamic sections for UI
+        public ObservableCollection<DirectorySection> Sections { get; }
+
+        public class DirectorySection
+        {
+            public string Title { get; set; } = string.Empty;
+            public ObservableCollection<string> Items { get; set; } = new ObservableCollection<string>();
+            public IAsyncRelayCommand? AddCommand { get; set; }
+            public IAsyncRelayCommand<string>? RemoveCommand { get; set; }
+        }
+
         private static string NormalizePath(string path)
         {
             try
@@ -102,6 +113,32 @@ namespace Pivot.ViewModels
             SelectAssetDirectoryCommand = new AsyncRelayCommand(SelectAssetDirectoryAsync);
             SelectImageDirectoryCommand = new AsyncRelayCommand(SelectImageDirectoryAsync);
             SelectProjectDirectoryCommand = new AsyncRelayCommand(SelectProjectDirectoryAsync);
+
+            // Initialize dynamic sections mapping to collections and commands
+            Sections = new ObservableCollection<DirectorySection>
+            {
+                new DirectorySection
+                {
+                    Title = "Asset Directories",
+                    Items = AssetDirectories,
+                    AddCommand = SelectAssetDirectoryCommand,
+                    RemoveCommand = RemoveDirectoryCommand
+                },
+                new DirectorySection
+                {
+                    Title = "Image Directories",
+                    Items = ImageDirectories,
+                    AddCommand = SelectImageDirectoryCommand,
+                    RemoveCommand = RemoveDirectoryCommand
+                },
+                new DirectorySection
+                {
+                    Title = "Project Directories",
+                    Items = ProjectDirectories,
+                    AddCommand = SelectProjectDirectoryCommand,
+                    RemoveCommand = RemoveDirectoryCommand
+                }
+            };
         }
 
         public ObservableCollection<string> AssetDirectories { get; }

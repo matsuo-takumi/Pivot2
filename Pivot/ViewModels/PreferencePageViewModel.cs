@@ -10,11 +10,11 @@ namespace Pivot.ViewModels
         private object? currentContent;
 
         [ObservableProperty]
-        private string selectedMenuTag = "Theme";
+        private string selectedMenuTag = "Directory"; // 初期選択をDirectoryに設定
 
         public PreferencePageViewModel()
         {
-            SelectMenuItem("Theme");
+            SelectMenuItem("Directory"); // 初期選択をDirectoryに設定
         }
 
         public void SelectMenuItem(string tag)
@@ -24,6 +24,7 @@ namespace Pivot.ViewModels
             // Create appropriate content based on tag
             CurrentContent = tag switch
             {
+                "Directory" => new DirectoryPage(),
                 "Theme" => new ThemePage(),
                 "MenuItem2" => new MenuItem2ContentControl(),
                 "MenuItem3" => new MenuItem3ContentControl(),

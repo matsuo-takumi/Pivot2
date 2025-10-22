@@ -28,6 +28,7 @@
             Grid.Column="0"
             Grid.ColumnSpan="2">
             <NavigationView.MenuItems>
+                <NavigationViewItem Icon="Folder" Content="Directories" Tag="Directory" />
                 <NavigationViewItem Icon="Setting" Content="Theme" Tag="Theme" />
                 <NavigationViewItem Icon="Save" Content="Menu Item2" Tag="MenuItem2" />
                 <NavigationViewItem Icon="Refresh" Content="Menu Item3" Tag="MenuItem3" />
