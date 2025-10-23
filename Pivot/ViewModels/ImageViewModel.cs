@@ -18,8 +18,9 @@ namespace Pivot.ViewModels
         private readonly MetadataService _metadataService;
         private readonly SettingsService _settingsService;
         private readonly IMessenger _messenger; // IMessenger を追加
+        private readonly IThumbnailService _thumbnailService;
 
-        public ObservableCollection<FileEntry> Images { get; } = new ObservableCollection<FileEntry>();
+        public ObservableCollection<ImageItem> Images { get; } = new ObservableCollection<ImageItem>();
 
         public IAsyncRelayCommand LoadImagesCommand { get; }
 
@@ -27,12 +28,14 @@ namespace Pivot.ViewModels
             //ILogger<ImageViewModel> logger, // コメントアウト
             MetadataService metadataService,
             SettingsService settingsService,
-            IMessenger messenger) // コンストラクタに IMessenger を追加
+            IMessenger messenger,
+            IThumbnailService thumbnailService) // コンストラクタに IMessenger / ThumbnailService を追加
         {
             //_logger = logger; // コメントアウト
             _metadataService = metadataService;
             _settingsService = settingsService;
             _messenger = messenger; // 初期化
+            _thumbnailService = thumbnailService;
 
             LoadImagesCommand = new AsyncRelayCommand(LoadImagesAsync);
             _ = LoadImagesAsync(); // 初期ロード
@@ -64,7 +67,15 @@ namespace Pivot.ViewModels
             var allFiles = await _metadataService.GetFilesAsync(0, int.MaxValue); // 全ファイル取得
             foreach (var file in allFiles.Where(f => IsImageFile(f.Path, settings)))
             {
-                Images.Add(file);
+                var item = new ImageItem
+                {
+                    Path = file.Path,
+                    Name = System.IO.Path.GetFileName(file.Path),
+                    Size = file.Size,
+                    LastModified = file.UpdatedAt
+                };
+                Images.Add(item);
+                _ = EnsureThumbnailAsync(item); // サムネイルを遅延で取得
             }
         }
 
@@ -77,7 +88,40 @@ namespace Pivot.ViewModels
             // ここでさらにImageとして適切なMIMEタイプかフィルタリングすることも可能
             // FileScannerService.GuessMime メソッドで "image/*" と判定される拡張子を持つファイルであるか確認するなど
             // 例: return inImageDir && FileScannerService.IsImageExtension(System.IO.Path.GetExtension(filePath));
-            return inImageDir; // 現時点ではディレクトリに含まれるもの全てをImageとする
+            // 一旦拡張子フィルタ（jpg/jpeg/png/webp/gif/bmp/ico/tif/tiff/tga）
+            var ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
+            switch (ext)
+            {
+                case ".jpg":
+                case ".jpeg":
+                case ".png":
+                case ".webp":
+                case ".gif":
+                case ".bmp":
+                case ".ico":
+                case ".tif":
+                case ".tiff":
+                case ".tga":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private async Task EnsureThumbnailAsync(ImageItem item)
+        {
+            try
+            {
+                var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                var cacheDir = System.IO.Path.Combine(local, "Pivot", "cache", "thumbnails");
+                await _thumbnailService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
+                var path = await _thumbnailService.GetOrCreateThumbnailAsync(item.Path, 220, 160);
+                item.ThumbnailPath = path;
+            }
+            catch
+            {
+                // ignore; placeholder will be used
+            }
         }
     }
 }

@@ -55,6 +55,7 @@ namespace Pivot
 			sc.AddSingleton<MetadataService>();
 			sc.AddSingleton<ICatalogService, JsonCatalogService>();
 			sc.AddSingleton<FileScannerService>();
+			sc.AddSingleton<IThumbnailService, ThumbnailService>();
 
 			// ViewModels
 			sc.AddTransient<MainViewModel>();
