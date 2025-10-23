@@ -28,12 +28,21 @@
             Grid.Column="0"
             Grid.ColumnSpan="2">
             <NavigationView.MenuItems>
-                <NavigationViewItem Icon="Setting" Content="Theme" Tag="Theme" />
+                <NavigationViewItem Icon="Folder" Content="Directories" Tag="Directories" />
+                <NavigationViewItem Content="Theme" Tag="Theme">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE793;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem Icon="Save" Content="Menu Item2" Tag="MenuItem2" />
                 <NavigationViewItem Icon="Refresh" Content="Menu Item3" Tag="MenuItem3" />
                 <NavigationViewItem Icon="Download" Content="Menu Item4" Tag="MenuItem4" />
             </NavigationView.MenuItems>
-            <ContentControl Content="{Binding CurrentContent}" />
+            <ContentControl Content="{Binding CurrentContent}" 
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
         </NavigationView>
     </Grid>
 </Page>

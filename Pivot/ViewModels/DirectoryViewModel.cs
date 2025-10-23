@@ -102,6 +102,7 @@ namespace Pivot.ViewModels
             SelectAssetDirectoryCommand = new AsyncRelayCommand(SelectAssetDirectoryAsync);
             SelectImageDirectoryCommand = new AsyncRelayCommand(SelectImageDirectoryAsync);
             SelectProjectDirectoryCommand = new AsyncRelayCommand(SelectProjectDirectoryAsync);
+            OpenDirectoryCommand = new AsyncRelayCommand<string>(OpenDirectoryAsync);
         }
 
         public ObservableCollection<string> AssetDirectories { get; }
@@ -118,6 +119,9 @@ namespace Pivot.ViewModels
         public IAsyncRelayCommand SelectAssetDirectoryCommand { get; }
         public IAsyncRelayCommand SelectImageDirectoryCommand { get; }
         public IAsyncRelayCommand SelectProjectDirectoryCommand { get; }
+
+        // ディレクトリをエクスプローラーで開くコマンド
+        public IAsyncRelayCommand<string> OpenDirectoryCommand { get; }
 
         private async Task AddDirectoryAsync(DirectoryCategory category)
         {
@@ -379,6 +383,32 @@ namespace Pivot.ViewModels
                 DirectoryCategory.Project => ProjectDirectories,
                 _ => throw new ArgumentOutOfRangeException(nameof(category))
             };
+        }
+
+        // ディレクトリをエクスプローラーで開く
+        private async Task OpenDirectoryAsync(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+
+            try
+            {
+                // Windowsの explorer.exe でディレクトリを開く
+                var processInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"/select,\"{path}\"",
+                    UseShellExecute = true
+                };
+
+                using (var process = System.Diagnostics.Process.Start(processInfo))
+                {
+                    await Task.CompletedTask;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"OpenDirectoryAsync error: {ex.Message}");
+            }
         }
     }
 }
