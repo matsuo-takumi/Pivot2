@@ -14,7 +14,7 @@ using System.Linq;
 
 namespace Pivot.ViewModels
 {
-	public partial class MainViewModel : ObservableObject
+	public partial class MainViewModel : ObservableObject, IRecipient<DirectoryChangedMessage>
 	{
 		private readonly ILogger<MainViewModel> _logger;
 		private readonly IConfiguration _configuration;
@@ -180,8 +180,25 @@ namespace Pivot.ViewModels
                 _logger.LogInformation("Directory removed. Current ScanDirectories count: {Count}", ScanDirectories.Count);
             });
 
+            // DirectoryChangedMessage をリッスン
+            _messenger.Register<MainViewModel, DirectoryChangedMessage>(this, (r, m) => r.Handle(m));
+
             // IsPreferencePaneOpen = true; // Removed as per edit hint
         }
+
+        public void Handle(DirectoryChangedMessage message)
+        {
+            if (message.Value.Category == DirectoryCategory.Project)
+            {
+                // Project ディレクトリが変更されたらスキャンディレクトリを再ロード
+                LoadScanDirectories();
+                // ウォッチャーを再設定 (変更後のディレクトリリストを渡す)
+                _fileScannerService.EnsureWatchers(ScanDirectories);
+            }
+        }
+
+        // IRecipient<T> implementation required by CommunityToolkit
+        public void Receive(DirectoryChangedMessage message) => Handle(message);
 
         /// <summary>
         /// MainViewModelの初期化処理。

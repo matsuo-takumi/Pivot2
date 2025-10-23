@@ -16,10 +16,10 @@ namespace Pivot.Converters
                     ElementTheme.Default => "システムの既定",
                     ElementTheme.Light => "ライト",
                     ElementTheme.Dark => "ダーク",
-                    _ => value.ToString()
+                    _ => value.ToString() ?? string.Empty
                 };
             }
-            return value;
+            return value?.ToString() ?? string.Empty;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)

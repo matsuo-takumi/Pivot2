@@ -12,6 +12,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Models;
 using Pivot.Messages;
 using System.Timers;
+using Microsoft.Extensions.Configuration;
 
 namespace Pivot.Services
 {
@@ -19,6 +20,8 @@ namespace Pivot.Services
 	{
 		private readonly ILogger<FileScannerService> _logger;
 		private readonly MetadataService _metadataService;
+		private readonly ICatalogService? _catalogService; // scanモード用
+		private readonly bool _useScanMode;
 		private readonly IMessenger _messenger;
 		private FileSystemWatcher? _watcher;
 		private string? _currentRootPath;
@@ -66,11 +69,13 @@ namespace Pivot.Services
 		private const int AssetFlushIntervalMs = 300; // Phase 6: move to config
 		private const int AssetFlushBatchMax = 100;   // Phase 6: move to config
 
-		public FileScannerService(ILogger<FileScannerService> logger, MetadataService metadataService, IMessenger messenger)
+		public FileScannerService(ILogger<FileScannerService> logger, MetadataService metadataService, IMessenger messenger, IConfiguration? configuration = null, ICatalogService? catalogService = null)
 		{
 			_logger = logger;
 			_metadataService = metadataService;
 			_messenger = messenger;
+			_useScanMode = bool.TryParse(configuration?["AppSettings:UseScanMode"], out var flag) && flag;
+			_catalogService = catalogService;
 
 			// Start periodic flush timer for asset changes
 			_assetFlushTimer = new System.Timers.Timer(AssetFlushIntervalMs)
@@ -87,6 +92,23 @@ namespace Pivot.Services
 
 		public async Task ScanAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
 		{
+			if (_useScanMode)
+			{
+				try
+				{
+					var catalog = _catalogService ?? new JsonCatalogService();
+					await catalog.InitializeAsync(rootPaths, cancellationToken);
+					progress?.Report(100);
+					_logger.LogInformation("ScanAsync: UseScanMode enabled. Delegated to JsonCatalogService.");
+					return;
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "ScanAsync: JsonCatalogService initialization failed in UseScanMode.");
+					// フォールバック: 従来経路
+				}
+			}
+
 			// 既存のWatcherを完全停止（複数対応）
 			StopWatchers();
 
@@ -586,6 +608,23 @@ namespace Pivot.Services
 
 		public async Task ScanWithCacheAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
 		{
+			if (_useScanMode)
+			{
+				try
+				{
+					var catalog = _catalogService ?? new JsonCatalogService();
+					await catalog.InitializeAsync(rootPaths, cancellationToken);
+					progress?.Report(100);
+					_logger.LogInformation("ScanWithCacheAsync: UseScanMode enabled. Delegated to JsonCatalogService.");
+					return;
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "ScanWithCacheAsync: JsonCatalogService initialization failed in UseScanMode.");
+					// フォールバック: 従来経路
+				}
+			}
+
 			// 既存のWatcherを完全停止（複数対応）
 			StopWatchers();
 

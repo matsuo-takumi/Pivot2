@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
-using LiteDB;
 
 namespace Pivot.Models
 {
     public class AssetEntry
     {
-        [BsonId]
         public int Id { get; set; }
 
         public string Path { get; set; }
@@ -20,11 +18,9 @@ namespace Pivot.Models
         public DateTime UpdatedAt { get; set; }
 
         // 関連するプロジェクト（多対多はIDリストやブリッジテーブルで管理することを推奨）
-        [BsonRef("projects")]
         public List<ProjectEntry> Projects { get; set; } = new List<ProjectEntry>();
 
         // 関連するFileEntry（ある場合のみ）
-        [BsonRef("files")]
         public FileEntry? File { get; set; }
 
         public AssetEntry()

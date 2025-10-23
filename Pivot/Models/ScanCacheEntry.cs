@@ -1,4 +1,3 @@
-using LiteDB;
 using System;
 
 namespace Pivot.Models
@@ -9,7 +8,6 @@ namespace Pivot.Models
     /// </summary>
     public class ScanCacheEntry
     {
-        [BsonId]
         public string FilePath { get; set; } // ファイルの絶対パス（ユニークキー）
 
         public string Hash { get; set; } // ファイルのハッシュ値

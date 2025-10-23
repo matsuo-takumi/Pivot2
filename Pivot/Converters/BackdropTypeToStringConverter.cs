@@ -18,10 +18,10 @@ namespace Pivot.Converters
                     BackdropType.MicaAlt => "Mica Alt",
                     BackdropType.Acrylic => "Acrylic",
                     BackdropType.AcrylicThin => "Acrylic Thin",
-                    _ => value.ToString()
+                    _ => value.ToString() ?? string.Empty
                 };
             }
-            return value;
+            return value?.ToString() ?? string.Empty;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)

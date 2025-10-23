@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using LiteDB;
 
 namespace Pivot.Models
 {
@@ -12,7 +11,6 @@ namespace Pivot.Models
     /// </summary>
     public class UnrealPresetEntry
     {
-        [BsonId]
         public int Id { get; set; }
 
         /// <summary>

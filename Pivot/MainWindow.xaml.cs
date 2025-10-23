@@ -39,7 +39,7 @@ namespace Pivot
         // to APIs that expect a FrameworkElement (the generated code calls SetConverterLookupRoot(this)).
         public static implicit operator Microsoft.UI.Xaml.FrameworkElement(MainWindow window)
         {
-            return window?.Content as Microsoft.UI.Xaml.FrameworkElement;
+            return window?.Content as Microsoft.UI.Xaml.FrameworkElement ?? throw new InvalidOperationException("Content is not a FrameworkElement");
         }
         public MainViewModel ViewModel { get; }
         public ThemeViewModel ThemeViewModel { get; }

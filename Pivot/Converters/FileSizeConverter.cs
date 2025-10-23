@@ -8,7 +8,7 @@ namespace Pivot.Converters
         public object Convert(object value, Type targetType, object parameter, string language)
         {
             if (value == null) return string.Empty;
-            if (!(value is long)) return value.ToString();
+            if (!(value is long)) return value.ToString() ?? string.Empty;
 
             long bytes = (long)value;
             if (bytes < 1024) return $"{bytes} B";

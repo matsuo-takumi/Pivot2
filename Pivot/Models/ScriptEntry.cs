@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
-using LiteDB;
 
 namespace Pivot.Models
 {
     public class ScriptEntry
     {
-        [BsonId]
         public int Id { get; set; }
 
         /// <summary>

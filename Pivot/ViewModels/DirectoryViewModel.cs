@@ -72,6 +72,7 @@ namespace Pivot.ViewModels
                 SelectAssetDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
                 SelectImageDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
                 SelectProjectDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
+                OpenDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
             }
             else
             {

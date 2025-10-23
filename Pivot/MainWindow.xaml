@@ -20,7 +20,7 @@
 
         <Grid x:Name="AppTitleBar" Background="Transparent" Grid.Row="0">
             <TextBlock x:Name="AppTitleBarText"
-                       Text="{x:Bind Title, Mode=OneWay}"
+                       Text="Pivot"
                        VerticalAlignment="Center"
                        Margin="12,0,0,0"
                        Style="{StaticResource CaptionTextBlockStyle}" />

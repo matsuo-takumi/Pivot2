@@ -1,17 +1,14 @@
-using LiteDB;
 using System;
 
 namespace Pivot.Models
 {
     public class PreferenceEntry
     {
-        [BsonId]
         public string Key { get; set; } // 設定のキー（例: "AppTheme", "AssetDirectories"）
         public string Value { get; set; } // 設定の値（JSON文字列として保存）
 
         /// <summary>
-        /// LiteDB による自動デシリアライゼーション用のパラメータなしコンストラクタ。
-        /// 通常は直接呼び出さないことを推奨します。
+        /// パラメータなしコンストラクタ。
         /// </summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         public PreferenceEntry()

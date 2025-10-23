@@ -7,14 +7,17 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System;
+using CommunityToolkit.Mvvm.Messaging; // IMessenger を追加
+using Pivot.Messages; // DirectoryChangedMessage を使用するために追加
 
 namespace Pivot.ViewModels
 {
-    public class ImageViewModel : ObservableObject
+    public class ImageViewModel : ObservableObject, IRecipient<DirectoryChangedMessage>
     {
         //private readonly ILogger<ImageViewModel> _logger; // コメントアウト
         private readonly MetadataService _metadataService;
         private readonly SettingsService _settingsService;
+        private readonly IMessenger _messenger; // IMessenger を追加
 
         public ObservableCollection<FileEntry> Images { get; } = new ObservableCollection<FileEntry>();
 
@@ -23,15 +26,32 @@ namespace Pivot.ViewModels
         public ImageViewModel(
             //ILogger<ImageViewModel> logger, // コメントアウト
             MetadataService metadataService,
-            SettingsService settingsService)
+            SettingsService settingsService,
+            IMessenger messenger) // コンストラクタに IMessenger を追加
         {
             //_logger = logger; // コメントアウト
             _metadataService = metadataService;
             _settingsService = settingsService;
+            _messenger = messenger; // 初期化
 
             LoadImagesCommand = new AsyncRelayCommand(LoadImagesAsync);
             _ = LoadImagesAsync(); // 初期ロード
+
+            // DirectoryChangedMessage をリッスン
+            _messenger.Register<ImageViewModel, DirectoryChangedMessage>(this, (r, m) => r.Handle(m));
         }
+
+        public void Handle(DirectoryChangedMessage message)
+        {
+            if (message.Value.Category == DirectoryCategory.Image)
+            {
+                // Image ディレクトリが変更されたら画像を再ロード
+                _ = LoadImagesAsync();
+            }
+        }
+
+        // IRecipient<T> implementation required by CommunityToolkit
+        public void Receive(DirectoryChangedMessage message) => Handle(message);
 
         private async Task LoadImagesAsync()
         {

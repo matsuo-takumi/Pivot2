@@ -1,3 +1,4 @@
+#if false
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
@@ -1566,4 +1567,228 @@ namespace Pivot.Services
         // - 依存関係解決メソッド（プリセット間の依存関係を検証）
         // - プリセット検証メソッド（互換性チェック）
     }
+}
+#endif
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Pivot.Models;
+
+namespace Pivot.Services
+{
+	public class MetadataService : IDisposable
+	{
+		private readonly ILogger<MetadataService> _logger;
+		private readonly object _lock = new object();
+		private readonly Dictionary<string, FileEntry> _filesByPath = new Dictionary<string, FileEntry>(StringComparer.OrdinalIgnoreCase);
+		private readonly Dictionary<string, AssetEntry> _assetsByPath = new Dictionary<string, AssetEntry>(StringComparer.OrdinalIgnoreCase);
+		private readonly Dictionary<string, ScanCacheEntry> _scanCacheByPath = new Dictionary<string, ScanCacheEntry>(StringComparer.OrdinalIgnoreCase);
+		private readonly Dictionary<string, PreferenceEntry> _preferences = new Dictionary<string, PreferenceEntry>(StringComparer.OrdinalIgnoreCase);
+
+		public MetadataService(ILogger<MetadataService> logger, IConfiguration configuration)
+		{
+			_logger = logger;
+		}
+
+		public Task InitializeDatabase() => Task.CompletedTask;
+
+		public Task UpsertFileAsync(string path, string type, long size, DateTime updatedAt, string hash)
+		{
+			lock (_lock)
+			{
+				if (!_filesByPath.TryGetValue(path, out var e)) e = new FileEntry { Path = path };
+				e.Type = type;
+				e.Size = size;
+				e.UpdatedAt = updatedAt;
+				e.Hash = hash;
+				_filesByPath[path] = e;
+			}
+			return Task.CompletedTask;
+		}
+
+		public Task DeleteFileAsync(string path)
+		{
+			lock (_lock) { _filesByPath.Remove(path); }
+			return Task.CompletedTask;
+		}
+
+		public Task<List<FileEntry>> GetFilesAsync(int skip, int take)
+		{
+			lock (_lock)
+			{
+				var list = _filesByPath.Values.OrderByDescending(f => f.UpdatedAt).Skip(skip).Take(take).ToList();
+				return Task.FromResult(list);
+			}
+		}
+
+		public async IAsyncEnumerable<FileEntry> StreamFilesAsync(int batchSize = 500)
+		{
+			List<FileEntry> snapshot;
+			lock (_lock) snapshot = _filesByPath.Values.OrderByDescending(f => f.UpdatedAt).ToList();
+			for (int i = 0; i < snapshot.Count; i += batchSize)
+			{
+				foreach (var item in snapshot.Skip(i).Take(batchSize)) yield return item;
+				await Task.Yield();
+			}
+		}
+
+		public Task<FileEntry?> GetFileEntryByPathAsync(string path)
+		{
+			lock (_lock)
+			{
+				_filesByPath.TryGetValue(path, out var e);
+				return Task.FromResult<FileEntry?>(e);
+			}
+		}
+
+		public Task UpdateFileEntryAsync(FileEntry fileEntry)
+		{
+			if (fileEntry == null || string.IsNullOrWhiteSpace(fileEntry.Path)) return Task.CompletedTask;
+			lock (_lock) _filesByPath[fileEntry.Path] = fileEntry;
+			return Task.CompletedTask;
+		}
+
+		public Task DeleteFileEntryAsync(int id)
+		{
+			lock (_lock)
+			{
+				var kv = _filesByPath.FirstOrDefault(kv => kv.Value.Id == id);
+				if (!string.IsNullOrEmpty(kv.Key)) _filesByPath.Remove(kv.Key);
+			}
+			return Task.CompletedTask;
+		}
+
+		// Assets
+		public Task AddAssetEntryAsync(AssetEntry assetEntry)
+		{
+			if (assetEntry == null || string.IsNullOrWhiteSpace(assetEntry.Path)) return Task.CompletedTask;
+			lock (_lock) _assetsByPath[assetEntry.Path] = assetEntry;
+			return Task.CompletedTask;
+		}
+
+		public Task<AssetEntry?> GetAssetEntryByPathAsync(string path)
+		{
+			lock (_lock)
+			{
+				_assetsByPath.TryGetValue(path, out var e);
+				return Task.FromResult<AssetEntry?>(e);
+			}
+		}
+
+		public Task UpdateAssetEntryAsync(AssetEntry assetEntry)
+		{
+			if (assetEntry == null || string.IsNullOrWhiteSpace(assetEntry.Path)) return Task.CompletedTask;
+			lock (_lock) _assetsByPath[assetEntry.Path] = assetEntry;
+			return Task.CompletedTask;
+		}
+
+		public Task<List<AssetEntry>> GetAssetEntriesAsync(int skip, int take)
+		{
+			lock (_lock)
+			{
+				var list = _assetsByPath.Values.OrderByDescending(a => a.UpdatedAt).Skip(skip).Take(take).ToList();
+				return Task.FromResult(list);
+			}
+		}
+
+		public async IAsyncEnumerable<AssetEntry> StreamAssetEntriesAsync(int batchSize = 500)
+		{
+			List<AssetEntry> snapshot;
+			lock (_lock) snapshot = _assetsByPath.Values.OrderByDescending(a => a.UpdatedAt).ToList();
+			for (int i = 0; i < snapshot.Count; i += batchSize)
+			{
+				foreach (var item in snapshot.Skip(i).Take(batchSize)) yield return item;
+				await Task.Yield();
+			}
+		}
+
+		public Task<int> GetAssetCountAsync(string? type = null, string? category = null)
+		{
+			lock (_lock)
+			{
+				IEnumerable<AssetEntry> q = _assetsByPath.Values;
+				if (!string.IsNullOrWhiteSpace(type)) q = q.Where(a => string.Equals(a.Type, type, StringComparison.OrdinalIgnoreCase));
+				if (!string.IsNullOrWhiteSpace(category)) q = q.Where(a => string.Equals(a.TagsJson, category, StringComparison.OrdinalIgnoreCase));
+				return Task.FromResult(q.Count());
+			}
+		}
+
+		public Task<List<AssetEntry>> GetAssetsByPropertyAsync(int skip, int take, string? type = null, string? category = null, long? maxSize = null)
+		{
+			lock (_lock)
+			{
+				IEnumerable<AssetEntry> q = _assetsByPath.Values;
+				if (!string.IsNullOrWhiteSpace(type)) q = q.Where(a => string.Equals(a.Type, type, StringComparison.OrdinalIgnoreCase));
+				if (!string.IsNullOrWhiteSpace(category)) q = q.Where(a => string.Equals(a.TagsJson, category, StringComparison.OrdinalIgnoreCase));
+				if (maxSize.HasValue) q = q.Where(a => a.Size <= maxSize.Value);
+				var list = q.OrderByDescending(a => a.UpdatedAt).Skip(skip).Take(take).ToList();
+				return Task.FromResult(list);
+			}
+		}
+
+		// Preferences (back-compat)
+		public Task UpsertPreferenceAsync(string key, string value)
+		{
+			lock (_lock) _preferences[key] = new PreferenceEntry(key, value);
+			return Task.CompletedTask;
+		}
+
+		public Task<PreferenceEntry?> GetPreferenceAsync(string key)
+		{
+			lock (_lock) { _preferences.TryGetValue(key, out var e); return Task.FromResult<PreferenceEntry?>(e); }
+		}
+
+		public Task<List<PreferenceEntry>> GetAllPreferencesAsync(int skip = 0, int take = 200)
+		{
+			lock (_lock)
+			{
+				var list = _preferences.Values.Skip(skip).Take(take).ToList();
+				return Task.FromResult(list);
+			}
+		}
+
+		public Task DeletePreferenceAsync(string key)
+		{
+			lock (_lock) _preferences.Remove(key);
+			return Task.CompletedTask;
+		}
+
+		// Scan cache
+		public Task UpsertScanCacheAsync(ScanCacheEntry cacheEntry)
+		{ if (cacheEntry != null && !string.IsNullOrWhiteSpace(cacheEntry.FilePath)) lock (_lock) _scanCacheByPath[cacheEntry.FilePath] = cacheEntry; return Task.CompletedTask; }
+		public Task<ScanCacheEntry?> GetScanCacheAsync(string filePath)
+		{ lock (_lock) { _scanCacheByPath.TryGetValue(filePath, out var e); return Task.FromResult<ScanCacheEntry?>(e); } }
+		public Task UpsertFilesBatchAsync(IEnumerable<FileEntry> entries)
+		{ if (entries != null) { lock (_lock) foreach (var e in entries) if (e != null && !string.IsNullOrWhiteSpace(e.Path)) _filesByPath[e.Path] = e; } return Task.CompletedTask; }
+		public Task UpsertScanCacheBatchAsync(IEnumerable<ScanCacheEntry> entries)
+		{ if (entries != null) { lock (_lock) foreach (var e in entries) if (e != null && !string.IsNullOrWhiteSpace(e.FilePath)) _scanCacheByPath[e.FilePath] = e; } return Task.CompletedTask; }
+		public Task<List<string>> DeleteEntriesByRootAsync(string rootPath)
+		{
+			var deleted = new List<string>();
+			if (string.IsNullOrWhiteSpace(rootPath)) return Task.FromResult(deleted);
+			lock (_lock)
+			{
+				foreach (var key in _assetsByPath.Keys.Where(p => p.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase)).ToList()) _assetsByPath.Remove(key);
+				foreach (var key in _filesByPath.Keys.Where(p => p.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase)).ToList()) { _filesByPath.Remove(key); deleted.Add(key); }
+				foreach (var key in _scanCacheByPath.Keys.Where(p => p.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase)).ToList()) _scanCacheByPath.Remove(key);
+			}
+			return Task.FromResult(deleted);
+		}
+		public Task DeleteScanCacheAsync(string filePath)
+		{ lock (_lock) _scanCacheByPath.Remove(filePath); return Task.CompletedTask; }
+		public Task<List<ScanCacheEntry>> GetScanCacheByRootAsync(string rootPath)
+		{ lock (_lock) { var list = _scanCacheByPath.Values.Where(c => string.Equals(c.RootPath, rootPath, StringComparison.OrdinalIgnoreCase)).ToList(); return Task.FromResult(list); } }
+		public Task ClearScanCacheByRootAsync(string rootPath)
+		{ lock (_lock) foreach (var k in _scanCacheByPath.Keys.Where(p => p.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase)).ToList()) _scanCacheByPath.Remove(k); return Task.CompletedTask; }
+		public Task ClearAllScanCacheAsync()
+		{ lock (_lock) _scanCacheByPath.Clear(); return Task.CompletedTask; }
+		public Task CleanupStaleScanCacheAsync(int retentionDays = 30)
+		{ var cutoff = DateTime.UtcNow.AddDays(-retentionDays); lock (_lock) foreach (var k in _scanCacheByPath.Where(kv => kv.Value.CachedAt < cutoff).Select(kv => kv.Key).ToList()) _scanCacheByPath.Remove(k); return Task.CompletedTask; }
+
+		public void Dispose() { }
+	}
 }

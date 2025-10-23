@@ -6,9 +6,9 @@ using System;
 using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
 using System.Collections.Generic; // Listを使用するために追加
 using Microsoft.Extensions.Logging; // Loggerを使用するために追加
-using Microsoft.UI.Xaml.Controls; // IMessengerを使用するために追加
 using System.Linq; // ToListを使用するために追加
 using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
+using Pivot.Messages; // DirectoryChangedMessageを使用するために追加
 
 namespace Pivot.Services
 {
@@ -18,6 +18,7 @@ namespace Pivot.Services
         private readonly ILogger<SettingsService> _logger;
         private readonly MetadataService _metadataService;
         private readonly IMessenger _messenger;
+        private readonly ISettingsStore _settingsStore;
 
         // In-memory cache to avoid sync-over-async and improve UI responsiveness
         private UserSettings _cache; // Settingsをメモリにキャッシュ
@@ -25,53 +26,49 @@ namespace Pivot.Services
         public SettingsService(
             ILogger<SettingsService> logger,
             MetadataService metadataService,
-            IMessenger messenger)
+            IMessenger messenger, // コンストラクタに IMessenger を追加
+            ISettingsStore? settingsStore = null)
         {
             _logger = logger;
             _metadataService = metadataService;
-            _messenger = messenger;
+            _messenger = messenger; // 初期化
+            _settingsStore = settingsStore ?? new JsonSettingsStore();
             _cache = new UserSettings(); // 初期キャッシュ
         }
 
-        private async Task EnsureDbAsync()
-        {
-            if (_metadataService.Database == null)
-            {
-                await _metadataService.InitializeDatabase();
-            }
-        }
+        // DB依存を排除し、JSON設定ストアに移行
 
         public async Task InitializeAsync()
         {
             _logger.LogInformation("SettingsService: Initializing...");
-            await EnsureDbAsync();
-            await LoadSettingsFromDbAsync();
+            await _settingsStore.InitializeAsync();
+            await LoadSettingsFromStoreAsync();
             _logger.LogInformation("SettingsService: Initialization complete. AssetDirectories count: {AssetCount}", _cache.AssetDirectories.Count);
         }
 
-        private async Task LoadSettingsFromDbAsync()
+        private async Task LoadSettingsFromStoreAsync()
         {
-            _logger.LogInformation("SettingsService: Loading settings from DB...");
+            _logger.LogInformation("SettingsService: Loading settings from JSON store...");
 
             // AssetDirectories
-            var assetPref = await _metadataService.GetPreferenceAsync("AssetDirectories");
-            _cache.AssetDirectories = ParseDirectoriesValue(assetPref?.Value);
-            _logger.LogInformation("SettingsService: Loaded AssetDirectories count from DB (parsed): {Count}", _cache.AssetDirectories.Count);
-            await NormalizeAndPersistIfNeededAsync("AssetDirectories", assetPref?.Value, _cache.AssetDirectories);
+            var assetPref = await _settingsStore.GetAsync("AssetDirectories");
+            _cache.AssetDirectories = ParseDirectoriesValue(assetPref);
+            _logger.LogInformation("SettingsService: Loaded AssetDirectories count (parsed): {Count}", _cache.AssetDirectories.Count);
+            await NormalizeAndPersistIfNeededAsync("AssetDirectories", assetPref, _cache.AssetDirectories);
 
             // ImageDirectories
-            var imagePref = await _metadataService.GetPreferenceAsync("ImageDirectories");
-            _cache.ImageDirectories = ParseDirectoriesValue(imagePref?.Value);
-            _logger.LogInformation("SettingsService: Loaded ImageDirectories count from DB (parsed): {Count}", _cache.ImageDirectories.Count);
-            await NormalizeAndPersistIfNeededAsync("ImageDirectories", imagePref?.Value, _cache.ImageDirectories);
+            var imagePref = await _settingsStore.GetAsync("ImageDirectories");
+            _cache.ImageDirectories = ParseDirectoriesValue(imagePref);
+            _logger.LogInformation("SettingsService: Loaded ImageDirectories count (parsed): {Count}", _cache.ImageDirectories.Count);
+            await NormalizeAndPersistIfNeededAsync("ImageDirectories", imagePref, _cache.ImageDirectories);
 
             // ProjectDirectories
-            var projectPref = await _metadataService.GetPreferenceAsync("ProjectDirectories");
-            _cache.ProjectDirectories = ParseDirectoriesValue(projectPref?.Value);
-            _logger.LogInformation("SettingsService: Loaded ProjectDirectories count from DB (parsed): {Count}", _cache.ProjectDirectories.Count);
-            await NormalizeAndPersistIfNeededAsync("ProjectDirectories", projectPref?.Value, _cache.ProjectDirectories);
+            var projectPref = await _settingsStore.GetAsync("ProjectDirectories");
+            _cache.ProjectDirectories = ParseDirectoriesValue(projectPref);
+            _logger.LogInformation("SettingsService: Loaded ProjectDirectories count (parsed): {Count}", _cache.ProjectDirectories.Count);
+            await NormalizeAndPersistIfNeededAsync("ProjectDirectories", projectPref, _cache.ProjectDirectories);
 
-            if (Enum.TryParse<ElementTheme>((await _metadataService.GetPreferenceAsync("AppTheme"))?.Value, out var theme))
+            if (Enum.TryParse<ElementTheme>(await _settingsStore.GetAsync("AppTheme"), out var theme))
             {
                 _cache.AppTheme = theme;
             }
@@ -81,7 +78,7 @@ namespace Pivot.Services
             }
             _logger.LogInformation("SettingsService: Loaded AppTheme: {Theme}", _cache.AppTheme);
 
-            if (Enum.TryParse<BackdropType>((await _metadataService.GetPreferenceAsync("AppBackdropType"))?.Value, out var backdrop))
+            if (Enum.TryParse<BackdropType>(await _settingsStore.GetAsync("AppBackdropType"), out var backdrop))
             {
                 _cache.AppBackdropType = backdrop;
             }
@@ -94,7 +91,7 @@ namespace Pivot.Services
             // Asset 表示モード
             try
             {
-                var modeStr = (await _metadataService.GetPreferenceAsync("AssetDisplayMode"))?.Value;
+                var modeStr = await _settingsStore.GetAsync("AssetDisplayMode");
                 if (Enum.TryParse<AssetDisplayMode>(modeStr, out var mode))
                 {
                     _cache.AssetDisplayMode = mode;
@@ -114,7 +111,7 @@ namespace Pivot.Services
             // Asset メタデータ表示
             try
             {
-                var showMetaStr = (await _metadataService.GetPreferenceAsync("ShowAssetMetadata"))?.Value;
+                var showMetaStr = await _settingsStore.GetAsync("ShowAssetMetadata");
                 if (bool.TryParse(showMetaStr, out var show))
                 {
                     _cache.ShowAssetMetadata = show;
@@ -134,7 +131,7 @@ namespace Pivot.Services
             // スキャン戦略: ForceFullScan
             try
             {
-                var forceFullStr = (await _metadataService.GetPreferenceAsync("Scan.ForceFull"))?.Value;
+                var forceFullStr = await _settingsStore.GetAsync("Scan.ForceFull");
                 if (bool.TryParse(forceFullStr, out var force))
                 {
                     _cache.ForceFullScan = force;
@@ -154,7 +151,7 @@ namespace Pivot.Services
             // メニュー表示モード
             try
             {
-                var modeStr = (await _metadataService.GetPreferenceAsync("MenuDisplayMode"))?.Value;
+                var modeStr = await _settingsStore.GetAsync("MenuDisplayMode");
                 if (Enum.TryParse<MenuDisplayMode>(modeStr, out var mode))
                 {
                     _cache.MenuDisplayMode = mode;
@@ -251,14 +248,14 @@ namespace Pivot.Services
         }
 
         private async Task NormalizeAndPersistIfNeededAsync(string key, string? originalStoredValue, List<string> directories)
+        {
+            try
             {
-                try
-                {
                 var normalized = JsonSerializer.Serialize(directories);
                 if (!string.Equals((originalStoredValue ?? string.Empty).Trim(), normalized, StringComparison.Ordinal))
                 {
                     _logger.LogInformation("SettingsService: Normalizing and persisting {Key}. Old='{Old}', New='{New}'", key, originalStoredValue, normalized);
-                    await _metadataService.UpsertPreferenceAsync(key, normalized);
+                    await _settingsStore.UpsertAsync(key, normalized);
                 }
             }
             catch (Exception ex)
@@ -278,18 +275,16 @@ namespace Pivot.Services
 
         public async Task SetTheme(ElementTheme theme)
         {
-            await EnsureDbAsync();
             _cache.AppTheme = theme;
-            await _metadataService.UpsertPreferenceAsync("AppTheme", theme.ToString());
+            await _settingsStore.UpsertAsync("AppTheme", theme.ToString());
         }
 
         public BackdropType GetBackdropType() => _cache.AppBackdropType;
 
         public async Task SetBackdropType(BackdropType type)
         {
-            await EnsureDbAsync();
             _cache.AppBackdropType = type;
-            await _metadataService.UpsertPreferenceAsync("AppBackdropType", type.ToString());
+            await _settingsStore.UpsertAsync("AppBackdropType", type.ToString());
         }
 
         // Asset 表示モード/メタ表示 設定
@@ -297,18 +292,16 @@ namespace Pivot.Services
 
         public async Task SetAssetDisplayModeAsync(AssetDisplayMode mode)
         {
-            await EnsureDbAsync();
             _cache.AssetDisplayMode = mode;
-            await _metadataService.UpsertPreferenceAsync("AssetDisplayMode", mode.ToString());
+            await _settingsStore.UpsertAsync("AssetDisplayMode", mode.ToString());
         }
 
         public bool GetShowAssetMetadata() => _cache.ShowAssetMetadata;
 
         public async Task SetShowAssetMetadataAsync(bool show)
         {
-            await EnsureDbAsync();
             _cache.ShowAssetMetadata = show;
-            await _metadataService.UpsertPreferenceAsync("ShowAssetMetadata", show.ToString());
+            await _settingsStore.UpsertAsync("ShowAssetMetadata", show.ToString());
         }
 
         // スキャン戦略設定
@@ -316,14 +309,12 @@ namespace Pivot.Services
 
         public async Task SetForceFullScanAsync(bool force)
         {
-            await EnsureDbAsync();
             _cache.ForceFullScan = force;
-            await _metadataService.UpsertPreferenceAsync("Scan.ForceFull", force.ToString());
+            await _settingsStore.UpsertAsync("Scan.ForceFull", force.ToString());
         }
 
         public async Task AddDirectoryAsync(DirectoryCategory category, string path)
         {
-            await EnsureDbAsync();
             if (string.IsNullOrWhiteSpace(path)) return;
 
             string key = category switch
@@ -350,8 +341,15 @@ namespace Pivot.Services
                 list.Add(path);
                 string serializedList = JsonSerializer.Serialize(list);
                 _logger.LogDebug("[SettingsService] AddDirectoryAsync: New serialized list for {Key}: {SerializedList}", key, serializedList);
-                await _metadataService.UpsertPreferenceAsync(key, serializedList);
+                await _settingsStore.UpsertAsync(key, serializedList);
                 _logger.LogDebug("[SettingsService] AddDirectoryAsync: Successfully upserted for {Key}.", key);
+                // ディレクトリ追加メッセージを送信
+                _messenger.Send(new DirectoryChangedMessage(new DirectoryChangedMessageData
+                {
+                    Category = category,
+                    Path = path,
+                    Type = DirectoryChangedMessageData.ChangeType.Added
+                }));
             }
             else
             {
@@ -361,7 +359,6 @@ namespace Pivot.Services
 
         public async Task RemoveDirectoryAsync(DirectoryCategory category, string path)
         {
-            await EnsureDbAsync();
             if (string.IsNullOrWhiteSpace(path)) return;
 
             string key = category switch
@@ -387,8 +384,15 @@ namespace Pivot.Services
             {
                 string serializedList = JsonSerializer.Serialize(list);
                 _logger.LogDebug("[SettingsService] RemoveDirectoryAsync: New serialized list for {Key}: {SerializedList}", key, serializedList);
-                await _metadataService.UpsertPreferenceAsync(key, serializedList);
+                await _settingsStore.UpsertAsync(key, serializedList);
                 _logger.LogDebug("[SettingsService] RemoveDirectoryAsync: Successfully upserted after removal for {Key}.", key);
+                // ディレクトリ削除メッセージを送信
+                _messenger.Send(new DirectoryChangedMessage(new DirectoryChangedMessageData
+                {
+                    Category = category,
+                    Path = path,
+                    Type = DirectoryChangedMessageData.ChangeType.Removed
+                }));
             }
             else
             {
@@ -400,9 +404,8 @@ namespace Pivot.Services
 
         public async Task SetMenuDisplayModeAsync(MenuDisplayMode mode)
         {
-            await EnsureDbAsync();
             _cache.MenuDisplayMode = mode;
-            await _metadataService.UpsertPreferenceAsync("MenuDisplayMode", mode.ToString());
+            await _settingsStore.UpsertAsync("MenuDisplayMode", mode.ToString());
         }
     }
 }
