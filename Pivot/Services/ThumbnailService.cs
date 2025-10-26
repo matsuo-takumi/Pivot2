@@ -81,7 +81,7 @@ namespace Pivot.Services
 
 		private static void RegisterImageSharpFormats(Configuration cfg)
 		{
-			cfg.ImageFormatsManager.SetEncoder(PngFormat.Instance, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
+			cfg.ImageFormatsManager.SetEncoder(SixLabors.ImageSharp.Formats.Png.PngFormat.Instance, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
 		}
 
 		private async Task CreateThumbnailAsync(string sourcePath, int width, int height, string destinationPngPath, CancellationToken ct)
@@ -90,9 +90,7 @@ namespace Pivot.Services
 			{
 				if (CanLoadWithImageSharp(sourcePath))
 				{
-					var cfg = Configuration.Default.Clone();
-					RegisterImageSharpFormats(cfg);
-					using var image = await Image.LoadAsync(cfg, sourcePath, ct).ConfigureAwait(false);
+					using var image = await Image.LoadAsync(sourcePath, ct).ConfigureAwait(false);
 					image.Mutate(x => x.Resize(new ResizeOptions
 					{
 						Mode = ResizeMode.Max,

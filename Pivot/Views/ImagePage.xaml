@@ -31,9 +31,9 @@
                 </ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate>
-                        <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="6" Padding="6" Margin="4">
+                        <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4">
                             <StackPanel>
-                                <Grid Width="200" Height="120" Background="#f2f2f2">
+                                <Grid Width="200" Height="120" Background="Transparent">
                                     <Image Stretch="Uniform" Source="{Binding ThumbnailPath}"/>
                                 </Grid>
                                 <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0"/>

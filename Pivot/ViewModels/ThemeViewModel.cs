@@ -51,8 +51,12 @@ namespace Pivot.ViewModels
 
         private void LoadCurrentSettings()
         {
-            AppTheme = _settingsService.GetTheme();
-            AppBackdropType = _settingsService.GetBackdropType();
+            // 初期ロード時はプロパティ経由で副作用を起こさないため、バックフィールドに直接設定する
+            _appTheme = _settingsService.GetTheme();
+            OnPropertyChanged(nameof(AppTheme));
+
+            _appBackdropType = _settingsService.GetBackdropType();
+            OnPropertyChanged(nameof(AppBackdropType));
 
             // (カスタム設定は削除)
         }

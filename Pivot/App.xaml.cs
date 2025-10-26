@@ -6,10 +6,11 @@ using Microsoft.UI.Xaml;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Services;
 using Pivot.ViewModels;
+using Pivot.Messages; // ThemeChangedMessage を使用するために追加
 
 namespace Pivot
 {
-	public partial class App : Application
+	public partial class App : Application, IRecipient<ThemeChangedMessage> // IRecipient<ThemeChangedMessage> を追加
 	{
 		public static new App Current => (App)Application.Current;
 		public IServiceProvider Services { get; private set; } = default!;
@@ -21,6 +22,9 @@ namespace Pivot
 			InitializeComponent();
 			BuildConfiguration();
 			ConfigureServices();
+
+			// メッセージの受信を開始
+			Services.GetRequiredService<IMessenger>().Register<ThemeChangedMessage>(this);
 		}
 
 		protected override async void OnLaunched(LaunchActivatedEventArgs args)
@@ -32,6 +36,17 @@ namespace Pivot
 
 			MainWindow = new MainWindow();
 			MainWindow.Activate();
+
+			// 起動時に保存されたテーマを即座に適用する
+			try
+			{
+				var theme = Services.GetRequiredService<SettingsService>().GetTheme();
+				if (MainWindow?.Content is FrameworkElement root)
+				{
+					root.RequestedTheme = theme;
+				}
+			}
+			catch { }
 		}
 
 		private void BuildConfiguration()
@@ -67,6 +82,14 @@ namespace Pivot
 			sc.AddTransient<PreferencePageViewModel>();
 
 			Services = sc.BuildServiceProvider();
+		}
+
+		public void Receive(ThemeChangedMessage message)
+		{
+			if (MainWindow != null && MainWindow.Content is FrameworkElement root)
+			{
+				root.RequestedTheme = message.Value;
+			}
 		}
 	}
 }
