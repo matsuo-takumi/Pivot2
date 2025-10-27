@@ -4,6 +4,8 @@ using Pivot.ViewModels;
 using System.ComponentModel;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml;
+using Microsoft.Extensions.DependencyInjection;
+using Pivot.Services;
 
 namespace Pivot.Views
 {
@@ -23,6 +25,22 @@ namespace Pivot.Views
 
 			// 初期レイアウトを適用
 			ApplyLayout(ViewModel.CurrentLayout);
+
+			// 自動ロード: 設定に保存された ImageDirectories があればテスト用に読み込む（安全策: try/catch）
+			try
+			{
+				var settings = App.Current.Services.GetService<SettingsService>();
+				if (settings != null)
+				{
+					var dirs = settings.GetUserSettings().ImageDirectories;
+					if (dirs != null && dirs.Count > 0)
+					{
+						// fire-and-forget loading (safe for quick testing)
+						_ = ViewModel.LoadFromDirectoriesAsync(dirs, 300);
+					}
+				}
+			}
+			catch { }
 		}
 
 		private void TemplatePage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -81,6 +99,14 @@ namespace Pivot.Views
 
 				case LayoutType.Masonry: // index 2 -> Masonry (本格実装)
 					UpdateResponsive(ActualWidth);
+					// set column width based on available width and desired column count
+					if (ViewModel != null)
+					{
+						// compute width per column including spacing/padding assumptions
+						double available = System.Math.Max(0, ActualWidth - 48); // keep same margin logic
+						int cols = ViewModel.MasonryColumnCount > 0 ? ViewModel.MasonryColumnCount : 1;
+						ViewModel.MasonryColumnWidth = System.Math.Floor(available / cols) - 16; // subtract margins
+					}
 					ViewModel.BuildMasonryColumns();
 					ItemsRepeaterMain.Visibility = Visibility.Collapsed;
 					MasonryColumnsControl.Visibility = Visibility.Visible;
