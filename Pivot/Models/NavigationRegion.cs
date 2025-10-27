@@ -5,7 +5,8 @@ namespace Pivot.Models
         Asset,
         Image,
         Project,
-        Preference
+        Preference,
+        Template
     }
 }
 

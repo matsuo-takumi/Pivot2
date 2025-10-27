@@ -17,18 +17,27 @@ namespace Pivot.Services
 	{
 		Task InitializeAsync(string cacheDirectory, long maxCacheBytes);
 		Task<string> GetOrCreateThumbnailAsync(string sourcePath, int width, int height, CancellationToken ct = default);
+		string? TryGetCachedThumbnailPath(string sourcePath, int width, int height);
 	}
 
 	public sealed class ThumbnailService : IThumbnailService
 	{
 		private readonly ILogger<ThumbnailService> _logger;
-		private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
+		// 限定並列でサムネイル生成を行うためのセマフォ
+		private readonly SemaphoreSlim _parallelismSemaphore;
+		// 同一キーに対する重複生成を抑止するための作成タスク辞書
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> _creationTasks = new System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>>();
+		// クリーンアップの呼び出し頻度を抑制（過負荷防止）
+		private long _lastCleanupTicks = 0;
+		private const long CleanupIntervalMs = 5000;
 		private string _cacheDir = string.Empty;
 		private long _maxCacheBytes = 500L * 1024 * 1024; // 500MB default
 
 		public ThumbnailService(ILogger<ThumbnailService> logger)
 		{
 			_logger = logger;
+			// 並列度は環境に依存して調整（最小2）
+			_parallelismSemaphore = new SemaphoreSlim(Math.Max(2, Environment.ProcessorCount / 2));
 		}
 
 		public Task InitializeAsync(string cacheDirectory, long maxCacheBytes)
@@ -54,19 +63,47 @@ namespace Pivot.Services
 				return thumbPath;
 			}
 
-			await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+			// 既に作成中のタスクがあればそれを待つ（重複作成を抑止）
+			var creationTask = _creationTasks.GetOrAdd(key, (_) => Task.Run(async () =>
+			{
+				// 制限付き並列で実際の生成を実行
+				await _parallelismSemaphore.WaitAsync(ct).ConfigureAwait(false);
+				try
+				{
+					if (File.Exists(thumbPath)) return thumbPath; // 再確認
+					await CreateThumbnailAsync(sourcePath, width, height, thumbPath, ct).ConfigureAwait(false);
+					var now = Environment.TickCount64;
+					if (now - Interlocked.Read(ref _lastCleanupTicks) >= CleanupIntervalMs)
+					{
+						Interlocked.Exchange(ref _lastCleanupTicks, now);
+						Task.Run(() => TryCleanupCache());
+					}
+					return thumbPath;
+				}
+				finally
+				{
+					_parallelismSemaphore.Release();
+				}
+			}));
+
 			try
 			{
-				if (File.Exists(thumbPath)) return thumbPath; // recheck under lock
-
-				await CreateThumbnailAsync(sourcePath, width, height, thumbPath, ct).ConfigureAwait(false);
-				_ = Task.Run(() => TryCleanupCache(), CancellationToken.None);
-				return thumbPath;
+				return await creationTask.ConfigureAwait(false);
 			}
 			finally
 			{
-				_writeLock.Release();
+				// 完了したタスクは辞書から削除してメモリ増加を抑える
+				_creationTasks.TryRemove(key, out _);
 			}
+		}
+
+		public string? TryGetCachedThumbnailPath(string sourcePath, int width, int height)
+		{
+			if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath)) return null;
+			var info = new FileInfo(sourcePath);
+			var key = ComputeKey(sourcePath, info.LastWriteTimeUtc.Ticks, info.Length, width, height);
+			var thumbPath = Path.Combine(_cacheDir, key + ".png");
+			return File.Exists(thumbPath) ? thumbPath : null;
 		}
 
 		private static string ComputeKey(string path, long ticks, long size, int w, int h)
@@ -158,7 +195,7 @@ namespace Pivot.Services
 
 		public void Dispose()
 		{
-			try { _writeLock.Dispose(); } catch { }
+			try { _parallelismSemaphore?.Dispose(); } catch { }
 		}
 	}
 }

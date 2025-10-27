@@ -84,6 +84,7 @@ namespace Pivot
             NavigateTo(NavigationRegion.Image);
             NavigateTo(NavigationRegion.Project);
             NavigateTo(NavigationRegion.Preference);
+            NavigateTo(NavigationRegion.Template);
 
             // ナビゲーション要求購読
             _messenger.Register<NavigationRequestMessage>(this);
@@ -257,6 +258,9 @@ namespace Pivot
                     case "Preference":
                         NavigateTo(NavigationRegion.Preference);
                         break;
+                    case "Template":
+                        NavigateTo(NavigationRegion.Template);
+                        break;
                 }
             }
         }
@@ -277,6 +281,9 @@ namespace Pivot
                     break;
                 case NavigationRegion.Preference:
                     PreferenceFrame.Navigate(typeof(Views.PreferencePage), null, transition);
+                    break;
+                case NavigationRegion.Template:
+                    TemplateFrame.Navigate(typeof(Views.TemplatePage), null, transition);
                     break;
             }
         }

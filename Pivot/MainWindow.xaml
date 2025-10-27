@@ -40,6 +40,9 @@
                 <PivotItem Header="Preference">
                     <Frame x:Name="PreferenceFrame" Background="Transparent"/>
                 </PivotItem>
+                <PivotItem Header="Template">
+                    <Frame x:Name="TemplateFrame" Background="Transparent"/>
+                </PivotItem>
             </Pivot>
         </Grid>
     </Grid>

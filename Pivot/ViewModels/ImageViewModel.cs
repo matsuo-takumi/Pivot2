@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System;
 using CommunityToolkit.Mvvm.Messaging; // IMessenger を追加
 using Pivot.Messages; // DirectoryChangedMessage を使用するために追加
+using System.Threading; // SemaphoreSlim を追加
 
 namespace Pivot.ViewModels
 {
@@ -19,6 +20,11 @@ namespace Pivot.ViewModels
         private readonly SettingsService _settingsService;
         private readonly IMessenger _messenger; // IMessenger を追加
         private readonly IThumbnailService _thumbnailService;
+
+        private static readonly int ThumbnailWidth = 220;
+        private static readonly int ThumbnailHeight = 160;
+        // サムネイル生成の並列度制御
+        private readonly SemaphoreSlim _thumbnailParallelismSemaphore = new SemaphoreSlim(Math.Max(2, Environment.ProcessorCount / 2));
 
         public ObservableCollection<ImageItem> Images { get; } = new ObservableCollection<ImageItem>();
 
@@ -64,19 +70,57 @@ namespace Pivot.ViewModels
 
             if (!imagePaths.Any()) return;
 
-            var allFiles = await _metadataService.GetFilesAsync(0, int.MaxValue); // 全ファイル取得
-            foreach (var file in allFiles.Where(f => IsImageFile(f.Path, settings)))
+            // サムネイルサービスを一度だけ初期化
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var cacheDir = System.IO.Path.Combine(local, "Pivot", "cache", "thumbnails");
+            await _thumbnailService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
+
+            // 爆速表示: ファイルシステムから直接列挙し、キャッシュヒットを即表示
+            var imageFiles = new System.Collections.Generic.List<string>();
+            foreach (var dir in imagePaths)
             {
-                var item = new ImageItem
+                try
                 {
-                    Path = file.Path,
-                    Name = System.IO.Path.GetFileName(file.Path),
-                    Size = file.Size,
-                    LastModified = file.UpdatedAt
-                };
-                Images.Add(item);
-                _ = EnsureThumbnailAsync(item); // サムネイルを遅延で取得
+                    if (!System.IO.Directory.Exists(dir)) continue;
+                    var files = System.IO.Directory.EnumerateFiles(dir, "*", System.IO.SearchOption.AllDirectories);
+                    foreach (var p in files)
+                    {
+                        if (IsImageFile(p, settings)) imageFiles.Add(p);
+                    }
+                }
+                catch { }
             }
+
+            // 先にアイテムを追加（名前のみ即表示）
+            foreach (var path in imageFiles)
+            {
+                var fi = new System.IO.FileInfo(path);
+                Images.Add(new ImageItem
+                {
+                    Path = path,
+                    Name = System.IO.Path.GetFileName(path),
+                    Size = fi.Exists ? fi.Length : 0,
+                    LastModified = fi.Exists ? fi.LastWriteTimeUtc : DateTime.MinValue,
+                    ThumbnailPath = _thumbnailService.TryGetCachedThumbnailPath(path, ThumbnailWidth, ThumbnailHeight) // キャッシュがあれば即表示
+                });
+            }
+
+            // キャッシュミス分を制限付き並列で生成
+            var tasks = Images
+                .Where(i => string.IsNullOrEmpty(i.ThumbnailPath))
+                .Select(async item =>
+                {
+                    await _thumbnailParallelismSemaphore.WaitAsync();
+                    try
+                    {
+                        var thumb = await _thumbnailService.GetOrCreateThumbnailAsync(item.Path, ThumbnailWidth, ThumbnailHeight);
+                        item.ThumbnailPath = thumb;
+                    }
+                    catch { }
+                    finally { _thumbnailParallelismSemaphore.Release(); }
+                });
+
+            _ = Task.Run(async () => await Task.WhenAll(tasks));
         }
 
         private bool IsImageFile(string filePath, UserSettings settings)
@@ -112,10 +156,7 @@ namespace Pivot.ViewModels
         {
             try
             {
-                var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                var cacheDir = System.IO.Path.Combine(local, "Pivot", "cache", "thumbnails");
-                await _thumbnailService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
-                var path = await _thumbnailService.GetOrCreateThumbnailAsync(item.Path, 220, 160);
+                var path = await _thumbnailService.GetOrCreateThumbnailAsync(item.Path, ThumbnailWidth, ThumbnailHeight);
                 item.ThumbnailPath = path;
             }
             catch
