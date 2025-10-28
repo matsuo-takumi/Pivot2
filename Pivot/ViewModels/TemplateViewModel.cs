@@ -8,6 +8,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Pivot.ViewModels
 {
@@ -66,6 +67,12 @@ namespace Pivot.ViewModels
 		[ObservableProperty]
 		private LayoutType _currentLayout = LayoutType.Grid;
 
+		[ObservableProperty]
+		private bool _useTextListMode = false;
+
+		[ObservableProperty]
+		private bool _showThumbnails = true;
+
 		[RelayCommand]
 		private void ToggleLayout()
 		{
@@ -101,51 +108,99 @@ namespace Pivot.ViewModels
 
 			// initialize masonry columns
 			BuildMasonryColumns();
+
+			// ensure derived flags
+			UseTextListMode = _currentLayout == LayoutType.List;
+			ShowThumbnails = !UseTextListMode;
+		}
+
+		partial void OnCurrentLayoutChanged(LayoutType value)
+		{
+			UseTextListMode = value == LayoutType.List;
+			ShowThumbnails = !UseTextListMode;
 		}
 
 		/// <summary>
 		/// Load image file paths from given directories and populate TestItems for testing.
 		/// This is intended for local testing only (no thumbnail generation).
 		/// </summary>
-		public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
-		{
-			if (directories == null) return;
-			var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
-			var files = new List<string>();
-			await Task.Run(() =>
-			{
-				foreach (var d in directories)
-				{
-					try
-					{
-						if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
-						foreach (var f in Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
-						{
-							if (exts.Contains(Path.GetExtension(f)))
-							{
-								files.Add(f);
-								if (files.Count >= maxFiles) return;
-							}
-						}
-					}
-					catch { }
-				}
-			});
+        public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
+        {
+            if (directories == null) return;
+            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
+            var files = new List<string>();
+            await Task.Run(() =>
+            {
+                foreach (var d in directories)
+                {
+                    try
+                    {
+                        if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
+                        foreach (var f in Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
+                        {
+                            if (exts.Contains(Path.GetExtension(f)))
+                            {
+                                files.Add(f);
+                                if (files.Count >= maxFiles) return;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            });
 
-			if (files.Count == 0) return;
-			// convert to ImageItem entries
-			TestItems.Clear();
-			int id = 1;
-			foreach (var f in files)
-			{
-				// convert to file:// uri for Image.Source
-				var uri = new System.Uri(f).AbsoluteUri; // ensures proper file:/// scheme
-				TestItems.Add(new ImageItem { Id = id.ToString(), Name = Path.GetFileName(f), ThumbnailPath = uri });
-				id++;
-			}
+            if (files.Count == 0) return;
 
-			BuildMasonryColumns();
-		}
+            // convert to ImageItem entries (store original path in Path property)
+            TestItems.Clear();
+            int id = 1;
+            foreach (var f in files)
+            {
+                // convert to file:// uri for Image.Source
+                var uri = new System.Uri(f).AbsoluteUri; // ensures proper file:/// scheme
+                TestItems.Add(new ImageItem { Id = id.ToString(), Path = f, Name = Path.GetFileName(f), ThumbnailPath = uri });
+                id++;
+            }
+
+            BuildMasonryColumns();
+
+            // Start background thumbnail generation using the registered IThumbnailService.
+            try
+            {
+                var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+                var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
+                if (thumbService == null) return;
+
+                var tasks = new List<Task>();
+                // create thumbnails concurrently (service has internal parallelism control)
+                foreach (var item in TestItems.ToList())
+                {
+                    var originalPath = item.Path;
+                    if (string.IsNullOrWhiteSpace(originalPath) || !File.Exists(originalPath)) continue;
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        try
+                        {
+                            // target size reasonable for grid thumbnails
+                            var thumbPath = await thumbService.GetOrCreateThumbnailAsync(originalPath, 300, 200).ConfigureAwait(false);
+                            var thumbUri = new System.Uri(thumbPath).AbsoluteUri;
+                            if (dispatcher != null)
+                            {
+                                dispatcher.TryEnqueue(() => item.ThumbnailPath = thumbUri);
+                            }
+                            else
+                            {
+                                item.ThumbnailPath = thumbUri;
+                            }
+                        }
+                        catch { }
+                    }));
+                }
+
+                try { await Task.WhenAll(tasks).ConfigureAwait(false); } catch { }
+            }
+            catch { }
+        }
 
 		public void BuildMasonryColumns()
 		{
