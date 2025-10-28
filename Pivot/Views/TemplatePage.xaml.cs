@@ -41,6 +41,13 @@ namespace Pivot.Views
 				}
 			}
 			catch { }
+
+			this.Unloaded += TemplatePage_Unloaded;
+		}
+
+		private void TemplatePage_Unloaded(object sender, RoutedEventArgs e)
+		{
+			try { ViewModel?.CancelLoads(); } catch { }
 		}
 
 		private void TemplatePage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -48,18 +55,34 @@ namespace Pivot.Views
 			UpdateResponsive(e.NewSize.Width);
 		}
 
+		private System.Threading.CancellationTokenSource? _resizeCts;
+
 		private void UpdateResponsive(double width)
 		{
 			if (width <= 0) return;
-			// columns based on available width (approx 220 item + spacing)
-			int columns = (int)System.Math.Max(1, System.Math.Floor((width - 48) / 220));
-			if (columns != ViewModel.MasonryColumnCount)
+			// debounce heavy reactive layout rebuilds
+			try { _resizeCts?.Cancel(); } catch { }
+			_resizeCts = new System.Threading.CancellationTokenSource();
+			var ct = _resizeCts.Token;
+			_ = System.Threading.Tasks.Task.Run(async () =>
 			{
-				ViewModel.MasonryColumnCount = columns;
-			}
-
-			// rebuild justified rows for current width
-			ViewModel.BuildJustifiedRows(width - 48, 8);
+				try
+				{
+					await System.Threading.Tasks.Task.Delay(150, ct);
+					if (ct.IsCancellationRequested) return;
+					var columns = (int)System.Math.Max(1, System.Math.Floor((width - 48) / 220));
+					DispatcherQueue.TryEnqueue(() =>
+					{
+						if (ViewModel == null) return;
+						if (columns != ViewModel.MasonryColumnCount)
+						{
+							ViewModel.MasonryColumnCount = columns;
+						}
+						ViewModel.BuildJustifiedRows(width - 48, 8);
+					});
+				}
+				catch { }
+			});
 		}
 
 		private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -98,13 +121,14 @@ namespace Pivot.Views
 					break;
 
 				case LayoutType.Masonry: // index 2 -> Masonry (本格実装)
-					UpdateResponsive(ActualWidth);
+				UpdateResponsive(ActualWidth);
 					// set column width based on available width and desired column count
 					if (ViewModel != null)
 					{
 						// compute width per column including spacing/padding assumptions
 						double available = System.Math.Max(0, ActualWidth - 48); // keep same margin logic
 						int cols = ViewModel.MasonryColumnCount > 0 ? ViewModel.MasonryColumnCount : 1;
+						if (cols <= 0) cols = 1;
 						ViewModel.MasonryColumnWidth = System.Math.Floor(available / cols) - 16; // subtract margins
 					}
 					ViewModel.BuildMasonryColumns();

@@ -24,16 +24,16 @@ namespace Pivot.ViewModels
 
     public class JustifiedItem
     {
-        public ImageItem Source { get; set; } = new ImageItem();
+        public TemplateItem Source { get; set; } = new TemplateItem();
         public double Width { get; set; }
     }
 
     public partial class TemplateViewModel : ObservableObject
 	{
-		public ObservableCollection<ImageItem> TestItems { get; set; }
+        public ObservableCollection<TemplateItem> TestItems { get; set; }
 
 		// Masonry layout columns: each inner collection represents a vertical column
-		public ObservableCollection<ObservableCollection<ImageItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<ImageItem>>();
+        public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
 
 		// Justified layout: collection of rows, each row has items with computed width
 		public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
@@ -80,30 +80,32 @@ namespace Pivot.ViewModels
 			CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 4);
 		}
 
-		public TemplateViewModel()
+        private System.Threading.CancellationTokenSource? _loadCts;
+
+        public TemplateViewModel()
 		{
-            TestItems = new ObservableCollection<ImageItem>
+            TestItems = new ObservableCollection<TemplateItem>
             {
-                new ImageItem { Id = "1", Name = "Test Image 1", ThumbnailPath = "https://via.placeholder.com/160x120?text=Image+1" },
-                new ImageItem { Id = "2", Name = "Test Image 2", ThumbnailPath = "https://via.placeholder.com/300x260?text=Image+2" },
-                new ImageItem { Id = "3", Name = "Test Image 3", ThumbnailPath = "https://via.placeholder.com/200x180?text=Image+3" },
-                new ImageItem { Id = "4", Name = "Test Image 4", ThumbnailPath = "https://via.placeholder.com/400x140?text=Image+4" },
-                new ImageItem { Id = "5", Name = "Test Image 5", ThumbnailPath = "https://via.placeholder.com/120x200?text=Image+5" },
-                new ImageItem { Id = "6", Name = "Test Image 6", ThumbnailPath = "https://via.placeholder.com/300x300?text=Image+6" },
-                new ImageItem { Id = "7", Name = "Test Image 7", ThumbnailPath = "https://via.placeholder.com/180x280?text=Image+7" },
-                new ImageItem { Id = "8", Name = "Test Image 8", ThumbnailPath = "https://via.placeholder.com/240x160?text=Image+8" },
-                new ImageItem { Id = "9", Name = "Test Image 9", ThumbnailPath = "https://via.placeholder.com/220x180?text=Image+9" },
-                new ImageItem { Id = "10", Name = "Test Image 10", ThumbnailPath = "https://via.placeholder.com/200x220?text=Image+10" },
-                new ImageItem { Id = "11", Name = "Test Image 11", ThumbnailPath = "https://via.placeholder.com/150x300?text=Image+11" },
-                new ImageItem { Id = "12", Name = "Test Image 12", ThumbnailPath = "https://via.placeholder.com/260x120?text=Image+12" },
-                new ImageItem { Id = "13", Name = "Test Image 13", ThumbnailPath = "https://via.placeholder.com/170x240?text=Image+13" },
-                new ImageItem { Id = "14", Name = "Test Image 14", ThumbnailPath = "https://via.placeholder.com/210x140?text=Image+14" },
-                new ImageItem { Id = "15", Name = "Test Image 15", ThumbnailPath = "https://via.placeholder.com/280x200?text=Image+15" },
-                new ImageItem { Id = "16", Name = "Test Image 16", ThumbnailPath = "https://via.placeholder.com/160x300?text=Image+16" },
-                new ImageItem { Id = "17", Name = "Test Image 17", ThumbnailPath = "https://via.placeholder.com/230x170?text=Image+17" },
-                new ImageItem { Id = "18", Name = "Test Image 18", ThumbnailPath = "https://via.placeholder.com/190x230?text=Image+18" },
-                new ImageItem { Id = "19", Name = "Test Image 19", ThumbnailPath = "https://via.placeholder.com/250x200?text=Image+19" },
-                new ImageItem { Id = "20", Name = "Test Image 20", ThumbnailPath = "https://via.placeholder.com/170x300?text=Image+20" }
+                new TemplateItem { Name = "Test Image 1", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/160x120?text=Image+1" },
+                new TemplateItem { Name = "Test Image 2", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/300x260?text=Image+2" },
+                new TemplateItem { Name = "Test Image 3", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/200x180?text=Image+3" },
+                new TemplateItem { Name = "Test Image 4", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/400x140?text=Image+4" },
+                new TemplateItem { Name = "Test Image 5", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/120x200?text=Image+5" },
+                new TemplateItem { Name = "Test Image 6", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/300x300?text=Image+6" },
+                new TemplateItem { Name = "Test Image 7", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/180x280?text=Image+7" },
+                new TemplateItem { Name = "Test Image 8", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/240x160?text=Image+8" },
+                new TemplateItem { Name = "Test Image 9", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/220x180?text=Image+9" },
+                new TemplateItem { Name = "Test Image 10", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/200x220?text=Image+10" },
+                new TemplateItem { Name = "Test Image 11", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/150x300?text=Image+11" },
+                new TemplateItem { Name = "Test Image 12", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/260x120?text=Image+12" },
+                new TemplateItem { Name = "Test Image 13", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/170x240?text=Image+13" },
+                new TemplateItem { Name = "Test Image 14", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/210x140?text=Image+14" },
+                new TemplateItem { Name = "Test Image 15", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/280x200?text=Image+15" },
+                new TemplateItem { Name = "Test Image 16", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/160x300?text=Image+16" },
+                new TemplateItem { Name = "Test Image 17", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/230x170?text=Image+17" },
+                new TemplateItem { Name = "Test Image 18", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/190x230?text=Image+18" },
+                new TemplateItem { Name = "Test Image 19", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/250x200?text=Image+19" },
+                new TemplateItem { Name = "Test Image 20", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/170x300?text=Image+20" }
             };
 
 			// initialize masonry columns
@@ -151,15 +153,47 @@ namespace Pivot.ViewModels
 
             if (files.Count == 0) return;
 
-            // convert to ImageItem entries (store original path in Path property)
+            // cancel previous load if any
+            try { _loadCts?.Cancel(); } catch { }
+            _loadCts = new System.Threading.CancellationTokenSource();
+            var ct = _loadCts.Token;
+
+            // convert to TemplateItem entries (store original path in Path property)
             TestItems.Clear();
-            int id = 1;
+            var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
+            // pre-initialize service if available
+            try
+            {
+                if (thumbService != null)
+                {
+                    var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    var cacheDir = System.IO.Path.Combine(local, "Pivot", "cache", "thumbnails");
+                    await thumbService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
+                }
+            }
+            catch { }
+
             foreach (var f in files)
             {
-                // convert to file:// uri for Image.Source
-                var uri = new System.Uri(f).AbsoluteUri; // ensures proper file:/// scheme
-                TestItems.Add(new ImageItem { Id = id.ToString(), Path = f, Name = Path.GetFileName(f), ThumbnailPath = uri });
-                id++;
+                var item = new TemplateItem
+                {
+                    Kind = AssetKind.Image,
+                    Path = f,
+                    Name = Path.GetFileName(f)
+                };
+                try
+                {
+                    if (thumbService != null)
+                    {
+                        var cached = thumbService.TryGetCachedThumbnailPath(f, 300, 200);
+                        if (!string.IsNullOrWhiteSpace(cached))
+                        {
+                            item.ThumbnailPath = new System.Uri(cached).AbsoluteUri;
+                        }
+                    }
+                }
+                catch { }
+                TestItems.Add(item);
             }
 
             BuildMasonryColumns();
@@ -168,7 +202,6 @@ namespace Pivot.ViewModels
             try
             {
                 var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-                var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
                 if (thumbService == null) return;
 
                 var tasks = new List<Task>();
@@ -182,7 +215,7 @@ namespace Pivot.ViewModels
                         try
                         {
                             // target size reasonable for grid thumbnails
-                            var thumbPath = await thumbService.GetOrCreateThumbnailAsync(originalPath, 300, 200).ConfigureAwait(false);
+                            var thumbPath = await thumbService.GetOrCreateThumbnailAsync(originalPath, 300, 200, ct).ConfigureAwait(false);
                             var thumbUri = new System.Uri(thumbPath).AbsoluteUri;
                             if (dispatcher != null)
                             {
@@ -202,13 +235,13 @@ namespace Pivot.ViewModels
             catch { }
         }
 
-		public void BuildMasonryColumns()
+        public void BuildMasonryColumns()
 		{
 			// height-aware distribution using approximate heights parsed from URL (px)
 			MasonryColumns.Clear();
 			for (int i = 0; i < MasonryColumnCount; i++)
 			{
-				MasonryColumns.Add(new ObservableCollection<ImageItem>());
+                MasonryColumns.Add(new ObservableCollection<TemplateItem>());
 			}
 
 			var columnHeights = new int[MasonryColumnCount];
@@ -234,7 +267,7 @@ namespace Pivot.ViewModels
 			var currentRow = new ObservableCollection<JustifiedItem>();
 			double targetHeight = JustifiedRowHeight;
 
-			foreach (var item in TestItems)
+            foreach (var item in TestItems)
 			{
 				double aspect = EstimateAspectFromUrl(item.ThumbnailPath); // width/height
 				double width = aspect * targetHeight;
@@ -251,7 +284,7 @@ namespace Pivot.ViewModels
 					currentRowWidth = 0;
 				}
 
-				currentRow.Add(new JustifiedItem { Source = item, Width = width });
+                currentRow.Add(new JustifiedItem { Source = item, Width = width });
 				currentRowWidth += width;
 			}
 
@@ -272,6 +305,11 @@ namespace Pivot.ViewModels
                 return (double)w / h;
             }
             return 200.0 / 180.0;
+        }
+
+        public void CancelLoads()
+        {
+            try { _loadCts?.Cancel(); } catch { }
         }
 
         private static int EstimateHeightFromUrl(string? url)

@@ -13,6 +13,8 @@
     <Page.Resources>
         <conv:FileSizeConverter x:Key="FileSizeConverter"/>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <conv:BitmapImageDecodeConverter x:Key="BitmapDecode"/>
+        <conv:KindToVisibilityConverter x:Key="KindToVisibility"/>
     </Page.Resources>
 
     <Grid Padding="12">
@@ -72,11 +74,28 @@
                                             <TextBlock Grid.Column="5" Text="" FontSize="12" Foreground="#777777" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         </Grid>
 
-                                        <!-- Grid/Tile mode: thumbnail -->
+                                        <!-- Grid/Tile mode: kind-based presentation -->
                                         <StackPanel Visibility="{Binding DataContext.ShowThumbnails, ElementName=TemplatePageRoot, Converter={StaticResource BoolToVisibility}}">
-                                            <Grid Width="200" Height="120" Background="Transparent">
-                                                <Image Stretch="Uniform" Source="{Binding ThumbnailPath}"/>
+                                            <!-- Image item -->
+                                            <Grid Width="200" Height="120" Background="Transparent" Visibility="{Binding Kind, Converter={StaticResource KindToVisibility}, ConverterParameter=Image}">
+                                                <Image Stretch="UniformToFill" Source="{Binding ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}"/>
                                             </Grid>
+
+                                            <!-- Model item (3D): show icon placeholder first phase) -->
+                                            <Grid Width="200" Height="120" Background="Transparent" Visibility="{Binding Kind, Converter={StaticResource KindToVisibility}, ConverterParameter=Model}">
+                                                <FontIcon Glyph="&#xE7B3;" FontSize="28" Foreground="#0078D4" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </Grid>
+
+                                            <!-- Script item: icon placeholder (preview later) -->
+                                            <Grid Width="200" Height="120" Background="Transparent" Visibility="{Binding Kind, Converter={StaticResource KindToVisibility}, ConverterParameter=Script}">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="28" Foreground="#0078D4" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </Grid>
+
+                                            <!-- Other -->
+                                            <Grid Width="200" Height="120" Background="Transparent" Visibility="{Binding Kind, Converter={StaticResource KindToVisibility}, ConverterParameter=Other}">
+                                                <FontIcon Glyph="&#xE7C3;" FontSize="28" Foreground="#888888" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </Grid>
+
                                             <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0"/>
                                         </StackPanel>
                                     </Grid>
