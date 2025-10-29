@@ -1,168 +1,273 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.Logging;
 using Pivot.Models;
-using Pivot.Services;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.IO;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using System;
-using CommunityToolkit.Mvvm.Messaging; // IMessenger を追加
-using Pivot.Messages; // DirectoryChangedMessage を使用するために追加
-using System.Threading; // SemaphoreSlim を追加
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Pivot.ViewModels
 {
-    public class ImageViewModel : ObservableObject, IRecipient<DirectoryChangedMessage>
+    public partial class ImageViewModel : ObservableObject
     {
-        //private readonly ILogger<ImageViewModel> _logger; // コメントアウト
-        private readonly MetadataService _metadataService;
-        private readonly SettingsService _settingsService;
-        private readonly IMessenger _messenger; // IMessenger を追加
-        private readonly IThumbnailService _thumbnailService;
+        public ObservableCollection<TemplateItem> Images { get; set; }
 
-        private static readonly int ThumbnailWidth = 220;
-        private static readonly int ThumbnailHeight = 160;
-        // サムネイル生成の並列度制御
-        private readonly SemaphoreSlim _thumbnailParallelismSemaphore = new SemaphoreSlim(Math.Max(2, Environment.ProcessorCount / 2));
+        public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
+        public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
 
-        public ObservableCollection<ImageItem> Images { get; } = new ObservableCollection<ImageItem>();
+        public double JustifiedRowHeight { get; set; } = 140;
 
-        public IAsyncRelayCommand LoadImagesCommand { get; }
-
-        public ImageViewModel(
-            //ILogger<ImageViewModel> logger, // コメントアウト
-            MetadataService metadataService,
-            SettingsService settingsService,
-            IMessenger messenger,
-            IThumbnailService thumbnailService) // コンストラクタに IMessenger / ThumbnailService を追加
+        private int _masonryColumnCount = 3;
+        public int MasonryColumnCount
         {
-            //_logger = logger; // コメントアウト
-            _metadataService = metadataService;
-            _settingsService = settingsService;
-            _messenger = messenger; // 初期化
-            _thumbnailService = thumbnailService;
-
-            LoadImagesCommand = new AsyncRelayCommand(LoadImagesAsync);
-            _ = LoadImagesAsync(); // 初期ロード
-
-            // DirectoryChangedMessage をリッスン
-            _messenger.Register<ImageViewModel, DirectoryChangedMessage>(this, (r, m) => r.Handle(m));
-        }
-
-        public void Handle(DirectoryChangedMessage message)
-        {
-            if (message.Value.Category == DirectoryCategory.Image)
+            get => _masonryColumnCount;
+            set
             {
-                // Image ディレクトリが変更されたら画像を再ロード
-                _ = LoadImagesAsync();
+                if (value <= 0) return;
+                _masonryColumnCount = value;
+                BuildMasonryColumns();
             }
         }
 
-        // IRecipient<T> implementation required by CommunityToolkit
-        public void Receive(DirectoryChangedMessage message) => Handle(message);
-
-        private async Task LoadImagesAsync()
+        private double _masonryColumnWidth = 200.0;
+        public double MasonryColumnWidth
         {
-            Images.Clear();
-            var settings = _settingsService.GetUserSettings();
-            var imagePaths = settings.ImageDirectories;
-
-            if (!imagePaths.Any()) return;
-
-            // サムネイルサービスを一度だけ初期化
-            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var cacheDir = System.IO.Path.Combine(local, "Pivot", "cache", "thumbnails");
-            await _thumbnailService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
-
-            // 爆速表示: ファイルシステムから直接列挙し、キャッシュヒットを即表示
-            var imageFiles = new System.Collections.Generic.List<string>();
-            foreach (var dir in imagePaths)
+            get => _masonryColumnWidth;
+            set
             {
+                if (value <= 0) return;
+                _masonryColumnWidth = value;
+                BuildMasonryColumns();
+            }
+        }
+
+        [ObservableProperty]
+        private LayoutType _currentLayout = LayoutType.Grid;
+
+        [ObservableProperty]
+        private bool _useTextListMode = false;
+
+        [ObservableProperty]
+        private bool _showThumbnails = true;
+
+        [RelayCommand]
+        private void ToggleLayout()
+        {
+            CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 4);
+        }
+
+        private System.Threading.CancellationTokenSource? _loadCts;
+
+        public ImageViewModel()
+        {
+            Images = new ObservableCollection<TemplateItem>
+            {
+                new TemplateItem { Name = "Test Image 1", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/160x120?text=Image+1" },
+                new TemplateItem { Name = "Test Image 2", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/300x260?text=Image+2" },
+                new TemplateItem { Name = "Test Image 3", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/200x180?text=Image+3" },
+                new TemplateItem { Name = "Test Image 4", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/400x140?text=Image+4" },
+                new TemplateItem { Name = "Test Image 5", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/120x200?text=Image+5" }
+            };
+
+            BuildMasonryColumns();
+            UseTextListMode = _currentLayout == LayoutType.List;
+            ShowThumbnails = !UseTextListMode;
+        }
+
+        partial void OnCurrentLayoutChanged(LayoutType value)
+        {
+            UseTextListMode = value == LayoutType.List;
+            ShowThumbnails = !UseTextListMode;
+        }
+
+        public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
+        {
+            if (directories == null) return;
+            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
+            var files = new List<string>();
+            await Task.Run(() =>
+            {
+                foreach (var d in directories)
+                {
+                    try
+                    {
+                        if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
+                        foreach (var f in Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
+                        {
+                            if (exts.Contains(Path.GetExtension(f)))
+                            {
+                                files.Add(f);
+                                if (files.Count >= maxFiles) return;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            });
+
+            if (files.Count == 0) return;
+
+            try { _loadCts?.Cancel(); } catch { }
+            _loadCts = new System.Threading.CancellationTokenSource();
+            var ct = _loadCts.Token;
+
+            Images.Clear();
+            var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
+            try
+            {
+                if (thumbService != null)
+                {
+                    var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    var cacheDir = System.IO.Path.Combine(local, "Pivot", "cache", "thumbnails");
+                    await thumbService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
+                }
+            }
+            catch { }
+
+            foreach (var f in files)
+            {
+                var item = new TemplateItem
+                {
+                    Kind = AssetKind.Image,
+                    Path = f,
+                    Name = Path.GetFileName(f)
+                };
                 try
                 {
-                    if (!System.IO.Directory.Exists(dir)) continue;
-                    var files = System.IO.Directory.EnumerateFiles(dir, "*", System.IO.SearchOption.AllDirectories);
-                    foreach (var p in files)
+                    if (thumbService != null)
                     {
-                        if (IsImageFile(p, settings)) imageFiles.Add(p);
+                        var cached = thumbService.TryGetCachedThumbnailPath(f, 300, 200);
+                        if (!string.IsNullOrWhiteSpace(cached))
+                        {
+                            item.ThumbnailPath = new System.Uri(cached).AbsoluteUri;
+                        }
                     }
                 }
                 catch { }
+                Images.Add(item);
             }
 
-            // 先にアイテムを追加（名前のみ即表示）
-            foreach (var path in imageFiles)
-            {
-                var fi = new System.IO.FileInfo(path);
-                Images.Add(new ImageItem
-                {
-                    Path = path,
-                    Name = System.IO.Path.GetFileName(path),
-                    Size = fi.Exists ? fi.Length : 0,
-                    LastModified = fi.Exists ? fi.LastWriteTimeUtc : DateTime.MinValue,
-                    ThumbnailPath = _thumbnailService.TryGetCachedThumbnailPath(path, ThumbnailWidth, ThumbnailHeight) // キャッシュがあれば即表示
-                });
-            }
+            BuildMasonryColumns();
 
-            // キャッシュミス分を制限付き並列で生成
-            var tasks = Images
-                .Where(i => string.IsNullOrEmpty(i.ThumbnailPath))
-                .Select(async item =>
-                {
-                    await _thumbnailParallelismSemaphore.WaitAsync();
-                    try
-                    {
-                        var thumb = await _thumbnailService.GetOrCreateThumbnailAsync(item.Path, ThumbnailWidth, ThumbnailHeight);
-                        item.ThumbnailPath = thumb;
-                    }
-                    catch { }
-                    finally { _thumbnailParallelismSemaphore.Release(); }
-                });
-
-            _ = Task.Run(async () => await Task.WhenAll(tasks));
-        }
-
-        private bool IsImageFile(string filePath, UserSettings settings)
-        {
-            // Imageディレクトリに含まれるファイルであるか
-            bool inImageDir = settings.ImageDirectories.Any(dir => filePath.StartsWith(dir, StringComparison.OrdinalIgnoreCase));
-            if (!inImageDir) return false;
-
-            // ここでさらにImageとして適切なMIMEタイプかフィルタリングすることも可能
-            // FileScannerService.GuessMime メソッドで "image/*" と判定される拡張子を持つファイルであるか確認するなど
-            // 例: return inImageDir && FileScannerService.IsImageExtension(System.IO.Path.GetExtension(filePath));
-            // 一旦拡張子フィルタ（jpg/jpeg/png/webp/gif/bmp/ico/tif/tiff/tga）
-            var ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
-            switch (ext)
-            {
-                case ".jpg":
-                case ".jpeg":
-                case ".png":
-                case ".webp":
-                case ".gif":
-                case ".bmp":
-                case ".ico":
-                case ".tif":
-                case ".tiff":
-                case ".tga":
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
-        private async Task EnsureThumbnailAsync(ImageItem item)
-        {
             try
             {
-                var path = await _thumbnailService.GetOrCreateThumbnailAsync(item.Path, ThumbnailWidth, ThumbnailHeight);
-                item.ThumbnailPath = path;
+                var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+                if (thumbService == null) return;
+
+                var tasks = new List<Task>();
+                foreach (var item in Images.ToList())
+                {
+                    var originalPath = item.Path;
+                    if (string.IsNullOrWhiteSpace(originalPath) || !File.Exists(originalPath)) continue;
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var thumbPath = await thumbService.GetOrCreateThumbnailAsync(originalPath, 300, 200, ct).ConfigureAwait(false);
+                            var thumbUri = new System.Uri(thumbPath).AbsoluteUri;
+                            if (dispatcher != null)
+                            {
+                                dispatcher.TryEnqueue(() => item.ThumbnailPath = thumbUri);
+                            }
+                            else
+                            {
+                                item.ThumbnailPath = thumbUri;
+                            }
+                        }
+                        catch { }
+                    }));
+                }
+
+                try { await Task.WhenAll(tasks).ConfigureAwait(false); } catch { }
             }
-            catch
+            catch { }
+        }
+
+        public void BuildMasonryColumns()
+        {
+            MasonryColumns.Clear();
+            for (int i = 0; i < MasonryColumnCount; i++)
             {
-                // ignore; placeholder will be used
+                MasonryColumns.Add(new ObservableCollection<TemplateItem>());
             }
+
+            var columnHeights = new int[MasonryColumnCount];
+            foreach (var item in Images)
+            {
+                int h = EstimateHeightFromUrl(item.ThumbnailPath);
+                int minIndex = 0;
+                for (int i = 1; i < MasonryColumnCount; i++)
+                {
+                    if (columnHeights[i] < columnHeights[minIndex]) minIndex = i;
+                }
+                MasonryColumns[minIndex].Add(item);
+                columnHeights[minIndex] += h;
+            }
+        }
+
+        public void BuildJustifiedRows(double containerWidth, double horizontalSpacing)
+        {
+            if (containerWidth <= 0) return;
+            JustifiedRows.Clear();
+            double currentRowWidth = 0;
+            var currentRow = new ObservableCollection<JustifiedItem>();
+            double targetHeight = JustifiedRowHeight;
+
+            foreach (var item in Images)
+            {
+                double aspect = EstimateAspectFromUrl(item.ThumbnailPath);
+                double width = aspect * targetHeight;
+                if (currentRow.Count > 0 && currentRowWidth + width + horizontalSpacing > containerWidth)
+                {
+                    double scale = (containerWidth - (currentRow.Count - 1) * horizontalSpacing) / currentRowWidth;
+                    foreach (var ji in currentRow)
+                    {
+                        ji.Width *= scale;
+                    }
+                    JustifiedRows.Add(currentRow);
+                    currentRow = new ObservableCollection<JustifiedItem>();
+                    currentRowWidth = 0;
+                }
+
+                currentRow.Add(new JustifiedItem { Source = item, Width = width });
+                currentRowWidth += width;
+            }
+
+            if (currentRow.Count > 0)
+            {
+                JustifiedRows.Add(currentRow);
+            }
+        }
+
+        private static double EstimateAspectFromUrl(string? url)
+        {
+            if (string.IsNullOrEmpty(url)) return 200.0 / 180.0;
+            var m = Regex.Match(url, "(\\d+)x(\\d+)");
+            if (m.Success && int.TryParse(m.Groups[1].Value, out int w) && int.TryParse(m.Groups[2].Value, out int h) && h > 0)
+            {
+                return (double)w / h;
+            }
+            return 200.0 / 180.0;
+        }
+
+        public void CancelLoads()
+        {
+            try { _loadCts?.Cancel(); } catch { }
+        }
+
+        private static int EstimateHeightFromUrl(string? url)
+        {
+            if (string.IsNullOrEmpty(url)) return 180;
+            var m = Regex.Match(url, "(\\d+)x(\\d+)");
+            if (m.Success && int.TryParse(m.Groups[2].Value, out int h))
+            {
+                return h;
+            }
+            return 180;
         }
     }
 }

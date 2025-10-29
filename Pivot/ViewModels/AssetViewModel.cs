@@ -1,367 +1,273 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.Extensions.Logging;
 using Pivot.Models;
-using Pivot.Services;
-using Pivot.Messages;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Threading.Tasks;
-using System;
-using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.IO;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Pivot.ViewModels
 {
-    public class AssetViewModel : ObservableObject, IRecipient<DirectoryChangedMessage>
+    public partial class AssetViewModel : ObservableObject
     {
-        private readonly ILogger<AssetViewModel> _logger;
-        private readonly MetadataService _metadataService;
-        private readonly SettingsService _settingsService;
-		private readonly IMessenger _messenger;
-		private readonly ICatalogService _catalogService;
+        public ObservableCollection<TemplateItem> Assets { get; set; }
 
-        private const int PageSize = 50;
+        public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
+        public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
 
-        // UI バインディング用プロパティ
-        public ObservableCollection<AssetEntry> Assets { get; } = new ObservableCollection<AssetEntry>();
+        public double JustifiedRowHeight { get; set; } = 140;
 
-        private int _currentPage = 0;
-        public int CurrentPage
+        private int _masonryColumnCount = 3;
+        public int MasonryColumnCount
         {
-            get => _currentPage;
-            set => SetProperty(ref _currentPage, value);
-        }
-
-        private int _totalCount = 0;
-        public int TotalCount
-        {
-            get => _totalCount;
-            set => SetProperty(ref _totalCount, value);
-        }
-
-        private bool _isLoading = false;
-        public bool IsLoading
-        {
-            get => _isLoading;
-            set => SetProperty(ref _isLoading, value);
-        }
-
-        private bool _isLoadingMore = false;
-        public bool IsLoadingMore
-        {
-            get => _isLoadingMore;
-            set => SetProperty(ref _isLoadingMore, value);
-        }
-
-        // コマンド
-        public IAsyncRelayCommand LoadAssetsCommand { get; }
-        public IAsyncRelayCommand LoadMoreAssetsCommand { get; }
-        public IRelayCommand ToggleDisplayModeCommand { get; }
-        public IRelayCommand ToggleMetadataCommand { get; }
-        public IRelayCommand<string> SetDisplayModeCommand { get; }
-
-        private AssetDisplayMode _selectedDisplayMode = AssetDisplayMode.List;
-        public AssetDisplayMode SelectedDisplayMode
-        {
-            get => _selectedDisplayMode;
+            get => _masonryColumnCount;
             set
             {
-                if (SetProperty(ref _selectedDisplayMode, value))
-                {
-                    _ = _settingsService.SetAssetDisplayModeAsync(value);
-                    OnPropertyChanged(nameof(IsListMode));
-                    OnPropertyChanged(nameof(IsGridMode));
-                }
+                if (value <= 0) return;
+                _masonryColumnCount = value;
+                BuildMasonryColumns();
             }
         }
 
-        private bool _showMetadata = true;
-        public bool ShowMetadata
+        private double _masonryColumnWidth = 200.0;
+        public double MasonryColumnWidth
         {
-            get => _showMetadata;
+            get => _masonryColumnWidth;
             set
             {
-                if (SetProperty(ref _showMetadata, value))
-                {
-                    _ = _settingsService.SetShowAssetMetadataAsync(value);
-                }
+                if (value <= 0) return;
+                _masonryColumnWidth = value;
+                BuildMasonryColumns();
             }
         }
 
-        public bool IsListMode => SelectedDisplayMode == AssetDisplayMode.List;
-        public bool IsGridMode => SelectedDisplayMode == AssetDisplayMode.Grid;
+        [ObservableProperty]
+        private LayoutType _currentLayout = LayoutType.Grid;
 
-        public AssetViewModel(
-            ILogger<AssetViewModel> logger,
-            MetadataService metadataService,
-            SettingsService settingsService,
-            IMessenger messenger,
-            ICatalogService catalogService)
+        [ObservableProperty]
+        private bool _useTextListMode = false;
+
+        [ObservableProperty]
+        private bool _showThumbnails = true;
+
+        [RelayCommand]
+        private void ToggleLayout()
         {
-            _logger = logger;
-            _metadataService = metadataService;
-            _settingsService = settingsService;
-            _messenger = messenger;
-            _catalogService = catalogService;
-
-            LoadAssetsCommand = new AsyncRelayCommand(LoadAssetsAsync);
-            LoadMoreAssetsCommand = new AsyncRelayCommand(LoadMoreAssetsAsync);
-            ToggleDisplayModeCommand = new RelayCommand(() =>
-            {
-                SelectedDisplayMode = SelectedDisplayMode == AssetDisplayMode.List ? AssetDisplayMode.Grid : AssetDisplayMode.List;
-            });
-            SetDisplayModeCommand = new RelayCommand<string>(mode =>
-            {
-                SelectedDisplayMode = string.Equals(mode, "Grid", StringComparison.OrdinalIgnoreCase)
-                    ? AssetDisplayMode.Grid
-                    : AssetDisplayMode.List;
-            });
-            ToggleMetadataCommand = new RelayCommand(() =>
-            {
-                ShowMetadata = !ShowMetadata;
-            });
-
-            _ = InitializeAsync();
+            CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 4);
         }
 
-        private async Task InitializeAsync()
+        private System.Threading.CancellationTokenSource? _loadCts;
+
+        public AssetViewModel()
         {
-            try
+            Assets = new ObservableCollection<TemplateItem>
             {
-                // Scanモードが利用可能ならカタログを初期化
-                if (IsScanModeAvailable())
+                new TemplateItem { Name = "Test Asset 1", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/160x120?text=Asset+1" },
+                new TemplateItem { Name = "Test Asset 2", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/300x260?text=Asset+2" },
+                new TemplateItem { Name = "Test Asset 3", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/200x180?text=Asset+3" },
+                new TemplateItem { Name = "Test Asset 4", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/400x140?text=Asset+4" },
+                new TemplateItem { Name = "Test Asset 5", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/120x200?text=Asset+5" }
+            };
+
+            BuildMasonryColumns();
+            UseTextListMode = _currentLayout == LayoutType.List;
+            ShowThumbnails = !UseTextListMode;
+        }
+
+        partial void OnCurrentLayoutChanged(LayoutType value)
+        {
+            UseTextListMode = value == LayoutType.List;
+            ShowThumbnails = !UseTextListMode;
+        }
+
+        public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
+        {
+            if (directories == null) return;
+            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
+            var files = new List<string>();
+            await Task.Run(() =>
+            {
+                foreach (var d in directories)
                 {
                     try
                     {
-                        var s = _settingsService.GetUserSettings();
-                        var roots = new List<string>();
-                        roots.AddRange(s.AssetDirectories);
-                        roots.AddRange(s.ImageDirectories);
-                        roots.AddRange(s.ProjectDirectories);
-                        await _catalogService.InitializeAsync(roots);
+                        if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
+                        foreach (var f in Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
+                        {
+                            if (exts.Contains(Path.GetExtension(f)))
+                            {
+                                files.Add(f);
+                                if (files.Count >= maxFiles) return;
+                            }
+                        }
                     }
                     catch { }
                 }
+            });
 
-                // 設定の復元
-                SelectedDisplayMode = _settingsService.GetAssetDisplayMode();
-                ShowMetadata = _settingsService.GetShowAssetMetadata();
-                await LoadAssetsAsync();
+            if (files.Count == 0) return;
 
-                // スキャン完了メッセージをリッスン
-                _messenger.Register<AssetViewModel, ScanCompletedMessage>(this, (r, m) =>
+            try { _loadCts?.Cancel(); } catch { }
+            _loadCts = new System.Threading.CancellationTokenSource();
+            var ct = _loadCts.Token;
+
+            Assets.Clear();
+            var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
+            try
+            {
+                if (thumbService != null)
                 {
-                    _ = r.LoadAssetsAsync();
-                });
+                    var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    var cacheDir = System.IO.Path.Combine(local, "Pivot", "cache", "thumbnails");
+                    await thumbService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
+                }
+            }
+            catch { }
 
-                // Asset 変更メッセージをリッスン
-                _messenger.Register<AssetViewModel, AssetChangedMessage>(this, async (r, m) =>
+            foreach (var f in files)
+            {
+                var item = new TemplateItem
                 {
-                    try
+                    Kind = AssetKind.Other,
+                    Path = f,
+                    Name = Path.GetFileName(f)
+                };
+                try
+                {
+                    if (thumbService != null)
                     {
-                        _logger.LogInformation($"Asset changed: {m.Value.Type} - {m.Value.FilePath}");
-                        var path = m.Value.FilePath;
-                        switch (m.Value.Type)
+                        var cached = thumbService.TryGetCachedThumbnailPath(f, 300, 200);
+                        if (!string.IsNullOrWhiteSpace(cached))
                         {
-                            case AssetChangedMessageData.ChangeType.Added:
-                            case AssetChangedMessageData.ChangeType.Updated:
-                            {
-                                var entry = await _metadataService.GetAssetEntryByPathAsync(path);
-                                if (entry == null) break;
-
-                                // 既存アイテム検索
-                                var existing = Assets.FirstOrDefault(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase));
-                                if (existing == null)
-                                {
-                                    Assets.Insert(0, entry);
-                                    TotalCount++;
-                                }
-                                else
-                                {
-                                    var index = Assets.IndexOf(existing);
-                                    if (index >= 0)
-                                    {
-                                        Assets[index] = entry;
-                                    }
-                                }
-                                break;
-                            }
-                            case AssetChangedMessageData.ChangeType.Deleted:
-                            {
-                                var existing = Assets.FirstOrDefault(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase));
-                                if (existing != null)
-                                {
-                                    Assets.Remove(existing);
-                                    TotalCount = Math.Max(0, TotalCount - 1);
-                                }
-                                break;
-                            }
+                            item.ThumbnailPath = new System.Uri(cached).AbsoluteUri;
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error applying incremental asset update for {Path}", m.Value.FilePath);
-                    }
-                });
-
-                // DirectoryChangedMessage をリッスン
-                _messenger.Register<AssetViewModel, DirectoryChangedMessage>(this, (r, m) => r.Handle(m));
+                }
+                catch { }
+                Assets.Add(item);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error initializing AssetViewModel");
-            }
-        }
 
-        public void Handle(DirectoryChangedMessage message)
-        {
-            if (message.Value.Category == DirectoryCategory.Asset)
-            {
-                // Asset ディレクトリが変更されたらアセットを再ロード
-                _ = LoadAssetsAsync();
-            }
-        }
-
-        // IRecipient<T> implementation required by CommunityToolkit
-        public void Receive(DirectoryChangedMessage message) => Handle(message);
-
-        private async Task LoadAssetsAsync()
-        {
-            if (IsLoading)
-                return;
+            BuildMasonryColumns();
 
             try
             {
-                IsLoading = true;
-                CurrentPage = 0;
+                var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+                if (thumbService == null) return;
 
-                if (IsScanModeAvailable())
+                var tasks = new List<Task>();
+                foreach (var item in Assets.ToList())
                 {
-                    Assets.Clear();
-                    int count = 0;
-                    await foreach (var a in _catalogService.StreamAssets(null, 4000))
+                    var originalPath = item.Path;
+                    if (string.IsNullOrWhiteSpace(originalPath) || !File.Exists(originalPath)) continue;
+                    tasks.Add(Task.Run(async () =>
                     {
-                        count++;
-                        if (Assets.Count < PageSize)
+                        try
                         {
-                            Assets.Add(new AssetEntry { Path = Path.GetFileName(a.Path) ?? a.Path, Name = Path.GetFileName(a.Path) ?? string.Empty, Type = a.Type, Size = a.Size, Hash = a.Hash ?? string.Empty, TagsJson = a.Category });
+                            var thumbPath = await thumbService.GetOrCreateThumbnailAsync(originalPath, 300, 200, ct).ConfigureAwait(false);
+                            var thumbUri = new System.Uri(thumbPath).AbsoluteUri;
+                            if (dispatcher != null)
+                            {
+                                dispatcher.TryEnqueue(() => item.ThumbnailPath = thumbUri);
+                            }
+                            else
+                            {
+                                item.ThumbnailPath = thumbUri;
+                            }
                         }
-                    }
-                    TotalCount = count;
-                    CurrentPage = 1;
-                    _logger.LogInformation($"Loaded {Assets.Count} assets (scan). Total: {TotalCount}");
+                        catch { }
+                    }));
                 }
-                else
-                {
-                    var assets = await _metadataService.GetAssetsByPropertyAsync(
-                        skip: 0,
-                        take: PageSize,
-                        type: null,
-                        category: null
-                    );
 
-                    Assets.Clear();
-                    foreach (var asset in assets)
-                    {
-                        Assets.Add(asset);
-                    }
-
-                    TotalCount = await _metadataService.GetAssetCountAsync(type: null, category: null);
-
-                    CurrentPage = 1;
-                    _logger.LogInformation($"Loaded {assets.Count} assets. Total: {TotalCount}");
-                }
+                try { await Task.WhenAll(tasks).ConfigureAwait(false); } catch { }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading assets");
-            }
-            finally
-            {
-                IsLoading = false;
-            }
+            catch { }
         }
 
-        public async Task LoadMoreAssetsAsync()
+        public void BuildMasonryColumns()
         {
-            if (IsLoadingMore || IsLoading)
-                return;
-
-            if (Assets.Count >= TotalCount)
+            MasonryColumns.Clear();
+            for (int i = 0; i < MasonryColumnCount; i++)
             {
-                _logger.LogInformation("All assets already loaded");
-                return;
+                MasonryColumns.Add(new ObservableCollection<TemplateItem>());
             }
 
-            try
+            var columnHeights = new int[MasonryColumnCount];
+            foreach (var item in Assets)
             {
-                IsLoadingMore = true;
-
-                if (IsScanModeAvailable())
+                int h = EstimateHeightFromUrl(item.ThumbnailPath);
+                int minIndex = 0;
+                for (int i = 1; i < MasonryColumnCount; i++)
                 {
-                    int alreadyLoaded = CurrentPage * PageSize;
-                    int count = 0;
-                    await foreach (var a in _catalogService.StreamAssets(null, 4000))
-                    {
-                        if (count++ < alreadyLoaded) continue; // Skip already loaded items
-                        if (Assets.Count < TotalCount)
-                        {
-                            Assets.Add(new AssetEntry { Path = a.Path, Name = Path.GetFileName(a.Path) ?? string.Empty, Type = a.Type, Size = a.Size, Hash = a.Hash ?? string.Empty, TagsJson = a.Category });
-                        }
-                        // If we've added enough for the next page, break.
-                        if (Assets.Count >= (CurrentPage + 1) * PageSize) break; 
-                    }
-                    CurrentPage++;
-                    _logger.LogInformation($"Loaded more assets (scan). Total in view: {Assets.Count}");
+                    if (columnHeights[i] < columnHeights[minIndex]) minIndex = i;
                 }
-                else
-                {
-                    var skip = CurrentPage * PageSize;
-                    var assets = await _metadataService.GetAssetsByPropertyAsync(
-                        skip: skip,
-                        take: PageSize,
-                        type: null,
-                        category: null
-                    );
-
-                    if (assets.Count > 0)
-                    {
-                        foreach (var asset in assets)
-                        {
-                            Assets.Add(asset);
-                        }
-
-                        CurrentPage++;
-                        _logger.LogInformation($"Loaded more assets. Total in view: {Assets.Count}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading more assets");
-            }
-            finally
-            {
-                IsLoadingMore = false;
+                MasonryColumns[minIndex].Add(item);
+                columnHeights[minIndex] += h;
             }
         }
 
-        private async Task ResetAndLoadAssetsAsync()
+        public void BuildJustifiedRows(double containerWidth, double horizontalSpacing)
         {
-            await LoadAssetsAsync();
+            if (containerWidth <= 0) return;
+            JustifiedRows.Clear();
+            double currentRowWidth = 0;
+            var currentRow = new ObservableCollection<JustifiedItem>();
+            double targetHeight = JustifiedRowHeight;
+
+            foreach (var item in Assets)
+            {
+                double aspect = EstimateAspectFromUrl(item.ThumbnailPath);
+                double width = aspect * targetHeight;
+                if (currentRow.Count > 0 && currentRowWidth + width + horizontalSpacing > containerWidth)
+                {
+                    double scale = (containerWidth - (currentRow.Count - 1) * horizontalSpacing) / currentRowWidth;
+                    foreach (var ji in currentRow)
+                    {
+                        ji.Width *= scale;
+                    }
+                    JustifiedRows.Add(currentRow);
+                    currentRow = new ObservableCollection<JustifiedItem>();
+                    currentRowWidth = 0;
+                }
+
+                currentRow.Add(new JustifiedItem { Source = item, Width = width });
+                currentRowWidth += width;
+            }
+
+            if (currentRow.Count > 0)
+            {
+                JustifiedRows.Add(currentRow);
+            }
         }
 
-		private static bool IsScanModeAvailable()
-		{
-			try
-			{
-				var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-				var assetsJson = Path.Combine(local, "Pivot", "cache", "assets.json");
-				return File.Exists(assetsJson);
-			}
-			catch { return false; }
-		}
+        private static double EstimateAspectFromUrl(string? url)
+        {
+            if (string.IsNullOrEmpty(url)) return 200.0 / 180.0;
+            var m = Regex.Match(url, "(\\d+)x(\\d+)");
+            if (m.Success && int.TryParse(m.Groups[1].Value, out int w) && int.TryParse(m.Groups[2].Value, out int h) && h > 0)
+            {
+                return (double)w / h;
+            }
+            return 200.0 / 180.0;
+        }
+
+        public void CancelLoads()
+        {
+            try { _loadCts?.Cancel(); } catch { }
+        }
+
+        private static int EstimateHeightFromUrl(string? url)
+        {
+            if (string.IsNullOrEmpty(url)) return 180;
+            var m = Regex.Match(url, "(\\d+)x(\\d+)");
+            if (m.Success && int.TryParse(m.Groups[2].Value, out int h))
+            {
+                return h;
+            }
+            return 180;
+        }
     }
 }
