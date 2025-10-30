@@ -1,0 +1,55 @@
+<Page
+    x:Class="Pivot.Views.PreferenceAssetPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:Pivot.Models"
+    xmlns:conv="using:Pivot.Converters"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <Page.Resources>
+        <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVisibility" />
+    </Page.Resources>
+
+    <Grid Padding="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+            <TextBlock Text="Asset Tags" FontSize="18" FontWeight="Bold" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}" />
+            <Button Content="+" Click="AddButton_Click" ToolTipService.ToolTip="Add new tag" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,12,0,0">
+            <ItemsControl ItemsSource="{Binding AvailableTags}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TagDefinition">
+                        <Border Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*" />
+                                    <ColumnDefinition Width="3*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox Grid.Column="0" Text="{x:Bind Name, Mode=TwoWay}" IsEnabled="{x:Bind IsEditing, Mode=OneWay}" />
+                                <TextBox Grid.Column="1" Text="{x:Bind ExtensionsCsv, Mode=TwoWay}" IsEnabled="{x:Bind IsEditing, Mode=OneWay}" KeyDown="ExtensionsTextBox_KeyDown" />
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                                    <Button x:Name="EditBtn" Content="Edit" Click="EditItem_Click" CommandParameter="{x:Bind Name}" Visibility="{x:Bind IsEditing, Converter={StaticResource InverseBoolToVisibility}}" />
+                                    <Button x:Name="DoneBtn" Content="Done" Click="DoneItem_Click" CommandParameter="{x:Bind Name}" Visibility="{x:Bind IsEditing, Converter={StaticResource BoolToVisibility}}" />
+                                    <Button Content="Delete" Click="DeleteItem_Click" CommandParameter="{x:Bind Name}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</Page>

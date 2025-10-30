@@ -68,6 +68,34 @@ namespace Pivot.Services
             _logger.LogInformation("SettingsService: Loaded ProjectDirectories count (parsed): {Count}", _cache.ProjectDirectories.Count);
             await NormalizeAndPersistIfNeededAsync("ProjectDirectories", projectPref, _cache.ProjectDirectories);
 
+            // AssetTagDefinitions (JSON serialized list of TagDefinition)
+            try
+            {
+                var tagsPref = await _settingsStore.GetAsync("AssetTagDefinitions");
+                if (!string.IsNullOrWhiteSpace(tagsPref))
+                {
+                    try
+                    {
+                        var parsed = JsonSerializer.Deserialize<List<TagDefinition>>(tagsPref);
+                        _cache.AssetTagDefinitions = parsed ?? new List<TagDefinition>();
+                    }
+                    catch
+                    {
+                        _cache.AssetTagDefinitions = new List<TagDefinition>();
+                    }
+                }
+                else
+                {
+                    _cache.AssetTagDefinitions = new List<TagDefinition>();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load AssetTagDefinitions");
+                _cache.AssetTagDefinitions = new List<TagDefinition>();
+            }
+
+
             if (Enum.TryParse<ElementTheme>(await _settingsStore.GetAsync("AppTheme"), out var theme))
             {
                 _cache.AppTheme = theme;
@@ -269,6 +297,22 @@ namespace Pivot.Services
         {
             _logger.LogDebug("SettingsService: GetUserSettings called. Current AssetDirectories count: {Count}", _cache.AssetDirectories.Count);
             return _cache;
+        }
+
+        public List<TagDefinition> GetAssetTagDefinitions() => _cache.AssetTagDefinitions;
+
+        public async Task SetAssetTagDefinitionsAsync(List<TagDefinition> tags)
+        {
+            try
+            {
+                _cache.AssetTagDefinitions = tags ?? new List<TagDefinition>();
+                var serialized = JsonSerializer.Serialize(_cache.AssetTagDefinitions);
+                await _settingsStore.UpsertAsync("AssetTagDefinitions", serialized);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist AssetTagDefinitions");
+            }
         }
 
         public ElementTheme GetTheme() => _cache.AppTheme;

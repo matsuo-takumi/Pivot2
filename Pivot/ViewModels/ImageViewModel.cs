@@ -15,11 +15,14 @@ namespace Pivot.ViewModels
     public partial class ImageViewModel : ObservableObject
     {
         public ObservableCollection<TemplateItem> Images { get; set; }
+        private List<TemplateItem> _allImages = new List<TemplateItem>();
+        private TagFilterViewModel? _tagFilterVm = App.Current.Services.GetService<TagFilterViewModel>();
 
         public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
-        public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
 
-        public double JustifiedRowHeight { get; set; } = 140;
+        // Justified layout support
+        public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
+        public double JustifiedRowHeight { get; set; } = 140.0;
 
         private int _masonryColumnCount = 3;
         public int MasonryColumnCount
@@ -76,6 +79,15 @@ namespace Pivot.ViewModels
             BuildMasonryColumns();
             UseTextListMode = _currentLayout == LayoutType.List;
             ShowThumbnails = !UseTextListMode;
+
+            try
+            {
+                if (_tagFilterVm != null)
+                {
+                    _tagFilterVm.SelectedTagsChanged += () => ApplyTagFilter();
+                }
+            }
+            catch { }
         }
 
         partial void OnCurrentLayoutChanged(LayoutType value)
@@ -115,7 +127,7 @@ namespace Pivot.ViewModels
             _loadCts = new System.Threading.CancellationTokenSource();
             var ct = _loadCts.Token;
 
-            Images.Clear();
+            _allImages.Clear();
             var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
             try
             {
@@ -148,9 +160,10 @@ namespace Pivot.ViewModels
                     }
                 }
                 catch { }
-                Images.Add(item);
+                _allImages.Add(item);
             }
 
+            ApplyTagFilter();
             BuildMasonryColumns();
 
             try
@@ -209,6 +222,39 @@ namespace Pivot.ViewModels
             }
         }
 
+        private void ApplyTagFilter()
+        {
+            try
+            {
+                var selectedExts = _tagFilterVm?.GetSelectedExtensions();
+                var toShow = new List<TemplateItem>();
+                if (selectedExts == null || selectedExts.Count == 0)
+                {
+                    toShow = _allImages.ToList();
+                }
+                else
+                {
+                    foreach (var a in _allImages)
+                    {
+                        var ext = Path.GetExtension(a.Path ?? string.Empty).TrimStart('.').ToLowerInvariant();
+                        if (selectedExts.Contains(ext)) toShow.Add(a);
+                    }
+                }
+
+                var toRemove = Images.Except(toShow).ToList();
+                var toAdd = toShow.Except(Images).ToList();
+
+                foreach (var r in toRemove) Images.Remove(r);
+                foreach (var a in toAdd) Images.Add(a);
+            }
+            catch { }
+        }
+
+        public void CancelLoads()
+        {
+            try { _loadCts?.Cancel(); } catch { }
+        }
+
         public void BuildJustifiedRows(double containerWidth, double horizontalSpacing)
         {
             if (containerWidth <= 0) return;
@@ -217,12 +263,14 @@ namespace Pivot.ViewModels
             var currentRow = new ObservableCollection<JustifiedItem>();
             double targetHeight = JustifiedRowHeight;
 
+            if (Images == null) return;
             foreach (var item in Images)
             {
                 double aspect = EstimateAspectFromUrl(item.ThumbnailPath);
                 double width = aspect * targetHeight;
                 if (currentRow.Count > 0 && currentRowWidth + width + horizontalSpacing > containerWidth)
                 {
+                    // scale row to fit container
                     double scale = (containerWidth - (currentRow.Count - 1) * horizontalSpacing) / currentRowWidth;
                     foreach (var ji in currentRow)
                     {
@@ -252,11 +300,6 @@ namespace Pivot.ViewModels
                 return (double)w / h;
             }
             return 200.0 / 180.0;
-        }
-
-        public void CancelLoads()
-        {
-            try { _loadCts?.Cancel(); } catch { }
         }
 
         private static int EstimateHeightFromUrl(string? url)

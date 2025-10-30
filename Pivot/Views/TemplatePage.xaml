@@ -130,7 +130,7 @@
                                                 </Border.Transitions>
                                                 <StackPanel>
                                                     <Grid Background="Transparent">
-                                                        <Image Stretch="Uniform" Source="{Binding ThumbnailPath}"/>
+                                                        <Image Stretch="Uniform" Source="{Binding ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}"/>
                                                     </Grid>
                                                     <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0"/>
                                                 </StackPanel>

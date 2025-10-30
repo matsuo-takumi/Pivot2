@@ -15,35 +15,8 @@ namespace Pivot.ViewModels
     public partial class AssetViewModel : ObservableObject
     {
         public ObservableCollection<TemplateItem> Assets { get; set; }
-
-        public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
-        public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
-
-        public double JustifiedRowHeight { get; set; } = 140;
-
-        private int _masonryColumnCount = 3;
-        public int MasonryColumnCount
-        {
-            get => _masonryColumnCount;
-            set
-            {
-                if (value <= 0) return;
-                _masonryColumnCount = value;
-                BuildMasonryColumns();
-            }
-        }
-
-        private double _masonryColumnWidth = 200.0;
-        public double MasonryColumnWidth
-        {
-            get => _masonryColumnWidth;
-            set
-            {
-                if (value <= 0) return;
-                _masonryColumnWidth = value;
-                BuildMasonryColumns();
-            }
-        }
+        private List<TemplateItem> _allAssets = new List<TemplateItem>();
+        private TagFilterViewModel? _tagFilterVm = App.Current.Services.GetService<TagFilterViewModel>();
 
         [ObservableProperty]
         private LayoutType _currentLayout = LayoutType.Grid;
@@ -73,9 +46,18 @@ namespace Pivot.ViewModels
                 new TemplateItem { Name = "Test Asset 5", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/120x200?text=Asset+5" }
             };
 
-            BuildMasonryColumns();
             UseTextListMode = _currentLayout == LayoutType.List;
             ShowThumbnails = !UseTextListMode;
+
+            // Subscribe to tag filter changes to re-apply filter automatically
+            try
+            {
+                if (_tagFilterVm != null)
+                {
+                    _tagFilterVm.SelectedTagsChanged += () => ApplyTagFilter();
+                }
+            }
+            catch { }
         }
 
         partial void OnCurrentLayoutChanged(LayoutType value)
@@ -87,7 +69,9 @@ namespace Pivot.ViewModels
         public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
         {
             if (directories == null) return;
-            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
+            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp",
+                // 3D model extensions
+                ".obj", ".fbx", ".stl", ".glb", ".gltf", ".3ds", ".dae" };
             var files = new List<string>();
             await Task.Run(() =>
             {
@@ -115,7 +99,8 @@ namespace Pivot.ViewModels
             _loadCts = new System.Threading.CancellationTokenSource();
             var ct = _loadCts.Token;
 
-            Assets.Clear();
+            // maintain all assets list and apply filter instead of clearing directly
+            _allAssets.Clear();
             var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
             try
             {
@@ -138,20 +123,45 @@ namespace Pivot.ViewModels
                 };
                 try
                 {
+                    var ext = Path.GetExtension(f).ToLowerInvariant();
+                    // determine kind
+                    if (new[] { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" }.Contains(ext))
+                    {
+                        item.Kind = AssetKind.Image;
+                    }
+                    else if (new[] { ".obj", ".fbx", ".stl", ".glb", ".gltf", ".3ds", ".dae" }.Contains(ext))
+                    {
+                        item.Kind = AssetKind.Model;
+                    }
                     if (thumbService != null)
                     {
                         var cached = thumbService.TryGetCachedThumbnailPath(f, 300, 200);
                         if (!string.IsNullOrWhiteSpace(cached))
                         {
-                            item.ThumbnailPath = new System.Uri(cached).AbsoluteUri;
+                            // If it's a ms-appx URI, use directly; otherwise convert to file:// URI
+                            if (cached.StartsWith("ms-appx://", StringComparison.OrdinalIgnoreCase))
+                            {
+                                item.ThumbnailPath = cached;
+                            }
+                            else
+                            {
+                                item.ThumbnailPath = new System.Uri(cached).AbsoluteUri;
+                            }
+                        }
+                        else if (item.Kind == AssetKind.Model)
+                        {
+                            // fallback icon path for models
+                            var extName = ext.TrimStart('.');
+                            item.ThumbnailPath = $"ms-appx:///Assets/Icons/model_{extName}.png";
                         }
                     }
                 }
                 catch { }
-                Assets.Add(item);
+                _allAssets.Add(item);
             }
 
-            BuildMasonryColumns();
+            // After loading, apply tag filter which will update the public Assets collection
+            ApplyTagFilter();
 
             try
             {
@@ -187,87 +197,129 @@ namespace Pivot.ViewModels
             catch { }
         }
 
-        public void BuildMasonryColumns()
-        {
-            MasonryColumns.Clear();
-            for (int i = 0; i < MasonryColumnCount; i++)
-            {
-                MasonryColumns.Add(new ObservableCollection<TemplateItem>());
-            }
-
-            var columnHeights = new int[MasonryColumnCount];
-            foreach (var item in Assets)
-            {
-                int h = EstimateHeightFromUrl(item.ThumbnailPath);
-                int minIndex = 0;
-                for (int i = 1; i < MasonryColumnCount; i++)
-                {
-                    if (columnHeights[i] < columnHeights[minIndex]) minIndex = i;
-                }
-                MasonryColumns[minIndex].Add(item);
-                columnHeights[minIndex] += h;
-            }
-        }
-
-        public void BuildJustifiedRows(double containerWidth, double horizontalSpacing)
-        {
-            if (containerWidth <= 0) return;
-            JustifiedRows.Clear();
-            double currentRowWidth = 0;
-            var currentRow = new ObservableCollection<JustifiedItem>();
-            double targetHeight = JustifiedRowHeight;
-
-            foreach (var item in Assets)
-            {
-                double aspect = EstimateAspectFromUrl(item.ThumbnailPath);
-                double width = aspect * targetHeight;
-                if (currentRow.Count > 0 && currentRowWidth + width + horizontalSpacing > containerWidth)
-                {
-                    double scale = (containerWidth - (currentRow.Count - 1) * horizontalSpacing) / currentRowWidth;
-                    foreach (var ji in currentRow)
-                    {
-                        ji.Width *= scale;
-                    }
-                    JustifiedRows.Add(currentRow);
-                    currentRow = new ObservableCollection<JustifiedItem>();
-                    currentRowWidth = 0;
-                }
-
-                currentRow.Add(new JustifiedItem { Source = item, Width = width });
-                currentRowWidth += width;
-            }
-
-            if (currentRow.Count > 0)
-            {
-                JustifiedRows.Add(currentRow);
-            }
-        }
-
-        private static double EstimateAspectFromUrl(string? url)
-        {
-            if (string.IsNullOrEmpty(url)) return 200.0 / 180.0;
-            var m = Regex.Match(url, "(\\d+)x(\\d+)");
-            if (m.Success && int.TryParse(m.Groups[1].Value, out int w) && int.TryParse(m.Groups[2].Value, out int h) && h > 0)
-            {
-                return (double)w / h;
-            }
-            return 200.0 / 180.0;
-        }
-
         public void CancelLoads()
         {
             try { _loadCts?.Cancel(); } catch { }
         }
 
-        private static int EstimateHeightFromUrl(string? url)
+        // Masonry layout support
+        public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
+
+        private int _masonryColumnCount = 3;
+        public int MasonryColumnCount
         {
-            if (string.IsNullOrEmpty(url)) return 180;
-            var m = Regex.Match(url, "(\\d+)x(\\d+)");
-            if (m.Success && int.TryParse(m.Groups[2].Value, out int h))
+            get => _masonryColumnCount;
+            set
             {
-                return h;
+                if (value <= 0) return;
+                _masonryColumnCount = value;
+                BuildMasonryColumns();
             }
-            return 180;
+        }
+
+        private double _masonryColumnWidth = 200.0;
+        public double MasonryColumnWidth
+        {
+            get => _masonryColumnWidth;
+            set
+            {
+                if (value <= 0) return;
+                _masonryColumnWidth = value;
+                BuildMasonryColumns();
+            }
+        }
+
+        public void BuildMasonryColumns()
+        {
+            MasonryColumns.Clear();
+            if (MasonryColumnCount <= 0) MasonryColumnCount = 1;
+            for (int i = 0; i < MasonryColumnCount; i++) MasonryColumns.Add(new ObservableCollection<TemplateItem>());
+
+            if (Assets == null) return;
+            int idx = 0;
+            foreach (var item in Assets)
+            {
+                MasonryColumns[idx % MasonryColumnCount].Add(item);
+                idx++;
+            }
+        }
+
+        // Justified layout support (minimal implementation)
+        public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
+        public double JustifiedRowHeight { get; set; } = 140.0;
+
+        public void BuildJustifiedRows(double containerWidth, double horizontalSpacing)
+        {
+            if (containerWidth <= 0) return;
+            JustifiedRows.Clear();
+            var currentRow = new ObservableCollection<JustifiedItem>();
+            double currentWidth = 0;
+            double targetHeight = JustifiedRowHeight;
+
+            if (Assets == null) return;
+            foreach (var item in Assets)
+            {
+                // best-effort aspect estimation: fallback to square if unknown
+                double aspect = 1.0;
+                try
+                {
+                    // attempt to parse WxH from thumbnail URL like .../160x120
+                    var m = System.Text.RegularExpressions.Regex.Match(item.ThumbnailPath ?? string.Empty, "(\\d+)x(\\d+)");
+                    if (m.Success)
+                    {
+                        double w = double.Parse(m.Groups[1].Value);
+                        double h = double.Parse(m.Groups[2].Value);
+                        if (h > 0) aspect = w / h;
+                    }
+                }
+                catch { }
+
+                double width = aspect * targetHeight;
+                if (currentRow.Count > 0 && currentWidth + width + horizontalSpacing > containerWidth)
+                {
+                    // scale row to fit
+                    double scale = (containerWidth - (currentRow.Count - 1) * horizontalSpacing) / currentWidth;
+                    foreach (var ji in currentRow) ji.Width *= scale;
+                    JustifiedRows.Add(currentRow);
+                    currentRow = new ObservableCollection<JustifiedItem>();
+                    currentWidth = 0;
+                }
+
+                currentRow.Add(new JustifiedItem { Source = item, Width = width });
+                currentWidth += width;
+            }
+
+            if (currentRow.Count > 0) JustifiedRows.Add(currentRow);
+        }
+
+        private void ApplyTagFilter()
+        {
+            try
+            {
+                var selectedExts = _tagFilterVm?.GetSelectedExtensions();
+                // If no selected extensions, show all
+                var toShow = new List<TemplateItem>();
+                if (selectedExts == null || selectedExts.Count == 0)
+                {
+                    toShow = _allAssets.ToList();
+                }
+                else
+                {
+                    foreach (var a in _allAssets)
+                    {
+                        var ext = Path.GetExtension(a.Path ?? string.Empty).TrimStart('.').ToLowerInvariant();
+                        if (selectedExts.Contains(ext)) toShow.Add(a);
+                    }
+                }
+
+                // Update Assets collection with diff to minimize UI churn
+                var toRemove = Assets.Except(toShow).ToList();
+                var toAdd = toShow.Except(Assets).ToList();
+
+                foreach (var r in toRemove) Assets.Remove(r);
+                foreach (var a in toAdd) Assets.Add(a);
+            }
+            catch { }
         }
     }
 }

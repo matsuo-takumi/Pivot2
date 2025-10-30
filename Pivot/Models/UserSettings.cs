@@ -22,6 +22,9 @@ namespace Pivot.Models
         // ウィンドウ設定
         public MenuDisplayMode MenuDisplayMode { get; set; } = MenuDisplayMode.Compact;
 
+        // カスタム: ユーザー定義のタグ定義（Asset タグ）
+        public List<TagDefinition> AssetTagDefinitions { get; set; } = new List<TagDefinition>();
+
         // (カスタムAcrylic/Luminosity設定は削除)
     }
 }

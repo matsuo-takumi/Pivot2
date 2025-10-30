@@ -10,6 +10,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Processing;
 using ImageMagick;
+using System.Collections.Generic; // Added for HashSet
 
 namespace Pivot.Services
 {
@@ -53,6 +54,26 @@ namespace Pivot.Services
 			ct.ThrowIfCancellationRequested();
 			if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
 				throw new FileNotFoundException("Source image not found", sourcePath);
+
+			var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+			// If this is a known non-image (3D model) extension, return packaged icon path
+			var modelExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".obj", ".fbx", ".stl", ".glb", ".gltf", ".3ds", ".dae" };
+			if (modelExts.Contains(ext))
+			{
+				var iconName = ext.TrimStart('.') switch
+				{
+					"obj" => "model_obj.png",
+					"fbx" => "model_fbx.png",
+					"stl" => "model_stl.png",
+					"glb" => "model_glb.png",
+					"gltf" => "model_gltf.png",
+					"3ds" => "model_3ds.png",
+					"dae" => "model_dae.png",
+					_ => "model_generic.png"
+				};
+				// Return ms-appx resource URI. The XAML Image control accepts this.
+				return $"ms-appx:///Assets/Icons/{iconName}";
+			}
 
 			var info = new FileInfo(sourcePath);
 			var key = ComputeKey(sourcePath, info.LastWriteTimeUtc.Ticks, info.Length, width, height);
@@ -100,6 +121,23 @@ namespace Pivot.Services
 		public string? TryGetCachedThumbnailPath(string sourcePath, int width, int height)
 		{
 			if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath)) return null;
+			var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+			var modelExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".obj", ".fbx", ".stl", ".glb", ".gltf", ".3ds", ".dae" };
+			if (modelExts.Contains(ext))
+			{
+				var iconName = ext.TrimStart('.') switch
+				{
+					"obj" => "model_obj.png",
+					"fbx" => "model_fbx.png",
+					"stl" => "model_stl.png",
+					"glb" => "model_glb.png",
+					"gltf" => "model_gltf.png",
+					"3ds" => "model_3ds.png",
+					"dae" => "model_dae.png",
+					_ => "model_generic.png"
+				};
+				return $"ms-appx:///Assets/Icons/{iconName}";
+			}
 			var info = new FileInfo(sourcePath);
 			var key = ComputeKey(sourcePath, info.LastWriteTimeUtc.Ticks, info.Length, width, height);
 			var thumbPath = Path.Combine(_cacheDir, key + ".png");

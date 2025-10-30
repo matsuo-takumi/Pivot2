@@ -12,9 +12,13 @@ namespace Pivot.Views
     public sealed partial class AssetPage : Page
     {
         public AssetViewModel ViewModel { get; set; }
+        private TagFilterViewModel? _tagVm = null;
 
         public AssetPage()
         {
+            // register TagFilterViewModel instance as a resource BEFORE XAML load
+            _tagVm = App.Current.Services.GetService<TagFilterViewModel>();
+            if (_tagVm != null) this.Resources["TagFilterVm"] = _tagVm;
             this.InitializeComponent();
             ViewModel = new AssetViewModel();
             this.DataContext = ViewModel;
@@ -39,6 +43,14 @@ namespace Pivot.Views
             catch { }
 
             this.Unloaded += AssetPage_Unloaded;
+        }
+
+        private void TagToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.CommandParameter is string name && _tagVm != null)
+            {
+                _tagVm.ToggleTag(name);
+            }
         }
 
         private void AssetPage_Unloaded(object sender, RoutedEventArgs e)
@@ -73,6 +85,7 @@ namespace Pivot.Views
                         {
                             ViewModel.MasonryColumnCount = columns;
                         }
+                        ViewModel.BuildJustifiedRows(width - 48, 8);
                     });
                 }
                 catch { }

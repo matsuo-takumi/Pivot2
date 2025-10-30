@@ -71,6 +71,9 @@ namespace Pivot
 			sc.AddSingleton<ICatalogService, JsonCatalogService>();
 			sc.AddSingleton<FileScannerService>();
 			sc.AddSingleton<IThumbnailService, ThumbnailService>();
+			// Tag filter shared service and VM
+			sc.AddSingleton<TagFilterService>();
+			sc.AddSingleton<TagFilterViewModel>();
 
 			// ViewModels
 			sc.AddTransient<MainViewModel>();
