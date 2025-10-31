@@ -22,6 +22,14 @@ namespace Pivot.Models
         // ウィンドウ設定
         public MenuDisplayMode MenuDisplayMode { get; set; } = MenuDisplayMode.Compact;
 
+        // Asset filters (custom and built-in)
+        public List<CustomFilter> AssetFilters { get; set; } = new List<CustomFilter>();
+
+        // Visible filters per tab (tab id -> list of filter Ids)
+        public Dictionary<string, List<System.Guid>> VisibleFiltersByTab { get; set; } = new Dictionary<string, List<System.Guid>>();
+        // Selected filters per tab (tab id -> list of selected filter Ids)
+        public Dictionary<string, List<System.Guid>> SelectedFiltersByTab { get; set; } = new Dictionary<string, List<System.Guid>>();
+
         // (カスタムAcrylic/Luminosity設定は削除)
     }
 }

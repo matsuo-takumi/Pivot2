@@ -24,6 +24,7 @@ namespace Pivot.ViewModels
             // Create appropriate content based on tag
             CurrentContent = tag switch
             {
+                "Asset" => new Views.AssetSettingsPage(),
                 "Directories" => new DirectoryPage(),
                 "Theme" => new ThemePage(),
                 "MenuItem2" => new MenuItem2ContentControl(),

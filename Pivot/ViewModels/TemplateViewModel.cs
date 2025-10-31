@@ -12,21 +12,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Pivot.ViewModels
 {
-	public enum LayoutType
-	{
-		List = 0,
-		Grid = 1,
-		Masonry = 2,
-		Justified = 3,
-		Flex = 4,
-		Flow = 5
-	}
-
-    public class JustifiedItem
+    public enum LayoutType
     {
-        public TemplateItem Source { get; set; } = new TemplateItem();
-        public double Width { get; set; }
+        List = 0,
+        Grid = 1,
+        Masonry = 2,
+        Flex = 3,
+        Flow = 4
     }
+
+// ... existing code ...
 
     public partial class TemplateViewModel : ObservableObject
 	{
@@ -35,10 +30,7 @@ namespace Pivot.ViewModels
 		// Masonry layout columns: each inner collection represents a vertical column
         public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
 
-		// Justified layout: collection of rows, each row has items with computed width
-		public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
-
-		public double JustifiedRowHeight { get; set; } = 140;
+// ... existing code ...
 
 		private int _masonryColumnCount = 3;
 		public int MasonryColumnCount
@@ -74,11 +66,11 @@ namespace Pivot.ViewModels
 		private bool _showThumbnails = true;
 
 		[RelayCommand]
-		private void ToggleLayout()
-		{
-			// Cycle through the first four layouts: List(0) -> Grid(1) -> Masonry(2) -> Justified(3) -> List
-			CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 4);
-		}
+        private void ToggleLayout()
+        {
+            // Cycle through the first three layouts: List(0) -> Grid(1) -> Masonry(2) -> List
+            CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 3);
+        }
 
         private System.Threading.CancellationTokenSource? _loadCts;
 
@@ -259,53 +251,9 @@ namespace Pivot.ViewModels
 			}
 		}
 
-		public void BuildJustifiedRows(double containerWidth, double horizontalSpacing)
-		{
-			if (containerWidth <= 0) return;
-			JustifiedRows.Clear();
-			double currentRowWidth = 0;
-			var currentRow = new ObservableCollection<JustifiedItem>();
-			double targetHeight = JustifiedRowHeight;
+// ... existing code ...
 
-            foreach (var item in TestItems)
-			{
-				double aspect = EstimateAspectFromUrl(item.ThumbnailPath); // width/height
-				double width = aspect * targetHeight;
-				if (currentRow.Count > 0 && currentRowWidth + width + horizontalSpacing > containerWidth)
-				{
-					// scale row to fit container
-					double scale = (containerWidth - (currentRow.Count - 1) * horizontalSpacing) / currentRowWidth;
-					foreach (var ji in currentRow)
-					{
-						ji.Width *= scale;
-					}
-					JustifiedRows.Add(currentRow);
-					currentRow = new ObservableCollection<JustifiedItem>();
-					currentRowWidth = 0;
-				}
-
-                currentRow.Add(new JustifiedItem { Source = item, Width = width });
-				currentRowWidth += width;
-			}
-
-			if (currentRow.Count > 0)
-			{
-				// last row: no scaling (or optionally stretch)
-				JustifiedRows.Add(currentRow);
-			}
-		}
-
-        private static double EstimateAspectFromUrl(string? url)
-        {
-            // extract WxH -> aspect = W/H
-            if (string.IsNullOrEmpty(url)) return 200.0 / 180.0;
-            var m = Regex.Match(url, "(\\d+)x(\\d+)");
-            if (m.Success && int.TryParse(m.Groups[1].Value, out int w) && int.TryParse(m.Groups[2].Value, out int h) && h > 0)
-            {
-                return (double)w / h;
-            }
-            return 200.0 / 180.0;
-        }
+// ... existing code ...
 
         public void CancelLoads()
         {

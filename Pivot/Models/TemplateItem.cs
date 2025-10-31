@@ -7,6 +7,8 @@ namespace Pivot.Models
 	{
 		Image,
 		Model,
+		Video,
+		Audio,
 		Script,
 		Other
 	}

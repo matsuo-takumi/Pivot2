@@ -80,6 +80,8 @@ namespace Pivot
 			sc.AddTransient<AssetViewModel>();
 			sc.AddTransient<WindowViewModel>();
 			sc.AddTransient<PreferencePageViewModel>();
+            // Filter service (depends on SettingsService)
+            sc.AddSingleton<FilterService>();
 
 			Services = sc.BuildServiceProvider();
 		}

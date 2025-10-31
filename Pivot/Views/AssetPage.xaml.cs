@@ -94,7 +94,6 @@ namespace Pivot.Views
         {
             var itemsRepeater = this.FindName("ItemsRepeaterMain") as Microsoft.UI.Xaml.Controls.ItemsRepeater;
             var masonryControl = this.FindName("MasonryColumnsControl") as Microsoft.UI.Xaml.Controls.ItemsControl;
-            var justifiedControl = this.FindName("JustifiedRowsControl") as Microsoft.UI.Xaml.Controls.ItemsControl;
 
             switch (layout)
             {
@@ -105,7 +104,6 @@ namespace Pivot.Views
                         itemsRepeater.Visibility = Visibility.Visible;
                     }
                     if (masonryControl != null) masonryControl.Visibility = Visibility.Collapsed;
-                    if (justifiedControl != null) justifiedControl.Visibility = Visibility.Collapsed;
                     break;
 
                 case LayoutType.Grid:
@@ -121,7 +119,6 @@ namespace Pivot.Views
                         itemsRepeater.Visibility = Visibility.Visible;
                     }
                     if (masonryControl != null) masonryControl.Visibility = Visibility.Collapsed;
-                    if (justifiedControl != null) justifiedControl.Visibility = Visibility.Collapsed;
                     break;
 
                 case LayoutType.Masonry:
@@ -133,19 +130,13 @@ namespace Pivot.Views
                         if (cols <= 0) cols = 1;
                         ViewModel.MasonryColumnWidth = System.Math.Floor(available / cols) - 16;
                     }
-                    ViewModel.BuildMasonryColumns();
+                    // build masonry columns from currently displayed (filtered) assets so layout change preserves filtering
+                    ViewModel.BuildMasonryColumns(ViewModel.DisplayedAssets);
                     if (itemsRepeater != null) itemsRepeater.Visibility = Visibility.Collapsed;
                     if (masonryControl != null) masonryControl.Visibility = Visibility.Visible;
-                    if (justifiedControl != null) justifiedControl.Visibility = Visibility.Collapsed;
                     break;
 
-                case LayoutType.Justified:
-                    UpdateResponsive(ActualWidth);
-                    if (itemsRepeater != null) itemsRepeater.Visibility = Visibility.Collapsed;
-                    if (masonryControl != null) masonryControl.Visibility = Visibility.Collapsed;
-                    if (justifiedControl != null) justifiedControl.Visibility = Visibility.Visible;
-                    break;
-
+                
                 default:
                     if (itemsRepeater != null)
                     {
@@ -159,7 +150,6 @@ namespace Pivot.Views
                         itemsRepeater.Visibility = Visibility.Visible;
                     }
                     if (masonryControl != null) masonryControl.Visibility = Visibility.Collapsed;
-                    if (justifiedControl != null) justifiedControl.Visibility = Visibility.Collapsed;
                     break;
             }
         }

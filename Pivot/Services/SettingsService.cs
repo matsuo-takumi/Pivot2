@@ -167,6 +167,122 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load MenuDisplayMode. Using default (Compact).");
                 _cache.MenuDisplayMode = MenuDisplayMode.Compact;
             }
+
+            // Asset Filters (customizable filter groups)
+            try
+            {
+                var filtersJson = await _settingsStore.GetAsync("AssetFilters");
+                if (!string.IsNullOrWhiteSpace(filtersJson) && LooksLikeJsonArray(filtersJson))
+                {
+                    try
+                    {
+                        var filters = JsonSerializer.Deserialize<List<Pivot.Models.CustomFilter>>(filtersJson);
+                        if (filters != null && filters.Count > 0)
+                        {
+                            _cache.AssetFilters = filters;
+                        }
+                        else
+                        {
+                            // initialize defaults if deserialization yields nothing
+                            _cache.AssetFilters = GetDefaultAssetFilters();
+                            await _settingsStore.UpsertAsync("AssetFilters", JsonSerializer.Serialize(_cache.AssetFilters));
+                        }
+                    }
+                    catch
+                    {
+                        _cache.AssetFilters = GetDefaultAssetFilters();
+                        await _settingsStore.UpsertAsync("AssetFilters", JsonSerializer.Serialize(_cache.AssetFilters));
+                    }
+                }
+                else
+                {
+                    _cache.AssetFilters = GetDefaultAssetFilters();
+                    await _settingsStore.UpsertAsync("AssetFilters", JsonSerializer.Serialize(_cache.AssetFilters));
+                }
+                _logger.LogInformation("SettingsService: Loaded AssetFilters: {Count}", _cache.AssetFilters.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load AssetFilters. Using defaults.");
+                _cache.AssetFilters = GetDefaultAssetFilters();
+            }
+
+            // Visible filters per tab
+            try
+            {
+                var visibleJson = await _settingsStore.GetAsync("VisibleFiltersByTab");
+                if (!string.IsNullOrWhiteSpace(visibleJson))
+                {
+                    try
+                    {
+                        var dict = JsonSerializer.Deserialize<Dictionary<string, List<Guid>>>(visibleJson);
+                        if (dict != null)
+                        {
+                            _cache.VisibleFiltersByTab = dict;
+                        }
+                        else
+                        {
+                            // default: make all asset filters visible on Asset tab
+                            _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>> { { "Asset", _cache.AssetFilters.Select(f => f.Id).ToList() } };
+                            await _settingsStore.UpsertAsync("VisibleFiltersByTab", JsonSerializer.Serialize(_cache.VisibleFiltersByTab));
+                        }
+                    }
+                    catch
+                    {
+                        _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>> { { "Asset", _cache.AssetFilters.Select(f => f.Id).ToList() } };
+                        await _settingsStore.UpsertAsync("VisibleFiltersByTab", JsonSerializer.Serialize(_cache.VisibleFiltersByTab));
+                    }
+                }
+                else
+                {
+                    _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>> { { "Asset", _cache.AssetFilters.Select(f => f.Id).ToList() } };
+                    await _settingsStore.UpsertAsync("VisibleFiltersByTab", JsonSerializer.Serialize(_cache.VisibleFiltersByTab));
+                }
+                _logger.LogInformation("SettingsService: Loaded VisibleFiltersByTab for {Count} tabs", _cache.VisibleFiltersByTab.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load VisibleFiltersByTab. Using defaults.");
+                _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>> { { "Asset", _cache.AssetFilters.Select(f => f.Id).ToList() } };
+            }
+
+            // Selected filters per tab (restore selection state)
+            try
+            {
+                var selJson = await _settingsStore.GetAsync("SelectedFiltersByTab");
+                if (!string.IsNullOrWhiteSpace(selJson))
+                {
+                    try
+                    {
+                        var dict = JsonSerializer.Deserialize<Dictionary<string, List<Guid>>>(selJson);
+                        if (dict != null)
+                        {
+                            _cache.SelectedFiltersByTab = dict;
+                        }
+                        else
+                        {
+                            _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
+                            await _settingsStore.UpsertAsync("SelectedFiltersByTab", JsonSerializer.Serialize(_cache.SelectedFiltersByTab));
+                        }
+                    }
+                    catch
+                    {
+                        _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
+                        await _settingsStore.UpsertAsync("SelectedFiltersByTab", JsonSerializer.Serialize(_cache.SelectedFiltersByTab));
+                    }
+                }
+                else
+                {
+                    _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
+                    await _settingsStore.UpsertAsync("SelectedFiltersByTab", JsonSerializer.Serialize(_cache.SelectedFiltersByTab));
+                }
+                _logger.LogInformation("SettingsService: Loaded SelectedFiltersByTab for {Count} tabs", _cache.SelectedFiltersByTab.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load SelectedFiltersByTab. Using defaults.");
+                _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
+            }
         }
 
         private static bool LooksLikeJsonArray(string value)
@@ -406,6 +522,79 @@ namespace Pivot.Services
         {
             _cache.MenuDisplayMode = mode;
             await _settingsStore.UpsertAsync("MenuDisplayMode", mode.ToString());
+        }
+
+        private List<Pivot.Models.CustomFilter> GetDefaultAssetFilters()
+        {
+            return new List<Pivot.Models.CustomFilter>
+            {
+                new Pivot.Models.CustomFilter { Name = "3D", AllowedExtensions = new List<string> { ".obj", ".fbx", ".gltf", ".glb", ".dae" }, IsBuiltIn = true, SortOrder = 0 },
+                new Pivot.Models.CustomFilter { Name = "Images", AllowedExtensions = new List<string> { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tga", ".tif", ".tiff" }, IsBuiltIn = true, SortOrder = 1 },
+                new Pivot.Models.CustomFilter { Name = "Video", AllowedExtensions = new List<string> { ".mp4", ".mov", ".avi", ".mkv", ".webm" }, IsBuiltIn = true, SortOrder = 2 },
+                new Pivot.Models.CustomFilter { Name = "Audio", AllowedExtensions = new List<string> { ".mp3", ".wav", ".ogg", ".flac", ".aac" }, IsBuiltIn = true, SortOrder = 3 },
+                new Pivot.Models.CustomFilter { Name = "Other", AllowedExtensions = new List<string>(), IsBuiltIn = true, SortOrder = 4 }
+            };
+        }
+
+        // AssetFilters accessors
+        public List<Pivot.Models.CustomFilter> GetAssetFilters() => _cache.AssetFilters;
+
+        public async Task SetAssetFiltersAsync(List<Pivot.Models.CustomFilter> filters)
+        {
+            _cache.AssetFilters = filters ?? new List<Pivot.Models.CustomFilter>();
+            try
+            {
+                await _settingsStore.UpsertAsync("AssetFilters", JsonSerializer.Serialize(_cache.AssetFilters));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist AssetFilters.");
+            }
+        }
+
+        // Visible filters per tab accessors
+        public List<Guid> GetVisibleFiltersForTab(string tabId)
+        {
+            if (string.IsNullOrWhiteSpace(tabId)) return new List<Guid>();
+            if (_cache.VisibleFiltersByTab != null && _cache.VisibleFiltersByTab.TryGetValue(tabId, out var list)) return list;
+            return new List<Guid>();
+        }
+
+        public async Task SetVisibleFiltersForTabAsync(string tabId, List<Guid> filterIds)
+        {
+            if (string.IsNullOrWhiteSpace(tabId)) return;
+            if (_cache.VisibleFiltersByTab == null) _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>>();
+            _cache.VisibleFiltersByTab[tabId] = filterIds ?? new List<Guid>();
+            try
+            {
+                await _settingsStore.UpsertAsync("VisibleFiltersByTab", JsonSerializer.Serialize(_cache.VisibleFiltersByTab));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist VisibleFiltersByTab.");
+            }
+        }
+
+        public List<Guid> GetSelectedFiltersForTab(string tabId)
+        {
+            if (string.IsNullOrWhiteSpace(tabId)) return new List<Guid>();
+            if (_cache.SelectedFiltersByTab != null && _cache.SelectedFiltersByTab.TryGetValue(tabId, out var list)) return list;
+            return new List<Guid>();
+        }
+
+        public async Task SetSelectedFiltersForTabAsync(string tabId, List<Guid> filterIds)
+        {
+            if (string.IsNullOrWhiteSpace(tabId)) return;
+            if (_cache.SelectedFiltersByTab == null) _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
+            _cache.SelectedFiltersByTab[tabId] = filterIds ?? new List<Guid>();
+            try
+            {
+                await _settingsStore.UpsertAsync("SelectedFiltersByTab", JsonSerializer.Serialize(_cache.SelectedFiltersByTab));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist SelectedFiltersByTab.");
+            }
         }
     }
 }

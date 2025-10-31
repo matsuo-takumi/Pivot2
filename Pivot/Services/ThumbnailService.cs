@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -138,11 +139,57 @@ namespace Pivot.Services
 				}
 				else
 				{
-					using var img = new MagickImage(sourcePath);
-					img.Resize(width, height);
-					img.Format = MagickFormat.Png;
+				// For non-image sources (e.g. some vector formats) try Magick.NET; for 3D model files produce a simple placeholder
+				var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+				var modelExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj", ".fbx", ".gltf", ".glb", ".dae" };
+				if (modelExts.Contains(ext))
+				{
+					// create a simple placeholder PNG for 3D models (colored background with white box)
+					using var img = new Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(width, height);
+					var bgColor = new SixLabors.ImageSharp.PixelFormats.Rgba32(0x2D, 0x6C, 0xDF, 0xFF); // #2D6CDF
+					var fgColor = new SixLabors.ImageSharp.PixelFormats.Rgba32(0xFF, 0xFF, 0xFF, 0xFF);
+					img.ProcessPixelRows(accessor =>
+					{
+						// fill background
+						for (int y = 0; y < height; y++)
+						{
+							var row = accessor.GetRowSpan(y);
+							for (int x = 0; x < width; x++) row[x] = bgColor;
+						}
+
+						// outer rect
+						int x0 = (int)(width * 0.18f);
+						int y0 = (int)(height * 0.28f);
+						int rw = (int)(width * 0.64f);
+						int rh = (int)(height * 0.44f);
+						for (int y = y0; y < Math.Min(height, y0 + rh); y++)
+						{
+							var row = accessor.GetRowSpan(y);
+							for (int x = x0; x < Math.Min(width, x0 + rw); x++) row[x] = fgColor;
+						}
+
+						// inner rect
+						int ix = (int)(width * 0.28f);
+						int iy = (int)(height * 0.38f);
+						int iw = (int)(width * 0.44f);
+						int ih = (int)(height * 0.24f);
+						for (int y = iy; y < Math.Min(height, iy + ih); y++)
+						{
+							var row = accessor.GetRowSpan(y);
+							for (int x = ix; x < Math.Min(width, ix + iw); x++) row[x] = bgColor;
+						}
+					});
 					Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
-					await img.WriteAsync(destinationPngPath, ct).ConfigureAwait(false);
+					await img.SaveAsPngAsync(destinationPngPath, ct).ConfigureAwait(false);
+				}
+				else
+				{
+					using var mag = new MagickImage(sourcePath);
+					mag.Resize(width, height);
+					mag.Format = MagickFormat.Png;
+					Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
+					await mag.WriteAsync(destinationPngPath, ct).ConfigureAwait(false);
+				}
 				}
 			}
 			catch (Exception ex)

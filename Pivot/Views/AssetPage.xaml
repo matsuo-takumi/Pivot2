@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:conv="using:Pivot.Converters"
+    xmlns:ctrls="using:Pivot.Controls"
     mc:Ignorable="d"
     x:Name="AssetPageRoot"
     Background="Transparent">
@@ -23,21 +24,26 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#20E0F7FF" CornerRadius="6" Padding="8" Margin="0,0,0,8">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Assets" FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
-                <StackPanel Orientation="Horizontal" Spacing="4" Margin="12,0,0,0">
+        <Border Grid.Row="0" Background="#20E0F7FF" CornerRadius="6" Padding="8" Margin="0,0,0,8" HorizontalAlignment="Stretch">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Assets" FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                    <ctrls:TagFilterControl TabId="Asset" Margin="0,0,8,0"/>
                     <Button Command="{Binding ToggleLayoutCommand}" ToolTipService.ToolTip="{Binding CurrentLayout}">
                         <FontIcon Glyph="&#xECA5;" FontFamily="Segoe MDL2 Assets"/>
                     </Button>
                 </StackPanel>
-            </StackPanel>
+            </Grid>
         </Border>
 
         <Border Grid.Row="1" Background="#20E8F5E9" CornerRadius="6" Padding="6">
             <ScrollViewer x:Name="MainScrollViewer" VerticalScrollBarVisibility="Auto" Background="Transparent">
                 <Grid>
-                    <ItemsRepeater x:Name="ItemsRepeaterMain" ItemsSource="{Binding Assets}">
+                    <ItemsRepeater x:Name="ItemsRepeaterMain" ItemsSource="{Binding DisplayedAssets}">
                         <ItemsRepeater.Layout>
                             <UniformGridLayout MinItemWidth="220" MinItemHeight="160" MinRowSpacing="8" MinColumnSpacing="8"/>
                         </ItemsRepeater.Layout>
@@ -120,40 +126,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <!-- Justified rows: visible only when Justified layout is selected -->
-                    <ItemsControl x:Name="JustifiedRowsControl" ItemsSource="{Binding JustifiedRows}" Visibility="Collapsed">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Vertical"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <!-- Each item is a row (collection of JustifiedItem) -->
-                                <ItemsControl ItemsSource="{Binding}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF" Height="{Binding DataContext.JustifiedRowHeight, ElementName=AssetPageRoot}" Width="{Binding Width}">
-                                                <Border.Transitions>
-                                                    <TransitionCollection>
-                                                        <EntranceThemeTransition/>
-                                                    </TransitionCollection>
-                                                </Border.Transitions>
-                                                <Grid Background="Transparent">
-                                                    <Image Stretch="UniformToFill" Source="{Binding Source.ThumbnailPath}"/>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <!-- Justified layout removed -->
 
                 </Grid>
             </ScrollViewer>

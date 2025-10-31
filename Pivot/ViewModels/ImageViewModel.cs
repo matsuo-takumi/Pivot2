@@ -17,9 +17,7 @@ namespace Pivot.ViewModels
         public ObservableCollection<TemplateItem> Images { get; set; }
 
         public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
-        public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
-
-        public double JustifiedRowHeight { get; set; } = 140;
+// ... existing code ...
 
         private int _masonryColumnCount = 3;
         public int MasonryColumnCount
@@ -57,7 +55,7 @@ namespace Pivot.ViewModels
         [RelayCommand]
         private void ToggleLayout()
         {
-            CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 4);
+            CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 3);
         }
 
         private System.Threading.CancellationTokenSource? _loadCts;
@@ -209,50 +207,9 @@ namespace Pivot.ViewModels
             }
         }
 
-        public void BuildJustifiedRows(double containerWidth, double horizontalSpacing)
-        {
-            if (containerWidth <= 0) return;
-            JustifiedRows.Clear();
-            double currentRowWidth = 0;
-            var currentRow = new ObservableCollection<JustifiedItem>();
-            double targetHeight = JustifiedRowHeight;
+// ... existing code ...
 
-            foreach (var item in Images)
-            {
-                double aspect = EstimateAspectFromUrl(item.ThumbnailPath);
-                double width = aspect * targetHeight;
-                if (currentRow.Count > 0 && currentRowWidth + width + horizontalSpacing > containerWidth)
-                {
-                    double scale = (containerWidth - (currentRow.Count - 1) * horizontalSpacing) / currentRowWidth;
-                    foreach (var ji in currentRow)
-                    {
-                        ji.Width *= scale;
-                    }
-                    JustifiedRows.Add(currentRow);
-                    currentRow = new ObservableCollection<JustifiedItem>();
-                    currentRowWidth = 0;
-                }
-
-                currentRow.Add(new JustifiedItem { Source = item, Width = width });
-                currentRowWidth += width;
-            }
-
-            if (currentRow.Count > 0)
-            {
-                JustifiedRows.Add(currentRow);
-            }
-        }
-
-        private static double EstimateAspectFromUrl(string? url)
-        {
-            if (string.IsNullOrEmpty(url)) return 200.0 / 180.0;
-            var m = Regex.Match(url, "(\\d+)x(\\d+)");
-            if (m.Success && int.TryParse(m.Groups[1].Value, out int w) && int.TryParse(m.Groups[2].Value, out int h) && h > 0)
-            {
-                return (double)w / h;
-            }
-            return 200.0 / 180.0;
-        }
+// ... existing code ...
 
         public void CancelLoads()
         {

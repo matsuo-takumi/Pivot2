@@ -101,7 +101,6 @@ namespace Pivot.Views
                     ItemsRepeaterMain.Layout = new StackLayout() { Orientation = Orientation.Vertical };
                     ItemsRepeaterMain.Visibility = Visibility.Visible;
                     MasonryColumnsControl.Visibility = Visibility.Collapsed;
-                    JustifiedRowsControl.Visibility = Visibility.Collapsed;
                     break;
 
                 case LayoutType.Grid:
@@ -114,7 +113,6 @@ namespace Pivot.Views
                     };
                     ItemsRepeaterMain.Visibility = Visibility.Visible;
                     MasonryColumnsControl.Visibility = Visibility.Collapsed;
-                    JustifiedRowsControl.Visibility = Visibility.Collapsed;
                     break;
 
                 case LayoutType.Masonry:
@@ -129,16 +127,9 @@ namespace Pivot.Views
                     ViewModel.BuildMasonryColumns();
                     ItemsRepeaterMain.Visibility = Visibility.Collapsed;
                     MasonryColumnsControl.Visibility = Visibility.Visible;
-                    JustifiedRowsControl.Visibility = Visibility.Collapsed;
                     break;
 
-                case LayoutType.Justified:
-                    UpdateResponsive(ActualWidth);
-                    ItemsRepeaterMain.Visibility = Visibility.Collapsed;
-                    MasonryColumnsControl.Visibility = Visibility.Collapsed;
-                    JustifiedRowsControl.Visibility = Visibility.Visible;
-                    break;
-
+                
                 default:
                     ItemsRepeaterMain.Layout = new UniformGridLayout
                     {
@@ -149,7 +140,6 @@ namespace Pivot.Views
                     };
                     ItemsRepeaterMain.Visibility = Visibility.Visible;
                     MasonryColumnsControl.Visibility = Visibility.Collapsed;
-                    JustifiedRowsControl.Visibility = Visibility.Collapsed;
                     break;
             }
         }

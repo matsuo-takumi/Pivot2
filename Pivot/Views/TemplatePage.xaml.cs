@@ -71,15 +71,14 @@ namespace Pivot.Views
 					await System.Threading.Tasks.Task.Delay(150, ct);
 					if (ct.IsCancellationRequested) return;
 					var columns = (int)System.Math.Max(1, System.Math.Floor((width - 48) / 220));
-					DispatcherQueue.TryEnqueue(() =>
-					{
-						if (ViewModel == null) return;
-						if (columns != ViewModel.MasonryColumnCount)
-						{
-							ViewModel.MasonryColumnCount = columns;
-						}
-						ViewModel.BuildJustifiedRows(width - 48, 8);
-					});
+                        DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (ViewModel == null) return;
+                        if (columns != ViewModel.MasonryColumnCount)
+                        {
+                            ViewModel.MasonryColumnCount = columns;
+                        }
+                    });
 				}
 				catch { }
 			});
@@ -100,14 +99,13 @@ namespace Pivot.Views
 		{
 			switch (layout)
 			{
-				case LayoutType.List: // index 0 -> List
-					ItemsRepeaterMain.Layout = new StackLayout() { Orientation = Orientation.Vertical };
-					ItemsRepeaterMain.Visibility = Visibility.Visible;
-					MasonryColumnsControl.Visibility = Visibility.Collapsed;
-					JustifiedRowsControl.Visibility = Visibility.Collapsed;
-					break;
+                case LayoutType.List: // index 0 -> List
+                    ItemsRepeaterMain.Layout = new StackLayout() { Orientation = Orientation.Vertical };
+                    ItemsRepeaterMain.Visibility = Visibility.Visible;
+                    MasonryColumnsControl.Visibility = Visibility.Collapsed;
+                    break;
 
-				case LayoutType.Grid: // index 1 -> Grid
+                case LayoutType.Grid: // index 1 -> Grid
 					ItemsRepeaterMain.Layout = new UniformGridLayout
 					{
 						MinItemWidth = 220,
@@ -117,7 +115,6 @@ namespace Pivot.Views
 					};
 					ItemsRepeaterMain.Visibility = Visibility.Visible;
 					MasonryColumnsControl.Visibility = Visibility.Collapsed;
-					JustifiedRowsControl.Visibility = Visibility.Collapsed;
 					break;
 
 				case LayoutType.Masonry: // index 2 -> Masonry (本格実装)
@@ -131,19 +128,12 @@ namespace Pivot.Views
 						if (cols <= 0) cols = 1;
 						ViewModel.MasonryColumnWidth = System.Math.Floor(available / cols) - 16; // subtract margins
 					}
-					ViewModel.BuildMasonryColumns();
-					ItemsRepeaterMain.Visibility = Visibility.Collapsed;
-					MasonryColumnsControl.Visibility = Visibility.Visible;
-					JustifiedRowsControl.Visibility = Visibility.Collapsed;
+                    ViewModel.BuildMasonryColumns();
+                    ItemsRepeaterMain.Visibility = Visibility.Collapsed;
+                    MasonryColumnsControl.Visibility = Visibility.Visible;
 					break;
 
-				case LayoutType.Justified: // index 3 -> Justified
-					UpdateResponsive(ActualWidth);
-					ItemsRepeaterMain.Visibility = Visibility.Collapsed;
-					MasonryColumnsControl.Visibility = Visibility.Collapsed;
-					JustifiedRowsControl.Visibility = Visibility.Visible;
-					break;
-
+                
 				default:
 					ItemsRepeaterMain.Layout = new UniformGridLayout
 					{
@@ -152,9 +142,8 @@ namespace Pivot.Views
 						MinRowSpacing = 8,
 						MinColumnSpacing = 8
 					};
-					ItemsRepeaterMain.Visibility = Visibility.Visible;
-					MasonryColumnsControl.Visibility = Visibility.Collapsed;
-					JustifiedRowsControl.Visibility = Visibility.Collapsed;
+                    ItemsRepeaterMain.Visibility = Visibility.Visible;
+                    MasonryColumnsControl.Visibility = Visibility.Collapsed;
 					break;
 			}
 		}

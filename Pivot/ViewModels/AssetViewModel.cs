@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System;
 using Microsoft.Extensions.DependencyInjection;
+using Pivot.Services;
+using Pivot.ViewModels;
 
 namespace Pivot.ViewModels
 {
@@ -16,10 +18,19 @@ namespace Pivot.ViewModels
     {
         public ObservableCollection<TemplateItem> Assets { get; set; }
 
-        public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
-        public ObservableCollection<ObservableCollection<JustifiedItem>> JustifiedRows { get; } = new ObservableCollection<ObservableCollection<JustifiedItem>>();
+        // FilterService-backed filters
+        public ObservableCollection<FilterViewModel> Filters { get; } = new ObservableCollection<FilterViewModel>();
 
-        public double JustifiedRowHeight { get; set; } = 140;
+        [ObservableProperty]
+        private FilterViewModel? _selectedFilter;
+
+        private readonly FilterService? _filterService;
+
+        // Assets after applying current filter
+        public ObservableCollection<TemplateItem> DisplayedAssets { get; } = new ObservableCollection<TemplateItem>();
+
+        public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
+// ... existing code ...
 
         private int _masonryColumnCount = 3;
         public int MasonryColumnCount
@@ -29,7 +40,8 @@ namespace Pivot.ViewModels
             {
                 if (value <= 0) return;
                 _masonryColumnCount = value;
-                BuildMasonryColumns();
+                // rebuild using currently displayed (filtered) assets so resizing preserves filter
+                BuildMasonryColumns(DisplayedAssets);
             }
         }
 
@@ -41,7 +53,8 @@ namespace Pivot.ViewModels
             {
                 if (value <= 0) return;
                 _masonryColumnWidth = value;
-                BuildMasonryColumns();
+                // rebuild using currently displayed (filtered) assets so resizing preserves filter
+                BuildMasonryColumns(DisplayedAssets);
             }
         }
 
@@ -57,7 +70,7 @@ namespace Pivot.ViewModels
         [RelayCommand]
         private void ToggleLayout()
         {
-            CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 4);
+            CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 3);
         }
 
         private System.Threading.CancellationTokenSource? _loadCts;
@@ -76,18 +89,77 @@ namespace Pivot.ViewModels
             BuildMasonryColumns();
             UseTextListMode = _currentLayout == LayoutType.List;
             ShowThumbnails = !UseTextListMode;
+
+            // obtain FilterService from DI and wire up
+            try
+            {
+                _filterService = App.Current.Services.GetService<FilterService>();
+                if (_filterService != null)
+                {
+                    // mirror list reference
+                    foreach (var f in _filterService.Filters) Filters.Add(f);
+                    // subscribe to changes on service - reapply filters when selection changes
+                    _filterService.PropertyChanged += (s, e) =>
+                    {
+                        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(FilterService.SelectedFilterIds))
+                        {
+                            ApplyFilterFromService();
+                        }
+                    };
+                }
+            }
+            catch { }
+
+            // initialize displayed assets
+            ApplyFilterFromService();
         }
 
-        partial void OnCurrentLayoutChanged(LayoutType value)
+        partial void OnSelectedFilterChanged(FilterViewModel? value)
         {
-            UseTextListMode = value == LayoutType.List;
-            ShowThumbnails = !UseTextListMode;
+            try
+            {
+                if (_filterService != null)
+                {
+                    if (value == null) _filterService.ClearSelectedFilters();
+                    else _filterService.SetSelectedFilters(new[] { value.Id });
+                    // Note: TagFilterControl persists per-tab selection; here we just update service selection
+                }
+            }
+            catch { }
+            ApplyFilterFromService();
+        }
+
+        private void ApplyFilterFromService()
+        {
+            DisplayedAssets.Clear();
+            try
+            {
+                if (_filterService == null)
+                {
+                    foreach (var a in Assets) DisplayedAssets.Add(a);
+                    return;
+                }
+                var res = _filterService.ApplyFilter(Assets);
+                foreach (var a in res) DisplayedAssets.Add(a);
+            }
+            catch
+            {
+                foreach (var a in Assets) DisplayedAssets.Add(a);
+            }
+
+            // rebuild masonry columns from displayed assets so Masonry layout shows filtered items
+            try
+            {
+                BuildMasonryColumns(DisplayedAssets);
+            }
+            catch { }
         }
 
         public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
         {
             if (directories == null) return;
-            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
+            // var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
+            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tga", ".tif", ".tiff", ".mp4", ".mov", ".avi", ".mkv", ".webm", ".obj", ".fbx", ".gltf", ".glb", ".dae", ".mp3", ".wav", ".ogg", ".flac", ".aac" };
             var files = new List<string>();
             await Task.Run(() =>
             {
@@ -130,9 +202,16 @@ namespace Pivot.ViewModels
 
             foreach (var f in files)
             {
+                var ext = Path.GetExtension(f);
+                AssetKind kind = AssetKind.Other;
+                if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj",".fbx",".gltf",".glb",".dae" }.Contains(ext)) kind = AssetKind.Model;
+                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png",".jpg",".jpeg",".bmp",".gif",".webp",".tga",".tif",".tiff" }.Contains(ext)) kind = AssetKind.Image;
+                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp4",".mov",".avi",".mkv",".webm" }.Contains(ext)) kind = AssetKind.Video;
+                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp3",".wav",".ogg",".flac",".aac" }.Contains(ext)) kind = AssetKind.Audio;
+
                 var item = new TemplateItem
                 {
-                    Kind = AssetKind.Other,
+                    Kind = kind,
                     Path = f,
                     Name = Path.GetFileName(f)
                 };
@@ -150,6 +229,9 @@ namespace Pivot.ViewModels
                 catch { }
                 Assets.Add(item);
             }
+
+            // apply current filter to newly loaded assets
+            try { ApplyFilterFromService(); } catch { }
 
             BuildMasonryColumns();
 
@@ -187,8 +269,9 @@ namespace Pivot.ViewModels
             catch { }
         }
 
-        public void BuildMasonryColumns()
+        public void BuildMasonryColumns(IEnumerable<TemplateItem>? source = null)
         {
+            var items = source ?? Assets;
             MasonryColumns.Clear();
             for (int i = 0; i < MasonryColumnCount; i++)
             {
@@ -196,7 +279,7 @@ namespace Pivot.ViewModels
             }
 
             var columnHeights = new int[MasonryColumnCount];
-            foreach (var item in Assets)
+            foreach (var item in items)
             {
                 int h = EstimateHeightFromUrl(item.ThumbnailPath);
                 int minIndex = 0;
@@ -209,50 +292,9 @@ namespace Pivot.ViewModels
             }
         }
 
-        public void BuildJustifiedRows(double containerWidth, double horizontalSpacing)
-        {
-            if (containerWidth <= 0) return;
-            JustifiedRows.Clear();
-            double currentRowWidth = 0;
-            var currentRow = new ObservableCollection<JustifiedItem>();
-            double targetHeight = JustifiedRowHeight;
+// ... existing code ...
 
-            foreach (var item in Assets)
-            {
-                double aspect = EstimateAspectFromUrl(item.ThumbnailPath);
-                double width = aspect * targetHeight;
-                if (currentRow.Count > 0 && currentRowWidth + width + horizontalSpacing > containerWidth)
-                {
-                    double scale = (containerWidth - (currentRow.Count - 1) * horizontalSpacing) / currentRowWidth;
-                    foreach (var ji in currentRow)
-                    {
-                        ji.Width *= scale;
-                    }
-                    JustifiedRows.Add(currentRow);
-                    currentRow = new ObservableCollection<JustifiedItem>();
-                    currentRowWidth = 0;
-                }
-
-                currentRow.Add(new JustifiedItem { Source = item, Width = width });
-                currentRowWidth += width;
-            }
-
-            if (currentRow.Count > 0)
-            {
-                JustifiedRows.Add(currentRow);
-            }
-        }
-
-        private static double EstimateAspectFromUrl(string? url)
-        {
-            if (string.IsNullOrEmpty(url)) return 200.0 / 180.0;
-            var m = Regex.Match(url, "(\\d+)x(\\d+)");
-            if (m.Success && int.TryParse(m.Groups[1].Value, out int w) && int.TryParse(m.Groups[2].Value, out int h) && h > 0)
-            {
-                return (double)w / h;
-            }
-            return 200.0 / 180.0;
-        }
+// ... existing code ...
 
         public void CancelLoads()
         {
