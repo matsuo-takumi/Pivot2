@@ -8,9 +8,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
+using ImageSharpImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Processing;
 using ImageMagick;
+using System.Drawing;
+using System.Drawing.Imaging;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
+using Windows.Storage;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace Pivot.Services
 {
@@ -24,20 +36,18 @@ namespace Pivot.Services
 	public sealed class ThumbnailService : IThumbnailService
 	{
 		private readonly ILogger<ThumbnailService> _logger;
-		// 限定並列でサムネイル生成を行うためのセマフォ
 		private readonly SemaphoreSlim _parallelismSemaphore;
-		// 同一キーに対する重複生成を抑止するための作成タスク辞書
-		private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> _creationTasks = new System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>>();
-		// クリーンアップの呼び出し頻度を抑制（過負荷防止）
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> _creationTasks = new(System.StringComparer.OrdinalIgnoreCase);
 		private long _lastCleanupTicks = 0;
 		private const long CleanupIntervalMs = 5000;
 		private string _cacheDir = string.Empty;
 		private long _maxCacheBytes = 500L * 1024 * 1024; // 500MB default
+		private DispatcherQueue? _uiDispatcher;
+		private ShellIconService? _shellIconService;
 
 		public ThumbnailService(ILogger<ThumbnailService> logger)
 		{
 			_logger = logger;
-			// 並列度は環境に依存して調整（最小2）
 			_parallelismSemaphore = new SemaphoreSlim(Math.Max(2, Environment.ProcessorCount / 2));
 		}
 
@@ -46,6 +56,10 @@ namespace Pivot.Services
 			_cacheDir = cacheDirectory;
 			_maxCacheBytes = maxCacheBytes > 0 ? maxCacheBytes : _maxCacheBytes;
 			Directory.CreateDirectory(_cacheDir);
+			// capture UI dispatcher when initialized from UI thread so we can render XAML visuals
+			try { _uiDispatcher = DispatcherQueue.GetForCurrentThread(); } catch { }
+			// init shell icon helper (icons cached under cache/icons)
+			try { _shellIconService = new ShellIconService(Path.Combine(_cacheDir, "icons")); } catch { }
 			return Task.CompletedTask;
 		}
 
@@ -59,19 +73,14 @@ namespace Pivot.Services
 			var key = ComputeKey(sourcePath, info.LastWriteTimeUtc.Ticks, info.Length, width, height);
 			var thumbPath = Path.Combine(_cacheDir, key + ".png");
 
-			if (File.Exists(thumbPath))
-			{
-				return thumbPath;
-			}
+			if (File.Exists(thumbPath)) return thumbPath;
 
-			// 既に作成中のタスクがあればそれを待つ（重複作成を抑止）
 			var creationTask = _creationTasks.GetOrAdd(key, (_) => Task.Run(async () =>
 			{
-				// 制限付き並列で実際の生成を実行
 				await _parallelismSemaphore.WaitAsync(ct).ConfigureAwait(false);
 				try
 				{
-					if (File.Exists(thumbPath)) return thumbPath; // 再確認
+					if (File.Exists(thumbPath)) return thumbPath;
 					await CreateThumbnailAsync(sourcePath, width, height, thumbPath, ct).ConfigureAwait(false);
 					var now = Environment.TickCount64;
 					if (now - Interlocked.Read(ref _lastCleanupTicks) >= CleanupIntervalMs)
@@ -81,21 +90,11 @@ namespace Pivot.Services
 					}
 					return thumbPath;
 				}
-				finally
-				{
-					_parallelismSemaphore.Release();
-				}
+				finally { _parallelismSemaphore.Release(); }
 			}));
 
-			try
-			{
-				return await creationTask.ConfigureAwait(false);
-			}
-			finally
-			{
-				// 完了したタスクは辞書から削除してメモリ増加を抑える
-				_creationTasks.TryRemove(key, out _);
-			}
+			try { return await creationTask.ConfigureAwait(false); }
+			finally { _creationTasks.TryRemove(key, out _); }
 		}
 
 		public string? TryGetCachedThumbnailPath(string sourcePath, int width, int height)
@@ -128,59 +127,85 @@ namespace Pivot.Services
 			{
 				if (CanLoadWithImageSharp(sourcePath))
 				{
-					using var image = await Image.LoadAsync(sourcePath, ct).ConfigureAwait(false);
-					image.Mutate(x => x.Resize(new ResizeOptions
-					{
-						Mode = ResizeMode.Max,
-						Size = new Size(width, height)
-					}));
+					using var image = await ImageSharpImage.LoadAsync(sourcePath, ct).ConfigureAwait(false);
+					image.Mutate(x => x.Resize(new ResizeOptions { Mode = ResizeMode.Max, Size = new SixLabors.ImageSharp.Size(width, height) }));
 					Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
 					await image.SaveAsPngAsync(destinationPngPath, ct).ConfigureAwait(false);
+					return;
 				}
-				else
-				{
-				// For non-image sources (e.g. some vector formats) try Magick.NET; for 3D model files produce a simple placeholder
+
 				var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
 				var modelExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj", ".fbx", ".gltf", ".glb", ".dae" };
 				if (modelExts.Contains(ext))
 				{
-					// create a simple placeholder PNG for 3D models (colored background with white box)
-					using var img = new Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(width, height);
-					var bgColor = new SixLabors.ImageSharp.PixelFormats.Rgba32(0x2D, 0x6C, 0xDF, 0xFF); // #2D6CDF
-					var fgColor = new SixLabors.ImageSharp.PixelFormats.Rgba32(0xFF, 0xFF, 0xFF, 0xFF);
-					img.ProcessPixelRows(accessor =>
+			// try shell icon service (per-extension cache)
+			try
+			{
+				if (_shellIconService != null)
+				{
+					var iconPath = await _shellIconService.GetOrCreateIconForExtensionAsync(ext, Math.Max(width, height), ct).ConfigureAwait(false);
+					if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
 					{
-						// fill background
-						for (int y = 0; y < height; y++)
-						{
-							var row = accessor.GetRowSpan(y);
-							for (int x = 0; x < width; x++) row[x] = bgColor;
-						}
+						// copy cached icon to destination (resize not necessary; we generate at requested size)
+						Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
+						File.Copy(iconPath, destinationPngPath, true);
+						return;
+					}
+				}
+			}
+			catch { }
 
-						// outer rect
-						int x0 = (int)(width * 0.18f);
-						int y0 = (int)(height * 0.28f);
-						int rw = (int)(width * 0.64f);
-						int rh = (int)(height * 0.44f);
-						for (int y = y0; y < Math.Min(height, y0 + rh); y++)
-						{
-							var row = accessor.GetRowSpan(y);
-							for (int x = x0; x < Math.Min(width, x0 + rw); x++) row[x] = fgColor;
-						}
+					var label = ext.StartsWith(".") ? ext.Substring(1).ToUpperInvariant() : ext.ToUpperInvariant();
+					if (_uiDispatcher != null)
+					{
+						try { await RenderLabelWithWinUIAsync(label, width, height, destinationPngPath, ct).ConfigureAwait(false); return; } catch { }
+					}
 
-						// inner rect
-						int ix = (int)(width * 0.28f);
-						int iy = (int)(height * 0.38f);
-						int iw = (int)(width * 0.44f);
-						int ih = (int)(height * 0.24f);
-						for (int y = iy; y < Math.Min(height, iy + ih); y++)
-						{
-							var row = accessor.GetRowSpan(y);
-							for (int x = ix; x < Math.Min(width, ix + iw); x++) row[x] = bgColor;
-						}
-					});
+					// fallback magick draw
+					// try System.Drawing text fallback first (guaranteed on Windows)
+					try
+					{
+						using var bmp = new System.Drawing.Bitmap(Math.Max(1, width), Math.Max(1, height));
+						using var g = System.Drawing.Graphics.FromImage(bmp);
+						// background
+						g.Clear(System.Drawing.Color.FromArgb(0x2D, 0x6C, 0xDF));
+						// draw a white rounded-ish box
+                        using (var brush = new System.Drawing.SolidBrush(System.Drawing.Color.White))
+                        {
+                            int bx0 = (int)(width * 0.18f);
+                            int by0 = (int)(height * 0.18f);
+                            int brw = (int)(width * 0.64f);
+                            int brh = (int)(height * 0.54f);
+                            g.FillRectangle(brush, bx0, by0, brw, brh);
+                        }
+						// label text
+						var labelText = label;
+						using var font = new System.Drawing.Font(System.Drawing.FontFamily.GenericSansSerif, Math.Max(10, width / 10), System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel);
+						var sf = new System.Drawing.StringFormat() { Alignment = System.Drawing.StringAlignment.Center, LineAlignment = System.Drawing.StringAlignment.Center };
+						using var textBrush = new System.Drawing.SolidBrush(System.Drawing.Color.Black);
+						var rect = new System.Drawing.Rectangle(0, height - (int)(font.Size * 2) - 6, width, (int)(font.Size * 2) + 6);
+						g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+						g.DrawString(labelText, font, textBrush, rect, sf);
+						Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
+						bmp.Save(destinationPngPath, System.Drawing.Imaging.ImageFormat.Png);
+						return;
+					}
+					catch { }
+
+					using var mag = new MagickImage(new MagickColor("#2D6CDF"), width, height);
+					int x0 = (int)(width * 0.18f);
+					int y0 = (int)(height * 0.18f);
+					int rw = (int)(width * 0.64f);
+					int rh = (int)(height * 0.54f);
+					var drawBox = new Drawables().FillColor(MagickColors.White).Rectangle(x0, y0, x0 + rw, y0 + rh);
+					drawBox.Draw(mag);
+					var fontSize = Math.Max(10, width / 10);
+					var drawLabel = new Drawables().FontPointSize(fontSize).FillColor(MagickColors.Black).TextAlignment(ImageMagick.TextAlignment.Center).Text(width / 2, height - (int)(fontSize * 0.5) - 6, label);
+					drawLabel.Draw(mag);
+					mag.Format = MagickFormat.Png;
 					Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
-					await img.SaveAsPngAsync(destinationPngPath, ct).ConfigureAwait(false);
+					await mag.WriteAsync(destinationPngPath, ct).ConfigureAwait(false);
+					return;
 				}
 				else
 				{
@@ -189,22 +214,68 @@ namespace Pivot.Services
 					mag.Format = MagickFormat.Png;
 					Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
 					await mag.WriteAsync(destinationPngPath, ct).ConfigureAwait(false);
-				}
+					return;
 				}
 			}
 			catch (Exception ex)
 			{
 				_logger.LogWarning(ex, "Thumbnail generation failed for {Path}. Writing placeholder.", sourcePath);
-				// Write a tiny transparent PNG placeholder
 				using var img = new Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(width, height);
 				Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
 				await img.SaveAsPngAsync(destinationPngPath, ct).ConfigureAwait(false);
 			}
 		}
 
+		private Task RenderLabelWithWinUIAsync(string labelText, int width, int height, string destinationPngPath, CancellationToken ct)
+		{
+			var tcs = new TaskCompletionSource<bool>();
+			_uiDispatcher!.TryEnqueue(async () =>
+			{
+				try
+				{
+					var grid = new Grid() { Width = (double)width, Height = (double)height, Background = new SolidColorBrush(Microsoft.UI.Colors.Black) };
+					var tb = new TextBlock()
+					{
+						Text = labelText,
+						HorizontalAlignment = HorizontalAlignment.Center,
+						VerticalAlignment = VerticalAlignment.Center,
+						Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+						FontSize = Math.Max(12, width / 10)
+					};
+					grid.Children.Add(tb);
+
+					var rtb = new RenderTargetBitmap();
+					await rtb.RenderAsync(grid, width, height);
+					var pixels = await rtb.GetPixelsAsync();
+
+					// read bytes from buffer
+					var readerBuf = DataReader.FromBuffer(pixels);
+					var bytes = new byte[readerBuf.UnconsumedBufferLength];
+					readerBuf.ReadBytes(bytes);
+
+					using var mem = new InMemoryRandomAccessStream();
+					var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, mem);
+					encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied, (uint)width, (uint)height, 96, 96, bytes);
+					await encoder.FlushAsync();
+					mem.Seek(0);
+
+					using var outFs = new FileStream(destinationPngPath, FileMode.Create, FileAccess.Write);
+					var reader = new DataReader(mem.GetInputStreamAt(0));
+					await reader.LoadAsync((uint)mem.Size);
+					var buffer = new byte[mem.Size];
+					reader.ReadBytes(buffer);
+					await outFs.WriteAsync(buffer, 0, buffer.Length);
+
+					tcs.SetResult(true);
+				}
+				catch (Exception ex) { tcs.SetException(ex); }
+			});
+
+			return tcs.Task;
+		}
+
 		private static bool CanLoadWithImageSharp(string sourcePath)
 		{
-			// ImageSharp covers most common formats; for ico/tiff/tga we fallback to Magick.NET
 			var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
 			switch (ext)
 			{
@@ -243,6 +314,7 @@ namespace Pivot.Services
 		public void Dispose()
 		{
 			try { _parallelismSemaphore?.Dispose(); } catch { }
+			try { _shellIconService?.Dispose(); } catch { }
 		}
 	}
 }

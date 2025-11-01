@@ -22,25 +22,15 @@ namespace Pivot.Services
 			_settings = settings ?? throw new ArgumentNullException(nameof(settings));
 			LoadFilters();
 			// restore selected filters for Asset tab if available
-			try
-			{
-				var sel = _settings.GetSelectedFiltersForTab("Asset");
-				if (sel != null && sel.Count > 0)
-				{
-					_selectedFilterIds = new HashSet<Guid>(sel);
-					OnPropertyChanged(nameof(SelectedFilterIds));
-					UpdateFilterSelections();
-				}
-				else
-				{
-					// default: select Images filter if present, otherwise first
-					var img = Filters.FirstOrDefault(f => f.Name?.ToLowerInvariant() == "images" || f.Name?.ToLowerInvariant() == "image");
-					if (img != null) { _selectedFilterIds = new HashSet<Guid> { img.Id }; OnPropertyChanged(nameof(SelectedFilterIds)); }
-					else if (Filters.Count > 0) { _selectedFilterIds = new HashSet<Guid> { Filters.First().Id }; OnPropertyChanged(nameof(SelectedFilterIds)); }
-					UpdateFilterSelections();
-				}
-			}
-			catch { }
+            try
+            {
+                // Intentionally do NOT restore previously selected filters on startup.
+                // Start with an empty selection so no filters are active until the user chooses.
+                _selectedFilterIds = new HashSet<Guid>();
+                OnPropertyChanged(nameof(SelectedFilterIds));
+                UpdateFilterSelections();
+            }
+            catch { }
 		}
 
 		public void LoadFilters()
