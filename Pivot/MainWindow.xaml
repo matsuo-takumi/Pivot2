@@ -37,6 +37,9 @@
                 <PivotItem Header="Project">
                     <Frame x:Name="ProjectFrame" Background="Transparent"/>
                 </PivotItem>
+                <PivotItem Header="Code">
+                    <Frame x:Name="CodeFrame" Background="Transparent"/>
+                </PivotItem>
                 <PivotItem Header="Preference">
                     <Frame x:Name="PreferenceFrame" Background="Transparent"/>
                 </PivotItem>

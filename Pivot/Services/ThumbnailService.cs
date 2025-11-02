@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using SixLabors.ImageSharp;
 using ImageSharpImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.Formats;
@@ -134,10 +135,26 @@ namespace Pivot.Services
 					return;
 				}
 
-				var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
-				var modelExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj", ".fbx", ".gltf", ".glb", ".dae" };
-				if (modelExts.Contains(ext))
-				{
+                var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+                var videoExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp4", ".mov", ".avi", ".mkv", ".webm" };
+
+                // try video frame extraction first for known video formats (requires ffmpeg in PATH)
+                if (videoExts.Contains(ext))
+                {
+                    try
+                    {
+                        if (await TryExtractVideoFrameWithFfmpegAsync(sourcePath, width, height, destinationPngPath, ct).ConfigureAwait(false))
+                        {
+                            return;
+                        }
+                    }
+                    catch { }
+                    // fallthrough to other handlers if ffmpeg not available or failed
+                }
+
+                var modelExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj", ".fbx", ".gltf", ".glb", ".dae" };
+                if (modelExts.Contains(ext))
+                {
 			// try shell icon service (per-extension cache)
 			try
 			{
@@ -150,7 +167,9 @@ namespace Pivot.Services
 						Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
 						File.Copy(iconPath, destinationPngPath, true);
 						return;
-					}
+        }
+
+        
 				}
 			}
 			catch { }
@@ -272,6 +291,41 @@ namespace Pivot.Services
 			});
 
 			return tcs.Task;
+		}
+
+		private async Task<bool> TryExtractVideoFrameWithFfmpegAsync(string sourcePath, int width, int height, string destinationPngPath, CancellationToken ct)
+		{
+			try
+			{
+				// ffmpeg should be on PATH. We seek 1s into the video to avoid black frames at start.
+				var ffmpeg = "ffmpeg";
+				var args = $"-y -ss 00:00:01 -i \"{sourcePath}\" -vframes 1 -vf \"scale='min({width},iw)':'min({height},ih)':force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2\" \"{destinationPngPath}\"";
+
+				var psi = new ProcessStartInfo(ffmpeg, args)
+				{
+					CreateNoWindow = true,
+					UseShellExecute = false,
+					RedirectStandardError = true,
+					RedirectStandardOutput = true,
+				};
+
+				using var proc = Process.Start(psi);
+				if (proc == null) return false;
+
+				using (ct.Register(() =>
+				{
+					try { if (!proc.HasExited) proc.Kill(true); } catch { }
+				}))
+				{
+					await proc.WaitForExitAsync(ct).ConfigureAwait(false);
+				}
+
+				return proc.ExitCode == 0 && File.Exists(destinationPngPath);
+			}
+			catch
+			{
+				return false;
+			}
 		}
 
 		private static bool CanLoadWithImageSharp(string sourcePath)

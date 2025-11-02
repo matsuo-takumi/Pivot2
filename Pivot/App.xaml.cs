@@ -7,6 +7,10 @@ using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Services;
 using Pivot.ViewModels;
 using Pivot.Messages; // ThemeChangedMessage を使用するために追加
+using Microsoft.EntityFrameworkCore;
+using System.IO;
+using Pivot.CodeModule.Services;
+using Pivot.CodeModule.ViewModels;
 
 namespace Pivot
 {
@@ -82,6 +86,25 @@ namespace Pivot
 			sc.AddTransient<PreferencePageViewModel>();
             // Filter service (depends on SettingsService)
             sc.AddSingleton<FilterService>();
+
+            // Code module: SQLite DB and services (lazy local appdata path)
+            try
+            {
+                var localFolder = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                var dbDir = Path.Combine(localFolder, "Pivot");
+                Directory.CreateDirectory(dbDir);
+                var dbPath = Path.Combine(dbDir, "codehub.db");
+
+                sc.AddDbContext<SQLiteDbContext>(options =>
+                    options.UseSqlite($"Data Source={dbPath}"));
+
+                sc.AddTransient<ICodeRepository, CodeRepository>();
+                sc.AddTransient<CodeViewModel>();
+            }
+            catch
+            {
+                // Best-effort registration; if System.IO or EF unavailable at runtime the app should still start.
+            }
 
 			Services = sc.BuildServiceProvider();
 		}

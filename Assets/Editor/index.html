@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Editor</title>
+    <style>
+      html,body,#editor { height:100%; margin:0; }
+      #editor { box-sizing:border-box; padding:12px; }
+    </style>
+  </head>
+  <body>
+    <!-- Lightweight code editor: gutter (line numbers) + textarea with basic code-editor features -->
+    <div id="editorRoot" style="display:flex;height:100%;width:100%;font-family:Segoe UI, Consolas, monospace;">
+      <div id="gutter" style="width:48px;background:#f3f3f3;border-right:1px solid #ddd;padding:8px 6px;box-sizing:border-box;overflow:hidden;">
+        <div id="lineNumbers" style="color:#666;font-size:12px;line-height:18px;white-space:pre;">1</div>
+      </div>
+      <textarea id="editor" spellcheck="false" style="flex:1;border:0;padding:8px 12px;font-size:13px;line-height:18px;resize:none;outline:none;overflow:auto;box-sizing:border-box;"/>
+    </div>
+
+    <script>
+      // Basic host communication helper
+      function setContent(text) {
+        const ta = document.getElementById('editor');
+        ta.value = text || '';
+        updateLineNumbers();
+      }
+
+      function postToHost(obj) {
+        try {
+          if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage(obj);
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      // Receive messages from host
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.addEventListener('message', ev => {
+          try {
+            const msg = ev.data;
+            if (msg && msg.action === 'load') {
+              setContent(msg.payload?.content || '');
+            }
+          } catch (e) {
+            // ignore
+          }
+        });
+      }
+
+      // Editor utilities: line numbers, tab insertion, auto-indent, ctrl+s
+      const ta = document.getElementById('editor');
+      const gutter = document.getElementById('gutter');
+      const lineNumbers = document.getElementById('lineNumbers');
+
+      function updateLineNumbers() {
+        const lines = ta.value.split('\n').length || 1;
+        let nums = '';
+        for (let i = 1; i <= lines; i++) nums += i + '\n';
+        lineNumbers.textContent = nums;
+      }
+
+      function syncScroll() {
+        lineNumbers.scrollTop = ta.scrollTop;
+      }
+
+      // Debounced content change notification
+      let changeTimeout = null;
+      ta.addEventListener('input', () => {
+        updateLineNumbers();
+        clearTimeout(changeTimeout);
+        changeTimeout = setTimeout(() => {
+          postToHost({ action: 'contentChanged', payload: { content: ta.value } });
+        }, 250);
+      });
+
+      ta.addEventListener('scroll', syncScroll);
+
+      // Tab handling and auto-indent on Enter
+      ta.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Tab') {
+          ev.preventDefault();
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          const useSpaces = true;
+          const insert = useSpaces ? '    ' : '\t';
+          ta.setRangeText(insert, start, end, 'end');
+          updateLineNumbers();
+          clearTimeout(changeTimeout);
+          changeTimeout = setTimeout(() => {
+            postToHost({ action: 'contentChanged', payload: { content: ta.value } });
+          }, 250);
+          return;
+        }
+
+        if (ev.key === 'Enter') {
+          // Determine indentation of current line
+          const pos = ta.selectionStart;
+          const value = ta.value;
+          const lineStart = value.lastIndexOf('\n', pos - 1) + 1;
+          const line = value.substring(lineStart, pos);
+          const m = line.match(/^\s+/);
+          const indent = m ? m[0] : '';
+          // insert newline + indent
+          ev.preventDefault();
+          ta.setRangeText('\n' + indent, ta.selectionStart, ta.selectionEnd, 'end');
+          updateLineNumbers();
+          clearTimeout(changeTimeout);
+          changeTimeout = setTimeout(() => {
+            postToHost({ action: 'contentChanged', payload: { content: ta.value } });
+          }, 250);
+          return;
+        }
+
+        // Ctrl+S / Cmd+S -> save
+        const isSave = (ev.key.toLowerCase() === 's' && (ev.ctrlKey || ev.metaKey));
+        if (isSave) {
+          ev.preventDefault();
+          postToHost({ action: 'save' });
+        }
+      });
+
+      // Initial layout setup
+      updateLineNumbers();
+
+      // Expose setContent for external calls
+      window.setContent = setContent;
+    </script>
+  </body>
+ </html>
+
+

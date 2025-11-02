@@ -83,6 +83,7 @@ namespace Pivot
             NavigateTo(NavigationRegion.Asset);
             NavigateTo(NavigationRegion.Image);
             NavigateTo(NavigationRegion.Project);
+            NavigateTo(NavigationRegion.Code);
             NavigateTo(NavigationRegion.Preference);
             NavigateTo(NavigationRegion.Template);
 
@@ -255,6 +256,9 @@ namespace Pivot
                     case "Project":
                         NavigateTo(NavigationRegion.Project);
                         break;
+                    case "Code":
+                        NavigateTo(NavigationRegion.Code);
+                        break;
                     case "Preference":
                         NavigateTo(NavigationRegion.Preference);
                         break;
@@ -279,6 +283,13 @@ namespace Pivot
                 case NavigationRegion.Project:
                     ProjectFrame.Navigate(typeof(Views.ProjectPage), null, transition);
                     break;
+                    case NavigationRegion.Code:
+                        var pivotItem = MainPivot.Items.OfType<PivotItem>().FirstOrDefault(pi => (pi.Header as string) == "Code");
+                        if (pivotItem?.Content is Frame codeFrameObj)
+                        {
+                            codeFrameObj.Navigate(typeof(Pivot.CodeModule.Views.CodePage), null, transition);
+                        }
+                        break;
                 case NavigationRegion.Preference:
                     PreferenceFrame.Navigate(typeof(Views.PreferencePage), null, transition);
                     break;

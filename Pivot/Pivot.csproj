@@ -38,6 +38,11 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     
+    <!-- EF Core / SQLite for CodeModule -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0" />
+
     <!-- Remove LiteDB/SQLite as DB is no longer used -->
     <!-- <PackageReference Include="LiteDB" Version="5.0.21" /> -->
     <!-- <PackageReference Include="Microsoft.Data.SQLite.Core" Version="9.0.10" /> -->
