@@ -30,6 +30,11 @@
             <NavigationView.MenuItems>
                 <NavigationViewItem Icon="Library" Content="Asset" Tag="Asset" />
                 <NavigationViewItem Icon="Folder" Content="Directories" Tag="Directories" />
+                <NavigationViewItem Content="Code" Tag="Code">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE943;"/> <!-- Code icon -->
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem Content="Theme" Tag="Theme">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE793;"/>

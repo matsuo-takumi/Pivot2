@@ -207,6 +207,45 @@ namespace Pivot.Services
                 _cache.AssetFilters = GetDefaultAssetFilters();
             }
 
+            // Code Filters (customizable filter groups)
+            try
+            {
+                var codeFiltersJson = await _settingsStore.GetAsync("CodeFilters");
+                if (!string.IsNullOrWhiteSpace(codeFiltersJson) && LooksLikeJsonArray(codeFiltersJson))
+                {
+                    try
+                    {
+                        var filters = JsonSerializer.Deserialize<List<Pivot.Models.CustomFilter>>(codeFiltersJson);
+                        if (filters != null && filters.Count > 0)
+                        {
+                            _cache.CodeFilters = filters;
+                        }
+                        else
+                        {
+                            // initialize defaults if deserialization yields nothing
+                            _cache.CodeFilters = GetDefaultCodeFilters();
+                            await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
+                        }
+                    }
+                    catch
+                    {
+                        _cache.CodeFilters = GetDefaultCodeFilters();
+                        await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
+                    }
+                }
+                else
+                {
+                    _cache.CodeFilters = GetDefaultCodeFilters();
+                    await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
+                }
+                _logger.LogInformation("SettingsService: Loaded CodeFilters: {Count}", _cache.CodeFilters.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load CodeFilters. Using defaults.");
+                _cache.CodeFilters = GetDefaultCodeFilters();
+            }
+
             // Visible filters per tab
             try
             {
@@ -536,6 +575,21 @@ namespace Pivot.Services
             };
         }
 
+        private List<Pivot.Models.CustomFilter> GetDefaultCodeFilters()
+        {
+            return new List<Pivot.Models.CustomFilter>
+            {
+                new Pivot.Models.CustomFilter { Name = "C#", IsBuiltIn=true },
+                new Pivot.Models.CustomFilter { Name = "Python", IsBuiltIn=true },
+                new Pivot.Models.CustomFilter { Name = "JavaScript", IsBuiltIn=true },
+                new Pivot.Models.CustomFilter { Name = "HTML", IsBuiltIn=true },
+                new Pivot.Models.CustomFilter { Name = "CSS", IsBuiltIn=true },
+                new Pivot.Models.CustomFilter { Name = "SQL", IsBuiltIn=true },
+                new Pivot.Models.CustomFilter { Name = "Markdown", IsBuiltIn=true },
+                new Pivot.Models.CustomFilter { Name = "Other", IsBuiltIn=true }
+            };
+        }
+
         // AssetFilters accessors
         public List<Pivot.Models.CustomFilter> GetAssetFilters() => _cache.AssetFilters;
 
@@ -550,6 +604,35 @@ namespace Pivot.Services
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to persist AssetFilters.");
             }
+        }
+
+        // CodeFilters accessors
+        public List<Pivot.Models.CustomFilter> GetCodeFilters() => _cache.CodeFilters;
+
+        public async Task SetCodeFiltersAsync(List<Pivot.Models.CustomFilter> filters)
+        {
+            _cache.CodeFilters = filters ?? new List<Pivot.Models.CustomFilter>();
+            try
+            {
+                await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist CodeFilters.");
+            }
+        }
+
+        public string GetFilterNameById(Guid filterId)
+        {
+            // Check AssetFilters first
+            var assetFilter = _cache.AssetFilters.FirstOrDefault(f => f.Id == filterId);
+            if (assetFilter != null) return assetFilter.Name;
+
+            // If not found in AssetFilters, check CodeFilters
+            var codeFilter = _cache.CodeFilters.FirstOrDefault(f => f.Id == filterId);
+            if (codeFilter != null) return codeFilter.Name;
+
+            return string.Empty; // Return empty if not found in either
         }
 
         // Visible filters per tab accessors

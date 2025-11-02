@@ -27,11 +27,23 @@ namespace Pivot.ViewModels
                 "Asset" => new Views.AssetSettingsPage(),
                 "Directories" => new DirectoryPage(),
                 "Theme" => new ThemePage(),
+                "Code" => CreateCodeSettingsPage(),
                 "MenuItem2" => new MenuItem2ContentControl(),
                 "MenuItem3" => new MenuItem3ContentControl(),
                 "MenuItem4" => new MenuItem4ContentControl(),
                 _ => null
             };
+        }
+
+        private object? CreateCodeSettingsPage()
+        {
+            try
+            {
+                var t = Type.GetType("Pivot.Views.CodeSettingsPage");
+                if (t != null) return Activator.CreateInstance(t);
+            }
+            catch { }
+            return null;
         }
     }
 }

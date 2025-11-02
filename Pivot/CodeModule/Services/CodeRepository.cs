@@ -2,14 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Pivot.CodeModule.Models;
+using Pivot.Services;
 
 namespace Pivot.CodeModule.Services
 {
     public class CodeRepository : ICodeRepository
     {
         private readonly SQLiteDbContext _context;
+        private readonly SettingsService _settingsService;
 
-        public CodeRepository(SQLiteDbContext context) => _context = context;
+        public CodeRepository(SQLiteDbContext context, SettingsService settingsService)
+        {
+            _context = context;
+            _settingsService = settingsService;
+        }
 
         public IEnumerable<CodeFile> GetAll() => _context.CodeFiles.OrderByDescending(c => c.Updated);
 
@@ -41,6 +47,25 @@ namespace Pivot.CodeModule.Services
                 _context.CodeFiles.Remove(item);
                 _context.SaveChanges();
             }
+        }
+
+        public IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags()
+        {
+            return _context.Tags.OrderBy(t => t.Name).ToList();
+        }
+
+        public void AddTag(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return;
+            var trimmed = name.Trim();
+            if (_context.Tags.Any(t => t.Name == trimmed)) return;
+            _context.Tags.Add(new Pivot.CodeModule.Models.CodeTag { Name = trimmed });
+            _context.SaveChanges();
+        }
+
+        public string GetFilterNameById(Guid filterId)
+        {
+            return _settingsService.GetFilterNameById(filterId);
         }
     }
 }

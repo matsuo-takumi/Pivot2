@@ -25,6 +25,9 @@ namespace Pivot.Models
         // Asset filters (custom and built-in)
         public List<CustomFilter> AssetFilters { get; set; } = new List<CustomFilter>();
 
+        // Code filters (for code file types / languages)
+        public List<CustomFilter> CodeFilters { get; set; } = new List<CustomFilter>();
+
         // Visible filters per tab (tab id -> list of filter Ids)
         public Dictionary<string, List<System.Guid>> VisibleFiltersByTab { get; set; } = new Dictionary<string, List<System.Guid>>();
         // Selected filters per tab (tab id -> list of selected filter Ids)

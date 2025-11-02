@@ -6,12 +6,17 @@ using System;
 using CommunityToolkit.Mvvm.Input;
 using Pivot.CodeModule.Models;
 using Pivot.CodeModule.Services;
+using System.Collections.Generic;
+using CommunityToolkit.Mvvm.Messaging;
+using Pivot.Messages;
 
 namespace Pivot.CodeModule.ViewModels
 {
     public partial class CodeViewModel : ObservableObject
     {
         private readonly ICodeRepository? _repo;
+        private List<CodeFile> _allSnippets = new List<CodeFile>();
+        private HashSet<string> _selectedCodeTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         [ObservableProperty]
         private ObservableCollection<CodeFile> _snippets;
@@ -25,11 +30,32 @@ namespace Pivot.CodeModule.ViewModels
         [ObservableProperty]
         private bool _isDirty = false;
 
+        [ObservableProperty]
+        private ObservableCollection<Guid> _activeFilters = new ObservableCollection<Guid>();
+
+        partial void OnSelectedSnippetChanging(CodeFile? oldValue, CodeFile? newValue)
+        {
+            // Auto-save the old snippet when a new one is selected
+            if (oldValue != null && _repo != null && _isDirty)
+            {
+                Task.Run(() => _repo.Save(oldValue));
+            }
+        }
+
         public CodeViewModel(ICodeRepository repo)
         {
             _repo = repo;
-            var all = _repo.GetAll() ?? Enumerable.Empty<CodeFile>();
-            _snippets = new ObservableCollection<CodeFile>(all);
+            var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
+            _allSnippets = all;
+            _snippets = new ObservableCollection<CodeFile>(_allSnippets);
+
+            // Register for tag selection messages
+            try
+            {
+                var messenger = App.Current.Services.GetService(typeof(IMessenger)) as IMessenger;
+                messenger?.Register<CodeViewModel, TagSelectionMessage>(this, (r, m) => r.OnTagSelection(m));
+            }
+            catch { }
 
             // If repository is empty, seed with test snippets for UI layout testing
             if (!_snippets.Any())
@@ -54,6 +80,7 @@ namespace Pivot.CodeModule.ViewModels
         {
             _repo = null;
             _snippets = new ObservableCollection<CodeFile>();
+            _allSnippets = _snippets.ToList();
 
             for (int i = 1; i <= 8; i++)
             {
@@ -72,13 +99,70 @@ namespace Pivot.CodeModule.ViewModels
         public void Refresh()
         {
             if (_repo == null) return;
-            var all = _repo.GetAll() ?? Enumerable.Empty<CodeFile>();
-            // Only replace the in-memory snippets if repository actually contains items.
-            // This avoids wiping out seeded test items during early UI actions.
+            var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
             if (all.Any())
             {
-                Snippets = new ObservableCollection<CodeFile>(all);
+                _allSnippets = all;
+                ApplyCodeTagFilters();
             }
+        }
+
+        public void FilterSnippets()
+        {
+            if (_repo == null) return;
+            // This method keeps compatibility with the existing _activeFilters (GUID-based) for other filter types.
+            var allSnippets = _repo.GetAll() ?? Enumerable.Empty<CodeFile>();
+            if (_activeFilters.Any())
+            {
+                var filtered = allSnippets.Where(s =>
+                {
+                    var snippetTags = s.Tags?.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                        .Select(t => t.Trim().ToLowerInvariant())
+                                        .ToList() ?? new List<string>();
+                    return _activeFilters.Any(af => snippetTags.Contains(_repo.GetFilterNameById(af).ToLowerInvariant()));
+                });
+                Snippets = new ObservableCollection<CodeFile>(filtered);
+            }
+            else
+            {
+                Snippets = new ObservableCollection<CodeFile>(allSnippets);
+            }
+        }
+
+        private void OnTagSelection(TagSelectionMessage msg)
+        {
+            try
+            {
+                var (tabId, tagName, isSelected) = msg.Value;
+                if (!string.Equals(tabId, "Code", StringComparison.OrdinalIgnoreCase)) return;
+                if (isSelected) _selectedCodeTags.Add(tagName);
+                else _selectedCodeTags.Remove(tagName);
+                ApplyCodeTagFilters();
+            }
+            catch { }
+        }
+
+        private void ApplyCodeTagFilters()
+        {
+            try
+            {
+                if (_selectedCodeTags == null || !_selectedCodeTags.Any())
+                {
+                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Snippets = new ObservableCollection<CodeFile>(_allSnippets));
+                    return;
+                }
+
+                var filtered = _allSnippets.Where(s =>
+                {
+                    var snippetTags = (s.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim()).ToList();
+                    // match if any selected tag is present on the snippet
+                    return _selectedCodeTags.Any(sel => snippetTags.Any(st => string.Equals(st, sel, StringComparison.OrdinalIgnoreCase)));
+                }).ToList();
+
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Snippets = new ObservableCollection<CodeFile>(filtered));
+            }
+            catch { }
         }
 
         [RelayCommand]
@@ -104,6 +188,16 @@ namespace Pivot.CodeModule.ViewModels
             {
                 // No repository available: mark as not dirty but do not persist
                 IsDirty = false;
+            }
+        }
+
+        // Save arbitrary snippet (used by host when snippet is closed)
+        public async Task SaveSnippetFileAsync(CodeFile? file)
+        {
+            if (file is null) return;
+            if (_repo != null)
+            {
+                await Task.Run(() => _repo.Save(file));
             }
         }
 
