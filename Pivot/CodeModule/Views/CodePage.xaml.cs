@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Linq;
 using Microsoft.UI.Xaml;
 using System.Text.Json;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -16,9 +17,9 @@ using System.Collections.Generic;
 using Pivot.CodeModule.Services;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using CommunityToolkit.Mvvm.Messaging;
+using Pivot.CodeModule.Models;
 
-// WebView2 core types are used if available at runtime
-using Microsoft.Web.WebView2.Core;
+// Note: editing is implemented with WinUI TextBox controls (replaced WebView2)
 
 namespace Pivot.CodeModule.Views
 {
@@ -55,10 +56,9 @@ namespace Pivot.CodeModule.Views
             // wire scratchpad buttons
             try
             {
-                var saveBtn = this.FindName("ScratchpadSaveButton") as Button;
-                var closeBtn = this.FindName("ScratchpadCloseButton") as Button;
-                if (saveBtn != null) saveBtn.Click += (_, __) => { if (ViewModel != null && ViewModel.SelectedSnippet != null) _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); };
-                if (closeBtn != null) closeBtn.Click += (_, __) => { if (ViewModel != null) ViewModel.SelectedSnippet = null; };
+                // Close button handler is wired later to a named handler to ensure removal/consistency
+                var tmpCloseBtn = this.FindName("ScratchpadCloseButton") as Button;
+                // no-op here
                 var addTagBtn = this.FindName("ScratchpadAddTagButton") as Button;
                 var newTagBox = this.FindName("ScratchpadNewTagBox") as TextBox;
                 if (addTagBtn != null && newTagBox != null)
@@ -78,6 +78,51 @@ namespace Pivot.CodeModule.Views
                         }
                         catch { }
                     };
+                }
+            }
+            catch { }
+
+            // wire editors (TextBox) change handlers
+            try
+            {
+                var codeEditor = this.FindName("CodeEditor") as TextBox;
+                var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
+                if (codeEditor != null)
+                {
+                    codeEditor.TextChanged -= CodeEditor_TextChanged;
+                    codeEditor.TextChanged += CodeEditor_TextChanged;
+                }
+                if (scratchEditor != null)
+                {
+                    scratchEditor.TextChanged -= ScratchpadEditor_TextChanged;
+                    scratchEditor.TextChanged += ScratchpadEditor_TextChanged;
+                }
+            }
+            catch { }
+
+            // wire close button
+            try
+            {
+                var closeBtn = this.FindName("ScratchpadCloseButton") as Button;
+                if (closeBtn != null)
+                {
+                    closeBtn.Click -= ScratchpadCloseButton_Click;
+                    closeBtn.Click += ScratchpadCloseButton_Click;
+                }
+            }
+            catch { }
+
+            // wire backdrop click to close scratchpad; avoid attaching overlay-level pointer handlers
+            try
+            {
+                // ensure overlay pointer handler is attached only once
+                var overlayRoot = this.FindName("ScratchpadOverlay") as UIElement;
+                if (overlayRoot != null)
+                {
+                    // Always remove to prevent duplicate attachments, then add
+                    overlayRoot.PointerPressed -= ScratchpadOverlay_PointerPressed;
+                    overlayRoot.PointerPressed += ScratchpadOverlay_PointerPressed;
+                    Debug.WriteLine("Constructor: ensured ScratchpadOverlay.PointerPressed is attached");
                 }
             }
             catch { }
@@ -141,51 +186,7 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private bool _webMessageHooked = false;
-        private bool _scratchpadWebMessageHooked = false;
-
-        private void CoreWebView2_WebMessageReceived(CoreWebView2 sender, CoreWebView2WebMessageReceivedEventArgs args)
-        {
-            try
-            {
-                var json = args.WebMessageAsJson;
-                if (string.IsNullOrEmpty(json)) return;
-                using var doc = JsonDocument.Parse(json);
-                if (!doc.RootElement.TryGetProperty("action", out var actionEl)) return;
-                var action = actionEl.GetString();
-
-                if (action == "contentChanged")
-                {
-                    var content = doc.RootElement.GetProperty("payload").GetProperty("content").GetString();
-                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
-                    {
-                        if (ViewModel != null && ViewModel.SelectedSnippet != null)
-                        {
-                            ViewModel.SelectedSnippet.Content = content ?? string.Empty;
-                            ViewModel.IsDirty = true;
-                        }
-                    });
-                }
-                else if (action == "save")
-                {
-                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(async () =>
-                    {
-                        if (ViewModel != null && ViewModel.SaveSnippetCommand != null)
-                        {
-                            if (ViewModel.SaveSnippetCommand is IAsyncRelayCommand asyncCmd)
-                            {
-                                await asyncCmd.ExecuteAsync(null);
-                            }
-                            else if (ViewModel.SaveSnippetCommand.CanExecute(null))
-                            {
-                                ViewModel.SaveSnippetCommand.Execute(null);
-                            }
-                        }
-                    });
-                }
-            }
-            catch { }
-        }
+        // Text-based editors (TextBox) are used instead of WebView2. Text change events update the ViewModel.
 
         private void OnSearchClicked(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         {
@@ -210,6 +211,7 @@ namespace Pivot.CodeModule.Views
         {
             if (e.PropertyName == nameof(CodeViewModel.SelectedSnippet))
             {
+                Debug.WriteLine($"OnViewModelPropertyChanged: SelectedSnippet changed -> {(ViewModel?.SelectedSnippet==null?"null":"set")}");
                 // auto-save previous snippet (Google Keep style)
                 try
                 {
@@ -246,21 +248,40 @@ namespace Pivot.CodeModule.Views
             var cardPanel = root?.FindName("CardPanel") as Grid;
             var placeholder = root?.FindName("PlaceholderBorder") as Border;
 
+            // Temporarily disable list interaction during open animation
+            if (list != null)
+            {
+                list.IsHitTestVisible = false;
+            }
+
             UIElement? source = null;
             try
             {
                 if (list != null && ViewModel?.SelectedSnippet != null)
                 {
+                    Debug.WriteLine($"OpenSnippetWithAnimationAsync: SelectedSnippet='{ViewModel.SelectedSnippet?.Title}'");
                     list.ScrollIntoView(ViewModel.SelectedSnippet);
                     await Task.Delay(80).ConfigureAwait(false);
                     App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { });
                     var container = list.ContainerFromItem(ViewModel.SelectedSnippet) as ListViewItem;
+                    Debug.WriteLine($"OpenSnippetWithAnimationAsync: container={(container==null?"null":"found")}");
                     if (container != null)
                     {
-                        source = FindDescendantByName(container, "SnippetCardBorder") as UIElement;
-                        if (source != null)
+                        // Prefer ListView helper to prepare connected animation from item -> named element inside template
+                        try
                         {
-                            try { _pendingOpenAnimation = ConnectedAnimationService.GetForCurrentView()?.PrepareToAnimate("OpenSnippet", source); } catch { _pendingOpenAnimation = null; }
+                            _pendingOpenAnimation = list.PrepareConnectedAnimation("OpenSnippet", ViewModel.SelectedSnippet, "SnippetCardBorder");
+                            Debug.WriteLine($"OpenSnippetWithAnimationAsync: PrepareConnectedAnimation returned {(_pendingOpenAnimation==null?"null":"animation")}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"OpenSnippetWithAnimationAsync: PrepareConnectedAnimation threw: {ex}");
+                            // Fallback: try to find the element and prepare via ConnectedAnimationService
+                            source = FindDescendantByName(container, "SnippetCardBorder") as UIElement;
+                            if (source != null)
+                            {
+                                try { _pendingOpenAnimation = ConnectedAnimationService.GetForCurrentView()?.PrepareToAnimate("OpenSnippet", source); Debug.WriteLine($"OpenSnippetWithAnimationAsync: Fallback prepare returned {(_pendingOpenAnimation==null?"null":"animation")} "); } catch (Exception ex2) { Debug.WriteLine($"OpenSnippet fallback threw: {ex2}"); _pendingOpenAnimation = null; }
+                            }
                         }
                     }
                 }
@@ -282,6 +303,14 @@ namespace Pivot.CodeModule.Views
                 {
                     var overlay = root?.FindName("ScratchpadOverlay") as Grid;
                     if (overlay != null) overlay.Visibility = Visibility.Visible;
+                                Debug.WriteLine($"OpenSnippetWithAnimationAsync: overlay visibility set to {(overlay==null?"null":overlay.Visibility.ToString())}");
+                // disable close button while opening
+                try
+                {
+                    var closeBtn = this.FindName("ScratchpadCloseButton") as Button;
+                    if (closeBtn != null) closeBtn.IsEnabled = false;
+                }
+                catch { }
                 }
                 catch { }
             }
@@ -290,16 +319,77 @@ namespace Pivot.CodeModule.Views
             // Start connected animation to editor header (or editor panel)
             try
             {
-                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(async () => // Make the lambda async
                         {
                             try
                             {
-                                var target = root?.FindName("EditorHeader") as UIElement ?? (UIElement?)editorPanel;
+                                var target = root?.FindName("ScratchpadContainer") as UIElement ?? (UIElement?)editorPanel;
+                                Debug.WriteLine($"OpenSnippetWithAnimationAsync: target for TryStart is {(target==null?"null":target.ToString())}, overlay visibility={(root?.FindName("ScratchpadOverlay") as Grid)?.Visibility}");
+                                // ensure scratchpad content is populated before running the connected animation
+                                try
+                                {
+                                    var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
+                                    if (scratchEditor != null && ViewModel?.SelectedSnippet != null)
+                                    {
+                                        scratchEditor.Text = ViewModel.SelectedSnippet.Content ?? string.Empty;
+                                    }
+                                }
+                                catch { }
+
+                                // Ensure overlay is visible before starting animation
+                                var overlayElement = root?.FindName("ScratchpadOverlay") as Grid;
+                                if (overlayElement != null)
+                                {
+                                    overlayElement.Visibility = Visibility.Visible;
+                                    // Force layout update after setting visibility
+                                    overlayElement.UpdateLayout();
+                                    await Task.Delay(20).ConfigureAwait(true); // Short delay to allow layout to settle
+                                }
+
                                 if (_pendingOpenAnimation != null && target != null)
                                 {
-                                    try { _pendingOpenAnimation.TryStart(target); } catch { }
+                                    try { _pendingOpenAnimation.TryStart(target); Debug.WriteLine("OpenSnippetWithAnimationAsync: TryStart called on pending animation."); } catch (Exception ex) { Debug.WriteLine($"OpenSnippetWithAnimationAsync: TryStart threw: {ex}"); }
                                     _pendingOpenAnimation = null;
+
+                                    // ensure scratchpad editor is focused after animation
+                                    try
+                                    {
+                                        var sp = this.FindName("ScratchpadEditor") as TextBox;
+                                        if (sp != null)
+                                        {
+                                            App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                                            {
+                                                try { sp.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); Debug.WriteLine("ScratchpadEditor focused."); } catch (Exception ex) { Debug.WriteLine($"Focus failed: {ex}"); }
+                                            });
+                                        }
+                                    }
+                                    catch (Exception ex) { Debug.WriteLine($"Post-start focus/action threw: {ex}"); }
                                 }
+                                else
+                                {
+                                    // Fallback: show overlay and focus editor even if ConnectedAnimation not prepared
+                                    try
+                                    {
+                                        var overlay = root?.FindName("ScratchpadOverlay") as Grid;
+                                        var sp = this.FindName("ScratchpadEditor") as TextBox;
+                                        if (overlay != null) overlay.Visibility = Visibility.Visible;
+                                        Debug.WriteLine($"OpenSnippetWithAnimationAsync: fallback overlay visibility set to {(overlay==null?"null":overlay.Visibility.ToString())}");
+                                        if (sp != null)
+                                        {
+                                            App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { try { sp.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); Debug.WriteLine("Fallback: ScratchpadEditor focused."); } catch (Exception ex) { Debug.WriteLine($"Fallback focus failed: {ex}"); } });
+                                        }
+                                        Debug.WriteLine("OpenSnippetWithAnimationAsync: fallback path used (no pending animation)");
+                                    }
+                                    catch (Exception ex) { Debug.WriteLine($"Fallback show/focus threw: {ex}"); }
+                                }
+
+                                // re-enable close button after open complete
+                                try
+                                {
+                                    var closeBtn = this.FindName("ScratchpadCloseButton") as Button;
+                                    if (closeBtn != null) closeBtn.IsEnabled = true;
+                                }
+                                catch { }
 
                                 // run a fade-in for editor panel
                                 if (editorPanel != null)
@@ -320,9 +410,9 @@ namespace Pivot.CodeModule.Views
                                     var scaleY = new DoubleAnimation { From = 0.94, To = 1, Duration = new Duration(TimeSpan.FromMilliseconds(260)), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
                                     var sb2 = new Storyboard();
                                     Storyboard.SetTarget(scaleX, header);
-                                    Storyboard.SetTargetProperty(scaleX, "RenderTransform.ScaleX");
-                                    Storyboard.SetTarget(scaleY, header);
-                                    Storyboard.SetTargetProperty(scaleY, "RenderTransform.ScaleY");
+                                        Storyboard.SetTargetProperty(scaleX, "(UIElement.RenderTransform).(ScaleTransform.ScaleX)");
+                                        Storyboard.SetTarget(scaleY, header);
+                                        Storyboard.SetTargetProperty(scaleY, "(UIElement.RenderTransform).(ScaleTransform.ScaleY)");
                                     sb2.Children.Add(scaleX);
                                     sb2.Children.Add(scaleY);
                                     sb2.Begin();
@@ -350,6 +440,12 @@ namespace Pivot.CodeModule.Views
             _previousSelectedSnippet = ViewModel?.SelectedSnippet;
             _isAnimationActive = false;
 
+            // Re-enable list interaction after open animation
+            if (list != null)
+            {
+                list.IsHitTestVisible = true;
+            }
+
             // refresh tags for scratchpad UI
             try { RefreshScratchpadTags(); } catch { }
         }
@@ -364,40 +460,67 @@ namespace Pivot.CodeModule.Views
             var cardPanel = root?.FindName("CardPanel") as Grid;
             var placeholder = root?.FindName("PlaceholderBorder") as Border;
 
+            // Disable list interaction to prevent re-selection during close
+            if (list != null)
+            {
+                list.IsItemClickEnabled = false;
+                list.SelectionMode = ListViewSelectionMode.None;
+            }
+
+            try
+            {
+                var overlayContainer = root?.FindName("ScratchpadContainer") as UIElement;
+                if (overlayContainer != null)
+                {
+                    try { _pendingCloseAnimation = ConnectedAnimationService.GetForCurrentView()?.PrepareToAnimate("CloseSnippet", overlayContainer); } catch { _pendingCloseAnimation = null; }
+                }
+                else if (editorPanel != null)
+                {
+                    try { _pendingCloseAnimation = ConnectedAnimationService.GetForCurrentView()?.PrepareToAnimate("CloseSnippet", editorPanel); } catch { _pendingCloseAnimation = null; }
+                }
+
+                // make list visible so target can be found
+                if (cardPanel != null) cardPanel.Visibility = Visibility.Visible;
+                await Task.Delay(60).ConfigureAwait(false);
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { });
+
+                if (list != null && _previousSelectedSnippet != null)
+                {
                     try
                     {
-                        var overlayContainer = root?.FindName("ScratchpadContainer") as UIElement;
-                        if (overlayContainer != null)
+                        // Prefer the ListView helper which handles scrolling and layout for us
+                        if (_pendingCloseAnimation != null)
                         {
-                            try { _pendingCloseAnimation = ConnectedAnimationService.GetForCurrentView()?.PrepareToAnimate("CloseSnippet", overlayContainer); } catch { _pendingCloseAnimation = null; }
-                        }
-                        else if (editorPanel != null)
-                        {
-                            try { _pendingCloseAnimation = ConnectedAnimationService.GetForCurrentView()?.PrepareToAnimate("CloseSnippet", editorPanel); } catch { _pendingCloseAnimation = null; }
-                        }
-
-                        // make list visible so target can be found
-                        if (cardPanel != null) cardPanel.Visibility = Visibility.Visible;
-                        await Task.Delay(60).ConfigureAwait(false);
-                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { });
-
-                    if (list != null && _previousSelectedSnippet != null)
-                    {
-                        var container = list.ContainerFromItem(_previousSelectedSnippet) as ListViewItem;
-                        if (container != null)
-                        {
-                            var target = FindDescendantByName(container, "SnippetCardBorder") as UIElement;
-                            if (target != null)
+                            try
                             {
-                                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                                Debug.WriteLine("CloseSnippetWithAnimationAsync: attempting TryStartConnectedAnimationAsync via ListView helper");
+                                await list.TryStartConnectedAnimationAsync(_pendingCloseAnimation, _previousSelectedSnippet, "SnippetCardBorder");
+                                _pendingCloseAnimation = null;
+                            }
+                            catch (System.Runtime.InteropServices.COMException ex)
+                            {
+                                Debug.WriteLine($"TryStartConnectedAnimationAsync threw: {ex}");
+                                // Fallback to manual TryStart on target if helper fails
+                                var container = list.ContainerFromItem(_previousSelectedSnippet) as ListViewItem;
+                                if (container != null)
                                 {
-                                    try { if (_pendingCloseAnimation != null) { _pendingCloseAnimation.TryStart(target); _pendingCloseAnimation = null; } } catch { }
-                                });
+                                    var target = FindDescendantByName(container, "SnippetCardBorder") as UIElement;
+                                    if (target != null)
+                                    {
+                                        try { if (_pendingCloseAnimation != null) _pendingCloseAnimation.TryStart(target); } catch { }
+                                        _pendingCloseAnimation = null;
+                                    }
+                                }
                             }
                         }
                     }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"CloseSnippetWithAnimationAsync fallback overall threw: {ex}");
                     }
-                    catch { }
+                }
+            }
+            catch { }
 
             try
             {
@@ -410,6 +533,36 @@ namespace Pivot.CodeModule.Views
                     if (overlay != null) overlay.Visibility = Visibility.Collapsed;
                 }
                 catch { }
+
+                // enforce overlay collapse on UI thread as a final safety
+                try
+                {
+                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                    {
+                        try
+                        {
+                            var overlay2 = this.FindName("ScratchpadOverlay") as Grid;
+                            if (overlay2 != null) overlay2.Visibility = Visibility.Collapsed;
+                        }
+                        catch { }
+                    });
+                }
+                catch { }
+
+                // re-enable close button after close
+                try
+                {
+                    var closeBtn = this.FindName("ScratchpadCloseButton") as Button;
+                    if (closeBtn != null) closeBtn.IsEnabled = true;
+                }
+                catch { }
+
+                // Re-enable list interaction after close
+                if (list != null)
+                {
+                    list.IsItemClickEnabled = true;
+                    list.SelectionMode = ListViewSelectionMode.Single;
+                }
             }
             catch { }
 
@@ -418,6 +571,22 @@ namespace Pivot.CodeModule.Views
             {
                 var rootUi = this.Content as UIElement;
                 if (rootUi != null) rootUi.PointerPressed -= Root_PointerPressed;
+            }
+            catch { }
+
+            // auto-save previous snippet on close
+            try
+            {
+                var prev = _previousSelectedSnippet;
+                if (prev != null)
+                {
+                    try
+                    {
+                        var vm = ViewModel;
+                        if (vm != null) await vm.SaveSnippetFileAsync(prev);
+                    }
+                    catch { }
+                }
             }
             catch { }
 
@@ -433,11 +602,24 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private void Root_PointerPressed(object? sender, PointerRoutedEventArgs e)
+        private void SnippetListView_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            if (_isAnimationActive) { Debug.WriteLine("SnippetListView_ItemClick: Animation is active, ignoring click."); return; }
+            if (e.ClickedItem is Pivot.CodeModule.Models.CodeFile clickedSnippet)
+            {
+                if (ViewModel != null)
+                {
+                    Debug.WriteLine($"SnippetListView_ItemClick: clicked='{clickedSnippet?.Title}'");
+                    ViewModel.SelectedSnippet = clickedSnippet;
+                }
+            }
+        }
+
+        private async void Root_PointerPressed(object? sender, PointerRoutedEventArgs e)
         {
             try
             {
-                var rootUi = sender as FrameworkElement;
+                var rootUi = this.Content as FrameworkElement;
                 if (rootUi == null) return;
                 var overlay = rootUi.FindName("ScratchpadOverlay") as FrameworkElement;
                 if (overlay != null && overlay.Visibility == Visibility.Visible)
@@ -449,7 +631,10 @@ namespace Pivot.CodeModule.Views
                     var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
                     if (!bounds.Contains(pt))
                     {
+                        Debug.WriteLine("Root_PointerPressed: Click outside ScratchpadContainer. Closing snippet.");
+                        // Clear selection on viewmodel and trigger close animation
                         if (ViewModel != null) ViewModel.SelectedSnippet = null;
+                        try { await CloseSnippetWithAnimationAsync(); } catch { }
                     }
                     return;
                 }
@@ -462,12 +647,55 @@ namespace Pivot.CodeModule.Views
                 var bounds2 = transform2.TransformBounds(new Rect(0, 0, editorPanel.ActualWidth, editorPanel.ActualHeight));
                 if (!bounds2.Contains(pt2))
                 {
+                    Debug.WriteLine("Root_PointerPressed: Click outside EditorPanel. Closing snippet.");
                     // click outside editor -> close
                     if (ViewModel != null) ViewModel.SelectedSnippet = null;
+                    try { await CloseSnippetWithAnimationAsync(); } catch { }
                 }
             }
             catch { }
         }
+
+        private async void ScratchpadOverlay_PointerPressed(object? sender, PointerRoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement overlay)) return;
+                var container = overlay.FindName("ScratchpadContainer") as FrameworkElement;
+                if (container == null) return;
+                var pt = e.GetCurrentPoint(overlay).Position;
+                var transform = container.TransformToVisual(overlay);
+                var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                if (!bounds.Contains(pt))
+                {
+                    Debug.WriteLine("ScratchpadOverlay_PointerPressed: Click outside ScratchpadContainer. Closing snippet.");
+                    // mark handled so other handlers don't interfere
+                    try { e.Handled = true; } catch { }
+
+                    // clear selection on viewmodel
+                    if (ViewModel != null) ViewModel.SelectedSnippet = null;
+
+                    // ensure close sequence runs even if binding didn't trigger (fallback)
+                    try { await CloseSnippetWithAnimationAsync(); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        // Purchase button removed - handler intentionally deleted
+
+        private async void ScratchpadCloseButton_Click(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Debug.WriteLine("ScratchpadCloseButton clicked");
+                // run the close animation which also hides overlay and clears previous selection
+                try { await CloseSnippetWithAnimationAsync(); } catch { }
+            }
+            catch { }
+        }
+
+        // Backdrop handlers removed — root-level handlers handle outside clicks now
 
         private void RefreshScratchpadTags()
         {
@@ -478,15 +706,18 @@ namespace Pivot.CodeModule.Views
                 if (repo == null || list == null) return;
                 var tags = repo.GetAllTags().ToList();
                 // convert to simple view items with IsChecked state
-                var items = tags.Select(t => new { Id = t.Id, Name = t.Name }).ToList();
+                var selected = ViewModel?.SelectedSnippet;
+                var selectedTags = selected != null ? (selected.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var items = tags.Select(t => new TagItem { Id = t.Id, Name = t.Name, IsSelected = selectedTags.Contains(t.Name) }).ToList();
+
                 App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
                 {
                     list.ItemsSource = items;
                     // set toggle states based on selected snippet once containers are realized
+                    // (this block can be removed as IsSelected is set above)
                     try
                     {
-                        var selected = ViewModel?.SelectedSnippet;
-                        var selectedTags = selected != null ? (selected.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         for (int i = 0; i < items.Count; i++)
                         {
                             var item = items[i];
@@ -495,7 +726,7 @@ namespace Pivot.CodeModule.Views
                             var toggle = FindDescendantOfType<ToggleButton>(container);
                             if (toggle != null)
                             {
-                                toggle.IsChecked = selectedTags.Contains(item.Name);
+                                toggle.IsChecked = item.IsSelected; // Use the IsSelected from TagItem
                             }
                         }
                     }
@@ -519,60 +750,28 @@ namespace Pivot.CodeModule.Views
             return default;
         }
 
-        private async Task SendSelectedSnippetToEditorAsync()
+        private Task SendSelectedSnippetToEditorAsync()
         {
-            if (CodeEditor == null) return;
+            if (CodeEditor == null) return Task.CompletedTask;
             var vm = ViewModel;
-            if (vm?.SelectedSnippet == null) return;
+            if (vm?.SelectedSnippet == null) return Task.CompletedTask;
             try
             {
-                // Ensure CoreWebView2 is created
-                try { await CodeEditor.EnsureCoreWebView2Async(); } catch { }
-
-                var payload = new
+                var content = vm.SelectedSnippet.Content ?? string.Empty;
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
                 {
-                    action = "load",
-                    payload = new
+                    try
                     {
-                        id = vm.SelectedSnippet.Id,
-                        title = vm.SelectedSnippet.Title,
-                        language = vm.SelectedSnippet.Language,
-                        content = vm.SelectedSnippet.Content
+                        var codeEditor = this.FindName("CodeEditor") as TextBox;
+                        var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
+                        if (codeEditor != null) codeEditor.Text = content;
+                        if (scratchEditor != null) scratchEditor.Text = content;
                     }
-                };
-                var json = JsonSerializer.Serialize(payload);
-                if (CodeEditor.CoreWebView2 != null)
-                {
-                    // attach handler once
-                    if (!_webMessageHooked)
-                    {
-                        CodeEditor.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
-                        _webMessageHooked = true;
-                    }
-
-                    CodeEditor.CoreWebView2.PostWebMessageAsJson(json);
-                }
-                // also send to scratchpad editor if present
-                try
-                {
-                    var sp = this.FindName("ScratchpadEditor") as WebView2;
-                    if (sp != null)
-                    {
-                        try { await sp.EnsureCoreWebView2Async(); } catch { }
-                        if (sp.CoreWebView2 != null)
-                        {
-                            if (!_scratchpadWebMessageHooked)
-                            {
-                                sp.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
-                                _scratchpadWebMessageHooked = true;
-                            }
-                            sp.CoreWebView2.PostWebMessageAsJson(json);
-                        }
-                    }
-                }
-                catch { }
+                    catch { }
+                });
             }
             catch { }
+            return Task.CompletedTask;
         }
 
         private void ScratchpadTag_Toggled(object sender, RoutedEventArgs e)
@@ -580,7 +779,10 @@ namespace Pivot.CodeModule.Views
             try
             {
                 if (!(sender is ToggleButton tb) || tb.DataContext == null) return;
-                var tagName = tb.Content?.ToString() ?? string.Empty;
+                // Using TagItem directly
+                if (!(tb.DataContext is TagItem tagItem)) return;
+
+                var tagName = tagItem.Name ?? string.Empty;
                 if (ViewModel?.SelectedSnippet == null) return;
                 var snippet = ViewModel.SelectedSnippet;
                 var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
@@ -595,6 +797,40 @@ namespace Pivot.CodeModule.Views
                 snippet.Tags = string.Join(",", current);
                 // persist
                 try { var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository; repo?.Save(snippet); } catch { }
+            }
+            catch { }
+        }
+
+        private void CodeEditor_TextChanged(object? sender, TextChangedEventArgs e)
+        {
+            try
+            {
+                var tb = sender as TextBox;
+                if (tb == null) return;
+                if (ViewModel != null && ViewModel.SelectedSnippet != null)
+                {
+                    ViewModel.SelectedSnippet.Content = tb.Text ?? string.Empty;
+                    ViewModel.IsDirty = true;
+                    // auto-save on input
+                    try { _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        private void ScratchpadEditor_TextChanged(object? sender, TextChangedEventArgs e)
+        {
+            try
+            {
+                var tb = sender as TextBox;
+                if (tb == null) return;
+                if (ViewModel != null && ViewModel.SelectedSnippet != null)
+                {
+                    ViewModel.SelectedSnippet.Content = tb.Text ?? string.Empty;
+                    ViewModel.IsDirty = true;
+                    // auto-save on input
+                    try { _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); } catch { }
+                }
             }
             catch { }
         }

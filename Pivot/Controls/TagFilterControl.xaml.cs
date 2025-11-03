@@ -30,18 +30,21 @@ namespace Pivot.Controls
             {
                 _filterService = App.Current.Services.GetService(typeof(FilterService)) as FilterService;
                 _settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                // Set items panel orientation based on TabId: horizontal for Asset/others, vertical for Code
+                // Set items panel orientation based on TabId: default horizontal in XAML, but use vertical for Code when needed
                 try
                 {
                     if (string.Equals(TabId, "Code", StringComparison.OrdinalIgnoreCase))
                     {
-                        var vertical = this.Resources["VerticalPanelTemplate"] as ItemsPanelTemplate;
-                        if (vertical != null) TagItems.ItemsPanel = vertical;
-                    }
-                    else
-                    {
-                        var horizontal = this.Resources["HorizontalPanelTemplate"] as ItemsPanelTemplate;
-                        if (horizontal != null) TagItems.ItemsPanel = horizontal;
+                        // Build a vertical ItemsPanelTemplate dynamically to avoid missing resource keys
+                        var xaml = "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\">" +
+                                   "<StackPanel Orientation=\"Vertical\"/>" +
+                                   "</ItemsPanelTemplate>";
+                        try
+                        {
+                            var tpl = Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml) as ItemsPanelTemplate;
+                            if (tpl != null) TagItems.ItemsPanel = tpl;
+                        }
+                        catch { }
                     }
                 }
                 catch { }
@@ -56,11 +59,20 @@ namespace Pivot.Controls
         {
             if (_settings == null) return;
 
-            // If used for Code tab, load code tags from repository
+            // If used for Code tab, prefer tags configured in user Preferences (SettingsService)
             if (string.Equals(TabId, "Code", StringComparison.OrdinalIgnoreCase))
             {
                 try
                 {
+                    var user = _settings.GetUserSettings();
+                    if (user != null && user.CodeFilters != null && user.CodeFilters.Count > 0)
+                    {
+                        var prefTags = user.CodeFilters.Select(f => new { Name = f.Name }).ToList();
+                        TagItems.ItemsSource = prefTags;
+                        return;
+                    }
+
+                    // Fallback: try code repository and derive tags from snippets
                     var repo = App.Current.Services.GetService(typeof(Pivot.CodeModule.Services.ICodeRepository)) as Pivot.CodeModule.Services.ICodeRepository;
                     if (repo == null)
                     {
@@ -69,7 +81,6 @@ namespace Pivot.Controls
                     }
 
                     var tags = repo.GetAllTags().Select(t => new { Name = t.Name }).ToList();
-                    // If repository has no explicit tags table entries, derive tags from existing code files
                     if (tags == null || tags.Count == 0)
                     {
                         try
