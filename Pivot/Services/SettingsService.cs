@@ -246,6 +246,41 @@ namespace Pivot.Services
                 _cache.CodeFilters = GetDefaultCodeFilters();
             }
 
+            // Code Categories (groups for Code tab navigation)
+            try
+            {
+                var codeCategoriesJson = await _settingsStore.GetAsync("CodeCategories");
+                if (!string.IsNullOrWhiteSpace(codeCategoriesJson) && codeCategoriesJson.TrimStart().StartsWith("["))
+                {
+                    try
+                    {
+                        var cats = JsonSerializer.Deserialize<List<Pivot.Models.CodeCategory>>(codeCategoriesJson);
+                        if (cats != null)
+                        {
+                            _cache.CodeCategories = cats;
+                        }
+                        else
+                        {
+                            InitializeDefaultCodeCategories();
+                        }
+                    }
+                    catch
+                    {
+                        InitializeDefaultCodeCategories();
+                    }
+                }
+                else
+                {
+                    InitializeDefaultCodeCategories();
+                }
+                _logger.LogInformation("SettingsService: Loaded CodeCategories: {Count}", _cache.CodeCategories?.Count ?? 0);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load CodeCategories. Using defaults.");
+                InitializeDefaultCodeCategories();
+            }
+
             // Visible filters per tab
             try
             {
@@ -590,6 +625,22 @@ namespace Pivot.Services
             };
         }
 
+        private void InitializeDefaultCodeCategories()
+        {
+            try
+            {
+                // Default single category that contains all current code filters
+                var allFilterIds = (_cache.CodeFilters ?? new List<Pivot.Models.CustomFilter>()).Select(f => f.Id).ToList();
+                _cache.CodeCategories = new List<Pivot.Models.CodeCategory>
+                {
+                    new Pivot.Models.CodeCategory { Name = "Languages", FilterIds = allFilterIds, SortOrder = 0 }
+                };
+                // Persist
+                _settingsStore.UpsertAsync("CodeCategories", JsonSerializer.Serialize(_cache.CodeCategories)).ConfigureAwait(false);
+            }
+            catch { _cache.CodeCategories = new List<Pivot.Models.CodeCategory>(); }
+        }
+
         // AssetFilters accessors
         public List<Pivot.Models.CustomFilter> GetAssetFilters() => _cache.AssetFilters;
 
@@ -619,6 +670,22 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to persist CodeFilters.");
+            }
+        }
+
+        // CodeCategories accessors
+        public List<Pivot.Models.CodeCategory> GetCodeCategories() => _cache.CodeCategories ?? new List<Pivot.Models.CodeCategory>();
+
+        public async Task SetCodeCategoriesAsync(List<Pivot.Models.CodeCategory> categories)
+        {
+            _cache.CodeCategories = categories ?? new List<Pivot.Models.CodeCategory>();
+            try
+            {
+                await _settingsStore.UpsertAsync("CodeCategories", JsonSerializer.Serialize(_cache.CodeCategories));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist CodeCategories.");
             }
         }
 

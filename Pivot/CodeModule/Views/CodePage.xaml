@@ -6,99 +6,116 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:Pivot.CodeModule.ViewModels"
     xmlns:models="using:Pivot.CodeModule.Models"
+    xmlns:ctrls="using:Pivot.Controls"
     mc:Ignorable="d">
 
     
 
-    <Grid x:Name="CodePageRoot" ColumnDefinitions="300,*" Padding="12" Background="Transparent" PointerPressed="Root_PointerPressed">
-        <!-- Sidebar: search, new, list -->
-        <StackPanel Grid.Column="0" Spacing="8">
-            <!-- Left side: filter control and snippet list -->
-            <TextBlock Text="Snippets" Margin="0,12,0,4" FontWeight="SemiBold" />
-            
-            <ListView ItemsSource="{Binding Snippets}" SelectedItem="{Binding SelectedSnippet, Mode=TwoWay}" Margin="0,8,0,0">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="models:CodeFile">
-                        <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" Margin="6" />
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-        </StackPanel>
-
-        <!-- Editor area: toolbar + editor -->
-        <Grid Grid.Column="1" RowDefinitions="Auto,*" ColumnDefinitions="*">
-            <!-- Toolbar removed: Title/Language/Save are handled inline per-snippet (auto-save on close) -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8" CornerRadius="6" Margin="0,0,0,8">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-                    <TextBlock Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+    <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" Background="Transparent" PointerPressed="Root_PointerPressed">
+        <!-- Header spanning both columns -->
+        <Border Grid.Row="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8" CornerRadius="6" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                    <ctrls:TagFilterControl TabId="Code" Margin="0,0,0,0" />
                 </StackPanel>
-            </Border>
+            </Grid>
+        </Border>
 
-            <Grid Grid.Row="1">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+        <!-- NavigationView hosts the left pane and the main content to avoid gaps in Compact mode -->
+        <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked">
+            <!-- Items will be populated in code-behind -->
+            <NavigationView.Content>
+                <!-- Editor area: toolbar + editor -->
+                <Grid Background="Transparent">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
 
-                <!-- Main area: show cards when no selection, editor when selected -->
-                <Grid>
-                    <Grid x:Name="CardPanel">
-                        <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollMode="Auto">
-                            <ListView x:Name="SnippetListView" ItemsSource="{Binding Snippets}" SelectedItem="{Binding SelectedSnippet, Mode=TwoWay}" SelectionMode="Single" CanDragItems="True" CanReorderItems="True" AllowDrop="True" IsItemClickEnabled="True" ItemClick="SnippetListView_ItemClick">
-                                <ListView.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <ItemsWrapGrid MaximumRowsOrColumns="4" Orientation="Horizontal" />
-                                    </ItemsPanelTemplate>
-                                </ListView.ItemsPanel>
-                                <ListView.ItemTemplate>
+                    <!-- Quick add (Google Keep style): type and blur to create card) -->
+                    <StackPanel Grid.Row="0">
+                        <InfoBar x:Name="QuickAddInfoBar" IsOpen="False" Severity="Success" Margin="0,0,0,8" Message="Saved" />
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
+                            <TextBox x:Name="QuickAddBox" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12"/>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Main area: show cards when no selection, editor when selected -->
+                    <Grid Grid.Row="1">
+                        <Grid x:Name="CardPanel" Background="Transparent">
+                            <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollMode="Auto">
+                                <ListView x:Name="SnippetListView" ItemsSource="{Binding Snippets}" SelectedItem="{Binding SelectedSnippet, Mode=TwoWay}" SelectionMode="Single" CanDragItems="True" CanReorderItems="True" AllowDrop="True" IsItemClickEnabled="True" ItemClick="SnippetListView_ItemClick">
+                                    <ListView.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <ItemsWrapGrid MaximumRowsOrColumns="4" Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ListView.ItemsPanel>
+                                    <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="models:CodeFile">
                                         <Border x:Name="SnippetCardBorder" Width="260" Height="150" Margin="8" Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                            <Border.ContextFlyout>
+                                                <MenuFlyout>
+                                                    <MenuFlyoutItem Text="Delete" Click="CardDeleteFlyout_Click" Tag="{x:Bind Id}" />
+                                                </MenuFlyout>
+                                            </Border.ContextFlyout>
                                             <Grid>
-                                                    <Grid.RowDefinitions>
-                                                        <RowDefinition Height="Auto" />
-                                                        <RowDefinition Height="*" />
-                                                        <RowDefinition Height="Auto" />
-                                                    </Grid.RowDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="*" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
 
-                                                    <!-- Show title (or + New) above the content -->
-                                                    <TextBlock Grid.Row="0" Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="#444" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
-                                                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                                                    
+                                                <!-- Title row with delete icon on the right -->
+                                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                                    <Button Grid.Column="1" Click="CardDeleteButton_Click" Tag="{x:Bind Id}" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Delete">
+                                                        <FontIcon Glyph="&#xE74D;" FontFamily="Segoe MDL2 Assets"/>
+                                                    </Button>
+                                                </Grid>
+
+                                                <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="#444" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
+                                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                                                     <TextBlock Text="·" Foreground="Gray" />
                                                     <TextBlock Text="{x:Bind Updated}" Foreground="Gray" FontSize="12" />
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                        </ScrollViewer>
-                    </Grid>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </ScrollViewer>
+                        </Grid>
 
-                    <Grid x:Name="EditorPanel" Visibility="Collapsed">
-                        <Border Background="Transparent" Padding="8">
-                            <TextBlock x:Name="EditorHeader" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        </Border>
-                        <TextBox x:Name="CodeEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" TabIndex="10" IsTabStop="True" />
-                        <Border x:Name="PlaceholderBorder" Background="#80FFFFFF" Visibility="Collapsed">
-                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <TextBlock Text="Select a snippet or create a new one" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                <TextBlock Text="左の一覧から選択するか「＋ New」を押してください" Foreground="Gray" HorizontalAlignment="Center" Margin="0,8,0,0" />
-                            </StackPanel>
-                        </Border>
+                        <Grid x:Name="EditorPanel" Visibility="Collapsed" Background="Transparent">
+                            <Border Background="Transparent" Padding="8">
+                                <TextBlock x:Name="EditorHeader" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBox x:Name="CodeEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" TabIndex="10" IsTabStop="True" />
+                            <Border x:Name="PlaceholderBorder" Background="#80FFFFFF" Visibility="Collapsed">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="Select a snippet or create a new one" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                    <TextBlock Text="左の一覧から選択するか「＋ New」を押してください" Foreground="Gray" HorizontalAlignment="Center" Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </Grid>
                 </Grid>
-            </Grid>
-        </Grid>
+            </NavigationView.Content>
+        </NavigationView>
         <!-- Scratchpad overlay (appears above content when a snippet is opened) -->
         <Grid x:Name="ScratchpadOverlay" Grid.Column="0" Grid.ColumnSpan="2" Visibility="Collapsed" Background="Transparent" IsHitTestVisible="True" PointerPressed="ScratchpadOverlay_PointerPressed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <!-- backdrop removed: rely on root-level pointer handling to close scratchpad -->
             <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Border x:Name="ScratchpadContainer" Width="900" Height="640" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                     <Grid RowDefinitions="Auto,Auto,*,Auto" ColumnDefinitions="*">
-                        <!-- Header -->
+                        <!-- Header: editable title -->
                         <Grid Grid.Row="0" ColumnDefinitions="*">
-                            <TextBlock x:Name="ScratchpadTitle" Text="Scratchpad" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBox x:Name="ScratchpadTitleBox" PlaceholderText="Title" TextChanging="ScratchpadTitleBox_TextChanged" FontSize="16" FontWeight="SemiBold" BorderThickness="0" />
                         </Grid>
 
                         <!-- Tag picker: vertical toggles + add field -->
@@ -129,6 +146,7 @@
 
                         <!-- Footer: action buttons (separated from editor) -->
                         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+                            <Button x:Name="ScratchpadDeleteButton" Content="Delete" Click="ScratchpadDeleteButton_Click" />
                             <Button x:Name="ScratchpadCloseButton" Content="Close" Margin="8,0,0,0" TabIndex="30" IsTabStop="True" />
                         </StackPanel>
                     </Grid>

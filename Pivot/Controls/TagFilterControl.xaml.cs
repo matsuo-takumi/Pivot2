@@ -30,24 +30,7 @@ namespace Pivot.Controls
             {
                 _filterService = App.Current.Services.GetService(typeof(FilterService)) as FilterService;
                 _settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                // Set items panel orientation based on TabId: default horizontal in XAML, but use vertical for Code when needed
-                try
-                {
-                    if (string.Equals(TabId, "Code", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Build a vertical ItemsPanelTemplate dynamically to avoid missing resource keys
-                        var xaml = "<ItemsPanelTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\">" +
-                                   "<StackPanel Orientation=\"Vertical\"/>" +
-                                   "</ItemsPanelTemplate>";
-                        try
-                        {
-                            var tpl = Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml) as ItemsPanelTemplate;
-                            if (tpl != null) TagItems.ItemsPanel = tpl;
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
+                // Keep default horizontal orientation defined in XAML for all tabs (including Code)
 
                 RefreshItems();
                 if (_filterService != null) _filterService.PropertyChanged += (s, ev) => RefreshItems();

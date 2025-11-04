@@ -25,6 +25,7 @@ using Pivot.CodeModule.Services;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.CodeModule.Models;
+using Pivot.Services;
 
 // Note: editing is implemented with WinUI TextBox controls (replaced WebView2)
 
@@ -58,6 +59,9 @@ namespace Pivot.CodeModule.Views
                 }
                 catch { }
             }
+
+            // build left navigation (Snippets/Categories)
+            try { BuildNavigationMenu(); } catch { }
 
             // subscribe to selection changes to push content to editor
             if (DataContext is INotifyPropertyChanged pc)
@@ -258,14 +262,87 @@ namespace Pivot.CodeModule.Views
                 // decide which animation path to run
                 if (ViewModel?.SelectedSnippet != null)
                 {
-                    // Open snippet in a separate OS window
-                    _ = ShowSnippetWindowAsync();
+                    // Open inline overlay instead of a separate OS window
+                    _ = OpenSnippetWithAnimationAsync();
                 }
                 else
                 {
                     _ = CloseSnippetWithAnimationAsync();
                 }
             }
+        }
+
+        private void BuildNavigationMenu()
+        {
+            try
+            {
+                var nav = this.FindName("CodeNav") as NavigationView;
+                if (nav == null) return;
+                nav.MenuItems.Clear();
+
+                // "All" entry with icon for compact mode
+                var allItem = new NavigationViewItem { Content = "All Snippets", Tag = "all", Icon = new SymbolIcon(Symbol.AllApps) };
+                nav.MenuItems.Add(allItem);
+
+                // Categories from Preferences → Code categories (groups) with filters
+                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                var categories = settings?.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
+                var filters = settings?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+
+                if (categories.Any())
+                {
+                    nav.MenuItems.Add(new NavigationViewItemSeparator());
+                    foreach (var cat in categories.OrderBy(c => c.SortOrder).ThenBy(c => c.Name))
+                    {
+                        var parent = new NavigationViewItem { Content = cat.Name, Icon = new SymbolIcon(Symbol.Folder) };
+                        foreach (var fid in cat.FilterIds)
+                        {
+                            var f = filters.FirstOrDefault(x => x.Id == fid);
+                            if (f == null) continue;
+                            parent.MenuItems.Add(new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Document) });
+                        }
+                        nav.MenuItems.Add(parent);
+                    }
+                }
+                else
+                {
+                    // Fallback: list all filters flat
+                    nav.MenuItems.Add(new NavigationViewItemSeparator());
+                    foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
+                    {
+                        nav.MenuItems.Add(new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Document) });
+                    }
+                }
+
+                nav.SelectedItem = allItem;
+            }
+            catch { }
+        }
+
+        private void CodeNav_ItemInvoked(object sender, NavigationViewItemInvokedEventArgs args)
+        {
+            try
+            {
+                if (args.IsSettingsInvoked) return;
+                var item = args.InvokedItemContainer as NavigationViewItem;
+                if (item == null || ViewModel == null) return;
+
+                var tagStr = item.Tag?.ToString() ?? string.Empty;
+                if (string.Equals(tagStr, "all", StringComparison.OrdinalIgnoreCase))
+                {
+                    ViewModel.ActiveFilters.Clear();
+                    ViewModel.FilterSnippets();
+                    return;
+                }
+
+                if (Guid.TryParse(tagStr, out var filterId))
+                {
+                    ViewModel.ActiveFilters.Clear();
+                    ViewModel.ActiveFilters.Add(filterId);
+                    ViewModel.FilterSnippets();
+                }
+            }
+            catch { }
         }
 
         private async Task OpenSnippetWithAnimationAsync()
@@ -359,9 +436,14 @@ namespace Pivot.CodeModule.Views
                                 try
                                 {
                                     var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
+                                    var titleBox = this.FindName("ScratchpadTitleBox") as TextBox;
                                     if (scratchEditor != null && ViewModel?.SelectedSnippet != null)
                                     {
                                         scratchEditor.Text = ViewModel.SelectedSnippet.Content ?? string.Empty;
+                                    }
+                                    if (titleBox != null && ViewModel?.SelectedSnippet != null)
+                                    {
+                                        titleBox.Text = ViewModel.SelectedSnippet.Title ?? string.Empty;
                                     }
                                 }
                                 catch { }
@@ -913,6 +995,117 @@ namespace Pivot.CodeModule.Views
             }
         }
 
+        // Quick add: commit on blur or Ctrl+Enter
+        private void QuickAddBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            try { CommitQuickAdd(); } catch { }
+        }
+
+        private void QuickAddBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            try
+            {
+                if (e.Key == Windows.System.VirtualKey.Enter && (Window.Current.CoreWindow.GetKeyState(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)))
+                {
+                    e.Handled = true;
+                    CommitQuickAdd();
+                }
+            }
+            catch { }
+        }
+
+        private void CommitQuickAdd()
+        {
+            try
+            {
+                var box = this.FindName("QuickAddBox") as TextBox;
+                if (box == null) return;
+                var text = (box.Text ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(text)) return;
+
+                // Derive title from first non-empty line
+                var lines = text.Replace("\r", "\n").Split(new[] { '\n' }, StringSplitOptions.None);
+                var title = lines.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l)) ?? "Snippet";
+                title = title.Length > 120 ? title.Substring(0, 120) : title;
+
+                var newSnippet = new Pivot.CodeModule.Models.CodeFile
+                {
+                    Title = title,
+                    Content = text,
+                    Updated = DateTime.Now
+                };
+
+                // inherit current left-pane filter as tag (if a specific filter is selected)
+                try
+                {
+                    var nav = this.FindName("CodeNav") as NavigationView;
+                    var selected = nav?.SelectedItem as NavigationViewItem;
+                    var tagStr = selected?.Tag?.ToString() ?? string.Empty;
+                    if (Guid.TryParse(tagStr, out var fid))
+                    {
+                        var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                        var tagName = repo?.GetFilterNameById(fid) ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(tagName)) newSnippet.Tags = tagName;
+                    }
+                }
+                catch { }
+
+                // Persist via repository
+                try
+                {
+                    var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                    repo?.Save(newSnippet);
+                }
+                catch { }
+
+                // Reflect in UI
+                try
+                {
+                    if (ViewModel != null)
+                    {
+                        if (ViewModel.Snippets != null)
+                        {
+                            var insertIndex = ViewModel.Snippets.Count > 0 && ViewModel.Snippets[0].Id == Guid.Empty ? 1 : 0;
+                            ViewModel.Snippets.Insert(insertIndex, newSnippet);
+                            // Scroll into view
+                            try
+                            {
+                                var list = this.FindName("SnippetListView") as ListView;
+                                list?.ScrollIntoView(newSnippet);
+                            }
+                            catch { }
+                        }
+                        else
+                        {
+                            ViewModel.Refresh();
+                        }
+                    }
+                }
+                catch { }
+
+                // Clear input
+                box.Text = string.Empty;
+
+                // show a brief saved toast (InfoBar)
+                try
+                {
+                    var bar = this.FindName("QuickAddInfoBar") as InfoBar;
+                    if (bar != null)
+                    {
+                        bar.Message = "Saved";
+                        bar.IsOpen = true;
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(1500);
+                            App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { try { bar.IsOpen = false; } catch { } });
+                        });
+                    }
+                }
+                catch { }
+            }
+            catch { }
+        }
+
         private async void Root_PointerPressed(object? sender, PointerRoutedEventArgs e)
         {
             try
@@ -1062,8 +1255,10 @@ namespace Pivot.CodeModule.Views
                     {
                         var codeEditor = this.FindName("CodeEditor") as TextBox;
                         var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
+                        var titleBox = this.FindName("ScratchpadTitleBox") as TextBox;
                         if (codeEditor != null) codeEditor.Text = content;
                         if (scratchEditor != null) scratchEditor.Text = content;
+                        if (titleBox != null) titleBox.Text = vm.SelectedSnippet.Title ?? string.Empty;
                     }
                     catch { }
                 });
@@ -1128,6 +1323,101 @@ namespace Pivot.CodeModule.Views
                     ViewModel.IsDirty = true;
                     // auto-save on input
                     try { _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        private void ScratchpadTitleBox_TextChanged(object? sender, TextBoxTextChangingEventArgs e)
+        {
+            try
+            {
+                var tb = sender as TextBox;
+                if (tb == null) return;
+                if (ViewModel != null && ViewModel.SelectedSnippet != null)
+                {
+                    ViewModel.SelectedSnippet.Title = tb.Text ?? string.Empty;
+                    ViewModel.IsDirty = true;
+                    try { _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        private async void ScratchpadDeleteButton_Click(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (ViewModel?.SelectedSnippet == null) return;
+                var snippet = ViewModel.SelectedSnippet;
+                var dlg = new ContentDialog { Title = "Delete this snippet?", PrimaryButtonText = "Delete", CloseButtonText = "Cancel" };
+                dlg.XamlRoot = this.XamlRoot;
+                var result = await dlg.ShowAsync();
+                if (result != ContentDialogResult.Primary) return;
+
+                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                try { if (snippet.Id != Guid.Empty) repo?.Delete(snippet.Id); } catch { }
+                try { ViewModel.Snippets.Remove(snippet); } catch { }
+                ViewModel.SelectedSnippet = null;
+                try { await CloseSnippetWithAnimationAsync(); } catch { }
+            }
+            catch { }
+        }
+
+        private async void CardDeleteButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement fe)) return;
+                Guid id = Guid.Empty;
+                try { if (fe.Tag is Guid gid) id = gid; else if (Guid.TryParse(fe.Tag?.ToString(), out var parsed)) id = parsed; } catch { }
+                var snippet = (fe.DataContext as Pivot.CodeModule.Models.CodeFile);
+                if (snippet == null && id != Guid.Empty)
+                {
+                    // try to resolve from ViewModel
+                    snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == id);
+                }
+                if (snippet == null || snippet.Id == Guid.Empty) return; // don't delete placeholder
+
+                var dlg = new ContentDialog { Title = "Delete this snippet?", PrimaryButtonText = "Delete", CloseButtonText = "Cancel" };
+                dlg.XamlRoot = this.XamlRoot;
+                var result = await dlg.ShowAsync();
+                if (result != ContentDialogResult.Primary) return;
+
+                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                try { repo?.Delete(snippet.Id); } catch { }
+                try { ViewModel?.Snippets?.Remove(snippet); } catch { }
+                if (ViewModel != null && ViewModel.SelectedSnippet == snippet)
+                {
+                    ViewModel.SelectedSnippet = null;
+                    try { await CloseSnippetWithAnimationAsync(); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        private async void CardDeleteFlyout_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement fe)) return;
+                Guid id = Guid.Empty;
+                try { if (fe.Tag is Guid gid) id = gid; else if (Guid.TryParse(fe.Tag?.ToString(), out var parsed)) id = parsed; } catch { }
+                var snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == id);
+                if (snippet == null || snippet.Id == Guid.Empty) return;
+
+                var dlg = new ContentDialog { Title = "Delete this snippet?", PrimaryButtonText = "Delete", CloseButtonText = "Cancel" };
+                dlg.XamlRoot = this.XamlRoot;
+                var result = await dlg.ShowAsync();
+                if (result != ContentDialogResult.Primary) return;
+
+                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                try { repo?.Delete(snippet.Id); } catch { }
+                try { ViewModel?.Snippets?.Remove(snippet); } catch { }
+                if (ViewModel != null && ViewModel.SelectedSnippet == snippet)
+                {
+                    ViewModel.SelectedSnippet = null;
+                    try { await CloseSnippetWithAnimationAsync(); } catch { }
                 }
             }
             catch { }
