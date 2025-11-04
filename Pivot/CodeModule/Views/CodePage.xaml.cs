@@ -1,4 +1,11 @@
 using Microsoft.UI.Xaml.Controls;
+using WinRT.Interop;
+using Microsoft.UI.Windowing;
+using Windows.Graphics;
+using Microsoft.UI.Composition.SystemBackdrops;
+using WinRT;
+using Microsoft.UI.Composition;
+using Microsoft.UI.Dispatching;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.CodeModule.ViewModels;
 using System;
@@ -27,6 +34,11 @@ namespace Pivot.CodeModule.Views
     {
         public CodeViewModel? ViewModel => DataContext as CodeViewModel;
         private Pivot.CodeModule.Models.CodeFile? _previousSelectedSnippet;
+        // Dragging state for movable scratchpad
+        private bool _isScratchpadDragging = false;
+        private Windows.Foundation.Point _scratchpadDragStart;
+        private double _scratchpadStartX = 0;
+        private double _scratchpadStartY = 0;
 
         public CodePage()
         {
@@ -123,6 +135,23 @@ namespace Pivot.CodeModule.Views
                     overlayRoot.PointerPressed -= ScratchpadOverlay_PointerPressed;
                     overlayRoot.PointerPressed += ScratchpadOverlay_PointerPressed;
                     Debug.WriteLine("Constructor: ensured ScratchpadOverlay.PointerPressed is attached");
+                }
+            }
+            catch { }
+
+            // wire scratchpad container drag handlers (make overlay movable)
+            try
+            {
+                var container = this.FindName("ScratchpadContainer") as FrameworkElement;
+                if (container != null)
+                {
+                    container.PointerPressed -= ScratchpadContainer_PointerPressed;
+                    container.PointerMoved -= ScratchpadContainer_PointerMoved;
+                    container.PointerReleased -= ScratchpadContainer_PointerReleased;
+
+                    container.PointerPressed += ScratchpadContainer_PointerPressed;
+                    container.PointerMoved += ScratchpadContainer_PointerMoved;
+                    container.PointerReleased += ScratchpadContainer_PointerReleased;
                 }
             }
             catch { }
@@ -229,7 +258,8 @@ namespace Pivot.CodeModule.Views
                 // decide which animation path to run
                 if (ViewModel?.SelectedSnippet != null)
                 {
-                    _ = OpenSnippetWithAnimationAsync();
+                    // Open snippet in a separate OS window
+                    _ = ShowSnippetWindowAsync();
                 }
                 else
                 {
@@ -450,6 +480,267 @@ namespace Pivot.CodeModule.Views
             try { RefreshScratchpadTags(); } catch { }
         }
 
+        // Show the existing scratchpad overlay and populate it. The overlay is made draggable via pointer handlers.
+        private Task ShowScratchpadOverlayAsync()
+        {
+            try
+            {
+                var vm = ViewModel;
+                if (vm?.SelectedSnippet == null) return Task.CompletedTask;
+
+                var root = this.Content as FrameworkElement;
+                if (root == null) return Task.CompletedTask;
+
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        var overlay = root.FindName("ScratchpadOverlay") as Grid;
+                        var container = root.FindName("ScratchpadContainer") as FrameworkElement;
+                        var title = root.FindName("ScratchpadTitle") as TextBlock;
+                        var scratchEditor = root.FindName("ScratchpadEditor") as TextBox;
+
+                        if (overlay != null) overlay.Visibility = Visibility.Visible;
+                        if (container != null) container.Visibility = Visibility.Visible;
+                        if (title != null) title.Text = vm.SelectedSnippet.Title ?? "Scratchpad";
+                        if (scratchEditor != null) scratchEditor.Text = vm.SelectedSnippet.Content ?? string.Empty;
+
+                        // refresh tags
+                        try { RefreshScratchpadTags(); } catch { }
+
+                        // ensure scratch editor focused
+                        try { scratchEditor?.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); } catch { }
+                    }
+                    catch { }
+                });
+            }
+            catch { }
+            return Task.CompletedTask;
+        }
+
+        // Open the selected snippet in a new OS-level window. Save on close and clear selection.
+        private Task ShowSnippetWindowAsync()
+        {
+            try
+            {
+                var vm = ViewModel;
+                if (vm?.SelectedSnippet == null) return Task.CompletedTask;
+
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        var snippet = vm.SelectedSnippet;
+
+                        // Build window content with reasonable initial size and matching scratchpad width
+                        var titleText = new TextBlock { Text = snippet?.Title ?? "Snippet", FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0,0,0,8) };
+                        var tagsBox = new TextBox { PlaceholderText = "Tags (comma separated)", Text = snippet?.Tags ?? string.Empty, Margin = new Thickness(0,0,0,8) };
+
+                        // Panel width (controls overall window size) - reduced default
+                        double panelWidth = 560;
+                        double panelHeight = 420;
+
+                        var contentBox = new TextBox
+                        {
+                            AcceptsReturn = true,
+                            TextWrapping = TextWrapping.Wrap,
+                            FontFamily = new FontFamily("Consolas"),
+                            FontSize = 12,
+                            Text = snippet?.Content ?? string.Empty,
+                            Width = panelWidth - 40,
+                            Height = panelHeight - 140
+                        };
+
+                        // Insert tab characters into the TextBox instead of moving focus
+                        try
+                        {
+                            contentBox.KeyDown += (s, e) =>
+                            {
+                                try
+                                {
+                                    if (e.Key == Windows.System.VirtualKey.Tab)
+                                    {
+                                        var tb = s as TextBox;
+                                        if (tb != null)
+                                        {
+                                            var pos = tb.SelectionStart;
+                                            tb.Text = tb.Text.Insert(pos, "\t");
+                                            tb.SelectionStart = pos + 1;
+                                        }
+                                        e.Handled = true;
+                                    }
+                                }
+                                catch { }
+                            };
+                        }
+                        catch { }
+
+                        var panel = new StackPanel { Spacing = 8, Padding = new Thickness(12), Width = panelWidth };
+                        panel.Children.Add(titleText);
+                        panel.Children.Add(tagsBox);
+                        panel.Children.Add(contentBox);
+
+                        // Apply theme/style from the current page to the panel so the new window respects theme
+                        try { panel.RequestedTheme = this.RequestedTheme; } catch { }
+
+                        // (AppWindow titlebar styling will be applied after creating the Window)
+
+                        var wnd = new Window();
+                        wnd.Content = panel;
+
+                        // Try to get AppWindow and set explicit size to avoid huge default sizing
+                        try
+                        {
+                            var hwnd = WindowNative.GetWindowHandle(wnd);
+                            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+                            var appWindow = AppWindow.GetFromWindowId(windowId);
+                            if (appWindow != null)
+                            {
+                                try { appWindow.Resize(new SizeInt32 { Width = (int)panelWidth + 24, Height = (int)panelHeight + 48 }); } catch { }
+
+                                // Try to apply Mica backdrop to the new AppWindow (best-effort)
+                                try
+                                {
+                                    // Ensure dispatcher queue for composition backdrops
+                                    try { DispatcherQueue.EnsureSystemDispatcherQueue(); } catch { }
+                                    var config = new SystemBackdropConfiguration();
+                                    config.IsInputActive = true;
+                                    // Set initial theme mapping
+                                    try
+                                    {
+                                        switch (panel.ActualTheme)
+                                        {
+                                            case ElementTheme.Dark: config.Theme = SystemBackdropTheme.Dark; break;
+                                            case ElementTheme.Light: config.Theme = SystemBackdropTheme.Light; break;
+                                            default: config.Theme = SystemBackdropTheme.Default; break;
+                                        }
+                                    }
+                                    catch { }
+                                    var mica = new MicaController();
+                                    mica.Kind = MicaKind.Base;
+                                    // Apply to the window's composition target
+                                    try { mica.AddSystemBackdropTarget(wnd.As<ICompositionSupportsSystemBackdrop>()); } catch { }
+                                    mica.SetSystemBackdropConfiguration(config);
+
+                                    // Update config when theme changes
+                                    Windows.Foundation.TypedEventHandler<FrameworkElement, object>? themeChangedHandler = null;
+                                    themeChangedHandler = (FrameworkElement s, object ev) =>
+                                    {
+                                        try
+                                        {
+                                            switch (panel.ActualTheme)
+                                            {
+                                                case ElementTheme.Dark: config.Theme = SystemBackdropTheme.Dark; break;
+                                                case ElementTheme.Light: config.Theme = SystemBackdropTheme.Light; break;
+                                                default: config.Theme = SystemBackdropTheme.Default; break;
+                                            }
+                                        }
+                                        catch { }
+                                    };
+                                    try { panel.ActualThemeChanged += themeChangedHandler; } catch { }
+
+                                    // Dispose mica and detach handlers when window closes
+                                    wnd.Closed += (_, __) =>
+                                    {
+                                        try { mica.Dispose(); } catch { }
+                                        try { if (themeChangedHandler != null) panel.ActualThemeChanged -= themeChangedHandler; } catch { }
+                                    };
+                                }
+                                catch { }
+                            }
+                        }
+                        catch { }
+
+                        // Helper to restore list interaction and clear selection
+                        void RestoreListInteraction()
+                        {
+                            try
+                            {
+                                var root = this.Content as FrameworkElement;
+                                var list = root?.FindName("SnippetListView") as ListView;
+                                if (list != null)
+                                {
+                                    list.IsItemClickEnabled = true;
+                                    list.IsHitTestVisible = true;
+                                    list.SelectionMode = ListViewSelectionMode.Single;
+                                    list.SelectedItem = null;
+                                }
+                                _previousSelectedSnippet = null;
+                            }
+                            catch { }
+                        }
+
+                        // Close the snippet window when it loses activation (focus out) or when main app window closes.
+                        try
+                        {
+                            wnd.Activated += (s, args) =>
+                            {
+                                try
+                                {
+                                    if (args.WindowActivationState == WindowActivationState.Deactivated)
+                                    {
+                                        try
+                                        {
+                                            if (snippet != null)
+                                            {
+                                                snippet.Content = contentBox.Text ?? string.Empty;
+                                                snippet.Tags = tagsBox.Text ?? string.Empty;
+                                                if (vm != null) _ = vm.SaveSnippetFileAsync(snippet);
+                                            }
+                                        }
+                                        catch { }
+                                        try { if (vm != null) vm.SelectedSnippet = null; } catch { }
+                                        try { RestoreListInteraction(); } catch { }
+                                        try { wnd.Close(); } catch { }
+                                    }
+                                }
+                                catch { }
+                            };
+                        }
+                        catch { }
+
+                        try
+                        {
+                            var mainWnd = App.Current.MainWindow as Window;
+                            if (mainWnd != null)
+                            {
+                                Windows.Foundation.TypedEventHandler<object, Microsoft.UI.Xaml.WindowEventArgs>? mainClosedHandler = null;
+                                mainClosedHandler = (ms, me) =>
+                                {
+                                    try { wnd.Close(); } catch { }
+                                    try { mainWnd.Closed -= mainClosedHandler; } catch { }
+                                };
+                                try { mainWnd.Closed += mainClosedHandler; } catch { }
+                            }
+                        }
+                        catch { }
+
+                        // Ensure closing via window chrome saves, clears and restores list
+                        wnd.Closed += (_, __) =>
+                        {
+                            try
+                            {
+                                if (snippet != null)
+                                {
+                                    snippet.Content = contentBox.Text ?? string.Empty;
+                                    snippet.Tags = tagsBox.Text ?? string.Empty;
+                                    if (vm != null) _ = vm.SaveSnippetFileAsync(snippet);
+                                }
+                            }
+                            catch { }
+                            try { if (vm != null) vm.SelectedSnippet = null; } catch { }
+                            try { RestoreListInteraction(); } catch { }
+                        };
+
+                        wnd.Activate();
+                    }
+                    catch { }
+                });
+            }
+            catch { }
+            return Task.CompletedTask;
+        }
+
         private async Task CloseSnippetWithAnimationAsync()
         {
             if (_isAnimationActive) return;
@@ -610,6 +901,13 @@ namespace Pivot.CodeModule.Views
                 if (ViewModel != null)
                 {
                     Debug.WriteLine($"SnippetListView_ItemClick: clicked='{clickedSnippet?.Title}'");
+                    // If this is the placeholder "New" card (Id == Guid.Empty), create a new snippet instead
+                    if (clickedSnippet.Id == Guid.Empty)
+                    {
+                        try { ViewModel.AddSnippetCommand?.Execute(null); } catch { }
+                        return;
+                    }
+
                     ViewModel.SelectedSnippet = clickedSnippet;
                 }
             }
@@ -831,6 +1129,72 @@ namespace Pivot.CodeModule.Views
                     // auto-save on input
                     try { _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); } catch { }
                 }
+            }
+            catch { }
+        }
+
+        private void ScratchpadContainer_PointerPressed(object? sender, PointerRoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement container)) return;
+                var rootUi = this.Content as FrameworkElement;
+                if (rootUi == null) return;
+
+                // start drag
+                var pt = e.GetCurrentPoint(rootUi).Position;
+                _scratchpadDragStart = pt;
+
+                if (container.RenderTransform is TranslateTransform tt)
+                {
+                    _scratchpadStartX = tt.X;
+                    _scratchpadStartY = tt.Y;
+                }
+                else
+                {
+                    var newT = new TranslateTransform { X = 0, Y = 0 };
+                    container.RenderTransform = newT;
+                    _scratchpadStartX = 0;
+                    _scratchpadStartY = 0;
+                }
+
+                try { container.CapturePointer(e.Pointer); } catch { }
+                _isScratchpadDragging = true;
+                try { e.Handled = true; } catch { }
+            }
+            catch { }
+        }
+
+        private void ScratchpadContainer_PointerMoved(object? sender, PointerRoutedEventArgs e)
+        {
+            try
+            {
+                if (!_isScratchpadDragging) return;
+                if (!(sender is FrameworkElement container)) return;
+                var rootUi = this.Content as FrameworkElement;
+                if (rootUi == null) return;
+
+                var pt = e.GetCurrentPoint(rootUi).Position;
+                var dx = pt.X - _scratchpadDragStart.X;
+                var dy = pt.Y - _scratchpadDragStart.Y;
+
+                if (container.RenderTransform is TranslateTransform tt)
+                {
+                    tt.X = _scratchpadStartX + dx;
+                    tt.Y = _scratchpadStartY + dy;
+                }
+            }
+            catch { }
+        }
+
+        private void ScratchpadContainer_PointerReleased(object? sender, PointerRoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement container)) return;
+                try { container.ReleasePointerCapture(e.Pointer); } catch { }
+                _isScratchpadDragging = false;
+                try { e.Handled = true; } catch { }
             }
             catch { }
         }

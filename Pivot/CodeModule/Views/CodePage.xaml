@@ -53,14 +53,16 @@
                                     <DataTemplate x:DataType="models:CodeFile">
                                         <Border x:Name="SnippetCardBorder" Width="260" Height="150" Margin="8" Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                             <Grid>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="*" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
-                                                
-                                                <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="#444" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
-                                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto" />
+                                                        <RowDefinition Height="*" />
+                                                        <RowDefinition Height="Auto" />
+                                                    </Grid.RowDefinitions>
+
+                                                    <!-- Show title (or + New) above the content -->
+                                                    <TextBlock Grid.Row="0" Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="#444" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
+                                                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                                                     
                                                     <TextBlock Text="·" Foreground="Gray" />
                                                     <TextBlock Text="{x:Bind Updated}" Foreground="Gray" FontSize="12" />

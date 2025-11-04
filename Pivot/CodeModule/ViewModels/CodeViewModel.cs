@@ -57,22 +57,7 @@ namespace Pivot.CodeModule.ViewModels
             }
             catch { }
 
-            // If repository is empty, seed with test snippets for UI layout testing
-            if (!_snippets.Any())
-            {
-                for (int i = 1; i <= 8; i++)
-                {
-                    _snippets.Add(new CodeFile
-                    {
-                        Title = $"Test Snippet {i}",
-                        Language = i % 2 == 0 ? "Python" : "VEX",
-                        Tool = i % 3 == 0 ? "Houdini" : "Unreal",
-                        Tags = i % 2 == 0 ? "math,util" : "render,fx",
-                        Content = "// sample code...\nprint(\"hello\")",
-                        Updated = DateTime.Now.AddMinutes(-i * 5)
-                    });
-                }
-            }
+            // No test seeding in production — snippets come from repository (may be empty)
         }
 
         // Parameterless constructor used as a fallback when DI is unavailable (seeds test items)
@@ -82,18 +67,22 @@ namespace Pivot.CodeModule.ViewModels
             _snippets = new ObservableCollection<CodeFile>();
             _allSnippets = _snippets.ToList();
 
-            for (int i = 1; i <= 8; i++)
+            // No test seeding in fallback; start with an empty collection
+        }
+
+        // Ensure a placeholder "New" item is always present at index 0 for UI
+        partial void OnSnippetsChanged(ObservableCollection<CodeFile> value)
+        {
+            try
             {
-                _snippets.Add(new CodeFile
+                if (value == null) return;
+                if (!value.Any(s => s.Id == Guid.Empty))
                 {
-                    Title = $"Test Snippet {i}",
-                    Language = i % 2 == 0 ? "Python" : "VEX",
-                    Tool = i % 3 == 0 ? "Houdini" : "Unreal",
-                    Tags = i % 2 == 0 ? "math,util" : "render,fx",
-                    Content = "// sample code...\nprint(\"hello\")",
-                    Updated = DateTime.Now.AddMinutes(-i * 5)
-                });
+                    var placeholder = new CodeFile { Id = Guid.Empty, Title = "+ New", Content = string.Empty, Updated = DateTime.MinValue };
+                    value.Insert(0, placeholder);
+                }
             }
+            catch { }
         }
 
         public void Refresh()
@@ -169,9 +158,22 @@ namespace Pivot.CodeModule.ViewModels
         private void AddSnippet()
         {
             var newSnippet = new CodeFile { Title = "New Snippet", Language = "Python" };
-            Snippets.Add(newSnippet);
-            SelectedSnippet = newSnippet;
-            IsDirty = true;
+            try
+            {
+                if (Snippets != null)
+                {
+                    // keep placeholder at index 0, insert new snippet after it
+                    var insertIndex = Snippets.Count > 0 ? 1 : 0;
+                    Snippets.Insert(insertIndex, newSnippet);
+                }
+                else
+                {
+                    Snippets = new ObservableCollection<CodeFile> { newSnippet };
+                }
+                SelectedSnippet = newSnippet;
+                IsDirty = true;
+            }
+            catch { }
         }
 
         [RelayCommand]
