@@ -1171,13 +1171,34 @@ namespace Pivot.CodeModule.Views
 
         // Purchase button removed - handler intentionally deleted
 
-        private async void ScratchpadCloseButton_Click(object? sender, RoutedEventArgs e)
+        private void ScratchpadCloseButton_Click(object? sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("ScratchpadCloseButton clicked");
+            CloseScratchpadSimple();
+        }
+
+        private void CloseScratchpadSimple()
         {
             try
             {
-                Debug.WriteLine("ScratchpadCloseButton clicked");
-                // run the close animation which also hides overlay and clears previous selection
-                try { await CloseSnippetWithAnimationAsync(); } catch { }
+                var root = this.Content as FrameworkElement;
+                var overlay = root?.FindName("ScratchpadOverlay") as UIElement;
+                if (overlay != null) overlay.Visibility = Visibility.Collapsed;
+                if (ViewModel != null) ViewModel.SelectedSnippet = null;
+                _previousSelectedSnippet = null;
+                _isAnimationActive = false;
+
+                // Re-enable list interactions
+                var list = root?.FindName("SnippetListView") as ListView;
+                if (list != null)
+                {
+                    list.IsHitTestVisible = true;
+                    list.IsItemClickEnabled = true;
+                    list.SelectionMode = ListViewSelectionMode.Single;
+                }
+
+                // Clear scratchpad tag state
+                RefreshScratchpadTags();
             }
             catch { }
         }
