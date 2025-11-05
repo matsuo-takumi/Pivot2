@@ -43,6 +43,7 @@
                 <NavigationViewItem Icon="Save" Content="Menu Item2" Tag="MenuItem2" />
                 <NavigationViewItem Icon="Refresh" Content="Menu Item3" Tag="MenuItem3" />
                 <NavigationViewItem Icon="Download" Content="Menu Item4" Tag="MenuItem4" />
+                <NavigationViewItem Icon="Send" Content="Export" Tag="Export" />
             </NavigationView.MenuItems>
             <ContentControl Content="{Binding CurrentContent}" 
                             HorizontalAlignment="Stretch"

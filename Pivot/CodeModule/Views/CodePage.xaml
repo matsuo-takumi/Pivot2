@@ -41,7 +41,7 @@
                     <StackPanel Grid.Row="0">
                         <InfoBar x:Name="QuickAddInfoBar" IsOpen="False" Severity="Success" Margin="0,0,0,8" Message="Saved" />
                         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
-                            <TextBox x:Name="QuickAddBox" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12"/>
+                            <TextBox x:Name="QuickAddBox" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" GotFocus="QuickAddBox_GotFocus" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12"/>
                         </Border>
                     </StackPanel>
 
@@ -95,7 +95,7 @@
                             <Border Background="Transparent" Padding="8">
                                 <TextBlock x:Name="EditorHeader" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
                             </Border>
-                            <TextBox x:Name="CodeEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" TabIndex="10" IsTabStop="True" />
+                            <TextBox x:Name="CodeEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" TabIndex="10" IsTabStop="True" KeyDown="CodeEditor_KeyDown" GotFocus="CodeEditor_GotFocus" LostFocus="CodeEditor_LostFocus" />
                             <Border x:Name="PlaceholderBorder" Background="#80FFFFFF" Visibility="Collapsed">
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <TextBlock Text="Select a snippet or create a new one" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
@@ -141,7 +141,7 @@
 
                         <!-- Editor area (scrollable) -->
                         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                            <TextBox x:Name="ScratchpadEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" TabIndex="20" IsTabStop="True" />
+                            <TextBox x:Name="ScratchpadEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" TabIndex="20" IsTabStop="True" KeyDown="ScratchpadEditor_KeyDown" />
                         </ScrollViewer>
 
                         <!-- Footer: action buttons (separated from editor) -->

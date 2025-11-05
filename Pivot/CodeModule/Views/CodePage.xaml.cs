@@ -19,6 +19,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Input;
 using Windows.Foundation;
 using System.Collections.Generic;
 using Pivot.CodeModule.Services;
@@ -998,17 +999,82 @@ namespace Pivot.CodeModule.Views
         // Quick add: commit on blur or Ctrl+Enter
         private void QuickAddBox_LostFocus(object sender, RoutedEventArgs e)
         {
-            try { CommitQuickAdd(); } catch { }
+            try
+            {
+                _isQuickAddTabMode = false;
+                CommitQuickAdd();
+            }
+            catch { }
         }
 
         private void QuickAddBox_KeyDown(object sender, KeyRoutedEventArgs e)
         {
             try
             {
-                if (e.Key == Windows.System.VirtualKey.Enter && (Window.Current.CoreWindow.GetKeyState(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)))
+                // If QuickAdd has special tab mode enabled, intercept Tab to insert a tab character
+                if (_isQuickAddTabMode && e.Key == Windows.System.VirtualKey.Tab)
+                {
+                    try
+                    {
+                        if (sender is TextBox tb)
+                        {
+                            var pos = tb.SelectionStart;
+                            tb.Text = tb.Text.Insert(pos, "\t");
+                            tb.SelectionStart = pos + 1;
+                        }
+                        e.Handled = true; // prevent moving focus to other components
+                        return;
+                    }
+                    catch { }
+                }
+
+                var ctrlDown2 = IsControlDown();
+                if (e.Key == Windows.System.VirtualKey.Enter && ctrlDown2)
                 {
                     e.Handled = true;
                     CommitQuickAdd();
+
+                    // Move focus away from the QuickAddBox so it is effectively blurred.
+                    // Use DispatcherQueue to ensure this runs after any UI changes caused by CommitQuickAdd.
+                    try
+                    {
+                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                        {
+                            try
+                            {
+                                var root2 = this.Content as FrameworkElement;
+                                var list2 = root2?.FindName("SnippetListView") as ListView;
+                                if (list2 != null)
+                                {
+                                    // If there's a selected item (the newly created snippet), scroll to it and focus its container.
+                                    var sel = list2.SelectedItem ?? (list2.Items.Count > 0 ? list2.Items[0] : null);
+                                    if (sel != null)
+                                    {
+                                        try { list2.ScrollIntoView(sel); } catch { }
+                                        var container = list2.ContainerFromItem(sel) as ListViewItem;
+                                        if (container != null)
+                                        {
+                                            try { container.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); } catch { }
+                                        }
+                                        else
+                                        {
+                                            try { list2.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); } catch { }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        try { list2.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); } catch { }
+                                    }
+                                }
+                                else
+                                {
+                                    (this as FrameworkElement)?.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+                    catch { }
                 }
             }
             catch { }
@@ -1504,6 +1570,131 @@ namespace Pivot.CodeModule.Views
                 if (found != null) return found;
             }
             return null;
+        }
+
+        private bool IsControlDown()
+        {
+            try
+            {
+                var core = Window.Current?.CoreWindow;
+                if (core != null && core.GetKeyState(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return true;
+            }
+            catch { }
+
+            try
+            {
+                if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return true;
+            }
+            catch { }
+
+            return false;
+        }
+
+        // Track when code editor has focus so tab behavior can be incident-specific
+        private volatile bool _isCodeEditorTabMode = false;
+        private volatile bool _isQuickAddTabMode = false;
+
+        private void CodeEditor_GotFocus(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _isCodeEditorTabMode = true;
+                // When focused, prefer inserting tabs rather than moving focus
+                Debug.WriteLine("CodeEditor got focus: enabling tab-insert mode.");
+            }
+            catch { }
+        }
+
+        private void CodeEditor_LostFocus(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _isCodeEditorTabMode = false;
+                Debug.WriteLine("CodeEditor lost focus: disabling tab-insert mode.");
+            }
+            catch { }
+        }
+
+        private void CodeEditor_KeyDown(object? sender, KeyRoutedEventArgs e)
+        {
+            try
+            {
+                if (!_isCodeEditorTabMode) return;
+                if (e.Key == Windows.System.VirtualKey.Tab)
+                {
+                    var tb = sender as TextBox;
+                    if (tb != null)
+                    {
+                        var pos = tb.SelectionStart;
+                        tb.Text = tb.Text.Insert(pos, "\t");
+                        tb.SelectionStart = pos + 1;
+                    }
+                    e.Handled = true; // prevent focus navigation / component selection
+                }
+                // Ctrl+Enter: save and blur (move focus away)
+                var ctrlDown = IsControlDown();
+                if (e.Key == Windows.System.VirtualKey.Enter && ctrlDown)
+                {
+                    try
+                    {
+                        e.Handled = true;
+                        // Save current snippet via ViewModel
+                        var vm = ViewModel;
+                        var snip = vm?.SelectedSnippet;
+                        if (vm != null && snip != null)
+                        {
+                            _ = vm.SaveSnippetFileAsync(snip);
+                            vm.IsDirty = false;
+                        }
+
+                        // Blur editor by moving focus to page root asynchronously
+                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                        {
+                            try { (this as FrameworkElement)?.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); } catch { }
+                        });
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        private void ScratchpadEditor_KeyDown(object? sender, KeyRoutedEventArgs e)
+        {
+            try
+            {
+                if (e.Key == Windows.System.VirtualKey.Enter && IsControlDown())
+                {
+                    try
+                    {
+                        e.Handled = true;
+                        var vm = ViewModel;
+                        var snip = vm?.SelectedSnippet;
+                        if (vm != null && snip != null)
+                        {
+                            _ = vm.SaveSnippetFileAsync(snip);
+                            vm.IsDirty = false;
+                        }
+
+                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                        {
+                            try { (this as FrameworkElement)?.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); } catch { }
+                        });
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        private void QuickAddBox_GotFocus(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _isQuickAddTabMode = true;
+                Debug.WriteLine("QuickAddBox got focus: enabling tab-insert mode.");
+            }
+            catch { }
         }
     }
 }

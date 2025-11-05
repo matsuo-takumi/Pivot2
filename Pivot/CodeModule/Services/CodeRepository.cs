@@ -37,6 +37,37 @@ namespace Pivot.CodeModule.Services
                 _context.CodeFiles.Add(file);
 
             _context.SaveChanges();
+
+            // Export saved snippet to user-configured output directory (JSON)
+            try
+            {
+                var exportDir = _settingsService?.GetExportOutputDirectory();
+                if (!string.IsNullOrWhiteSpace(exportDir))
+                {
+                    try
+                    {
+                        if (!System.IO.Directory.Exists(exportDir)) System.IO.Directory.CreateDirectory(exportDir);
+                        var fileName = file.Id.ToString() + ".json"; // use Id to avoid collisions
+                        var outPath = System.IO.Path.Combine(exportDir, fileName);
+                        var json = System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            file.Id,
+                            file.Title,
+                            file.Language,
+                            file.Tool,
+                            file.Tags,
+                            file.Content,
+                            file.Updated
+                        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                        System.IO.File.WriteAllText(outPath, json);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CodeRepository: export write failed: {ex}");
+                    }
+                }
+            }
+            catch { }
         }
 
         public void Delete(Guid id)

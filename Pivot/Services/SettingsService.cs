@@ -68,6 +68,19 @@ namespace Pivot.Services
             _logger.LogInformation("SettingsService: Loaded ProjectDirectories count (parsed): {Count}", _cache.ProjectDirectories.Count);
             await NormalizeAndPersistIfNeededAsync("ProjectDirectories", projectPref, _cache.ProjectDirectories);
 
+            // Export output directory
+            try
+            {
+                var exportDir = await _settingsStore.GetAsync("Export.OutputDirectory");
+                _cache.ExportOutputDirectory = exportDir ?? string.Empty;
+                _logger.LogInformation("SettingsService: Loaded Export.OutputDirectory: {Dir}", _cache.ExportOutputDirectory);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Export.OutputDirectory. Using empty string.");
+                _cache.ExportOutputDirectory = string.Empty;
+            }
+
             if (Enum.TryParse<ElementTheme>(await _settingsStore.GetAsync("AppTheme"), out var theme))
             {
                 _cache.AppTheme = theme;
@@ -475,6 +488,22 @@ namespace Pivot.Services
         {
             _cache.AppBackdropType = type;
             await _settingsStore.UpsertAsync("AppBackdropType", type.ToString());
+        }
+
+        // Export output directory accessors
+        public string GetExportOutputDirectory() => _cache.ExportOutputDirectory ?? string.Empty;
+
+        public async Task SetExportOutputDirectoryAsync(string path)
+        {
+            _cache.ExportOutputDirectory = path ?? string.Empty;
+            try
+            {
+                await _settingsStore.UpsertAsync("Export.OutputDirectory", _cache.ExportOutputDirectory);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Export.OutputDirectory.");
+            }
         }
 
         // Asset 表示モード/メタ表示 設定

@@ -31,6 +31,9 @@ namespace Pivot.Models
         // Code categories (groups for Code tab navigation)
         public List<CodeCategory> CodeCategories { get; set; } = new List<CodeCategory>();
 
+        // Export settings
+        public string ExportOutputDirectory { get; set; } = string.Empty;
+
         // Visible filters per tab (tab id -> list of filter Ids)
         public Dictionary<string, List<System.Guid>> VisibleFiltersByTab { get; set; } = new Dictionary<string, List<System.Guid>>();
         // Selected filters per tab (tab id -> list of selected filter Ids)
