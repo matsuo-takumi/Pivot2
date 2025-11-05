@@ -11,9 +11,9 @@
 
     
 
-    <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" Background="Transparent" PointerPressed="Root_PointerPressed">
+    <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" Background="LightGray" PointerPressed="Root_PointerPressed">
         <!-- Header spanning both columns -->
-        <Border Grid.Row="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8" CornerRadius="6" Margin="0,0,0,8">
+        <Border Grid.Row="0" Background="LightBlue" Padding="8" CornerRadius="6" Margin="0,0,0,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -27,18 +27,18 @@
         </Border>
 
         <!-- NavigationView hosts the left pane and the main content to avoid gaps in Compact mode -->
-        <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked">
+        <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked" Background="LightCoral">
             <!-- Items will be populated in code-behind -->
             <NavigationView.Content>
                 <!-- Editor area: toolbar + editor -->
-                <Grid Background="Transparent">
+                <Grid Background="LightYellow">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
                     <!-- Quick add (Google Keep style): type and blur to create card) -->
-                    <StackPanel Grid.Row="0">
+                    <StackPanel Grid.Row="0" Background="LightGreen">
                         <InfoBar x:Name="QuickAddInfoBar" IsOpen="False" Severity="Success" Margin="0,0,0,8" Message="Saved" />
                         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
                             <TextBox x:Name="QuickAddBox" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" GotFocus="QuickAddBox_GotFocus" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12"/>
@@ -47,7 +47,7 @@
 
                     <!-- Main area: show cards when no selection, editor when selected -->
                     <Grid Grid.Row="1">
-                        <Grid x:Name="CardPanel" Background="Transparent">
+                        <Grid x:Name="CardPanel" Background="LightPink">
                             <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollMode="Auto">
                                 <ListView x:Name="SnippetListView" ItemsSource="{Binding Snippets}" SelectedItem="{Binding SelectedSnippet, Mode=TwoWay}" SelectionMode="Single" CanDragItems="True" CanReorderItems="True" AllowDrop="True" IsItemClickEnabled="True" ItemClick="SnippetListView_ItemClick">
                                     <ListView.ItemsPanel>
@@ -89,12 +89,81 @@
                                     </ListView.ItemTemplate>
                                 </ListView>
                             </ScrollViewer>
+
+                            <!-- Scratchpad overlay moved into CardPanel so it covers the card area only -->
+                            <Grid x:Name="ScratchpadOverlay" Visibility="Collapsed" Background="#80808080" IsHitTestVisible="True" PointerPressed="ScratchpadOverlay_PointerPressed" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Border x:Name="ScratchpadContainer" Width="900" Height="640" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                        <Grid RowDefinitions="Auto,Auto,*,Auto" ColumnDefinitions="*">
+                                            <!-- Header: editable title -->
+                                            <Grid Grid.Row="0" ColumnDefinitions="*">
+                                                <TextBox x:Name="ScratchpadTitleBox" PlaceholderText="Title" TextChanging="ScratchpadTitleBox_TextChanged" FontSize="16" FontWeight="SemiBold" BorderThickness="0" />
+                                            </Grid>
+
+                                            <!-- Tag picker: vertical toggles + add field -->
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
+                                                <ItemsControl x:Name="ScratchpadTagList" Margin="0,8,0,0">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapGrid Orientation="Horizontal" HorizontalChildrenAlignment="Left" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:TagItem">
+                                                            <ToggleButton Content="{x:Bind Name}" Margin="4" Padding="8,4" Checked="ScratchpadTag_Toggled" Unchecked="ScratchpadTag_Toggled" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                    <TextBox x:Name="ScratchpadNewTagBox" Width="160" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
+                                                    <Button x:Name="ScratchpadAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- Editor area (scrollable) -->
+                                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                                <TextBox x:Name="ScratchpadEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" TabIndex="20" IsTabStop="True" KeyDown="ScratchpadEditor_KeyDown" />
+                                            </ScrollViewer>
+
+                                            <!-- Footer: action buttons (separated from editor) -->
+                                            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+                                                <Button x:Name="ScratchpadDeleteButton" Content="Delete" Click="ScratchpadDeleteButton_Click" />
+                                                <Button x:Name="ScratchpadCloseButton" Content="Close" Margin="8,0,0,0" TabIndex="30" IsTabStop="True" Click="ScratchpadCloseButton_Click" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </Grid>
+
                         </Grid>
 
-                        <Grid x:Name="EditorPanel" Visibility="Collapsed" Background="Transparent">
+                        <Grid x:Name="EditorPanel" Visibility="Collapsed" Background="LightCyan">
                             <Border Background="Transparent" Padding="8">
                                 <TextBlock x:Name="EditorHeader" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
                             </Border>
+
+                            <!-- Tag picker moved into main editor area so tags appear in the main section instead of the overlay -->
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                                <ItemsControl x:Name="EditorTagList" Margin="0,8,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapGrid Orientation="Horizontal" HorizontalChildrenAlignment="Left" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:TagItem">
+                                            <ToggleButton Content="{x:Bind Name}" Margin="4" Padding="8,4" Checked="ScratchpadTag_Toggled" Unchecked="ScratchpadTag_Toggled" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                    <TextBox x:Name="EditorNewTagBox" Width="160" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
+                                    <Button x:Name="EditorAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
+                                </StackPanel>
+                            </StackPanel>
+
                             <TextBox x:Name="CodeEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" TabIndex="10" IsTabStop="True" KeyDown="CodeEditor_KeyDown" GotFocus="CodeEditor_GotFocus" LostFocus="CodeEditor_LostFocus" />
                             <Border x:Name="PlaceholderBorder" Background="#80FFFFFF" Visibility="Collapsed">
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -107,52 +176,7 @@
                 </Grid>
             </NavigationView.Content>
         </NavigationView>
-        <!-- Scratchpad overlay (appears above content when a snippet is opened) -->
-        <Grid x:Name="ScratchpadOverlay" Grid.Column="0" Grid.ColumnSpan="2" Visibility="Collapsed" Background="Transparent" IsHitTestVisible="True" PointerPressed="ScratchpadOverlay_PointerPressed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-            <!-- backdrop removed: rely on root-level pointer handling to close scratchpad -->
-            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Border x:Name="ScratchpadContainer" Width="900" Height="640" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                    <Grid RowDefinitions="Auto,Auto,*,Auto" ColumnDefinitions="*">
-                        <!-- Header: editable title -->
-                        <Grid Grid.Row="0" ColumnDefinitions="*">
-                            <TextBox x:Name="ScratchpadTitleBox" PlaceholderText="Title" TextChanging="ScratchpadTitleBox_TextChanged" FontSize="16" FontWeight="SemiBold" BorderThickness="0" />
-                        </Grid>
-
-                        <!-- Tag picker: vertical toggles + add field -->
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,4,0,8">
-                            <ItemsControl x:Name="ScratchpadTagList" Margin="0,8,0,0">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapGrid Orientation="Horizontal" HorizontalChildrenAlignment="Left" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="models:TagItem">
-                                        <ToggleButton Content="{x:Bind Name}" Margin="4" Padding="8,4" Checked="ScratchpadTag_Toggled" Unchecked="ScratchpadTag_Toggled" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                <TextBox x:Name="ScratchpadNewTagBox" Width="160" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
-                                <Button x:Name="ScratchpadAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
-                            </StackPanel>
-                        </StackPanel>
-
-                        <!-- Editor area (scrollable) -->
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                            <TextBox x:Name="ScratchpadEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" TabIndex="20" IsTabStop="True" KeyDown="ScratchpadEditor_KeyDown" />
-                        </ScrollViewer>
-
-                        <!-- Footer: action buttons (separated from editor) -->
-                        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
-                            <Button x:Name="ScratchpadDeleteButton" Content="Delete" Click="ScratchpadDeleteButton_Click" />
-                            <Button x:Name="ScratchpadCloseButton" Content="Close" Margin="8,0,0,0" TabIndex="30" IsTabStop="True" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-            </Grid>
-        </Grid>
+        <!-- (Original overlay removed; scratchpad overlay moved into CardPanel) -->
     </Grid>
 </Page>
 
