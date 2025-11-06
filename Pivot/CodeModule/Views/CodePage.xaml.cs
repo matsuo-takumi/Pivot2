@@ -187,6 +187,18 @@ namespace Pivot.CodeModule.Views
             }
             catch { }
 
+            // keep scratchpad sized to available area when page resizes
+            try
+            {
+                var rootGrid = this.FindName("CodePageRoot") as FrameworkElement;
+                if (rootGrid != null)
+                {
+                    rootGrid.SizeChanged -= RootGrid_SizeChanged;
+                    rootGrid.SizeChanged += RootGrid_SizeChanged;
+                }
+            }
+            catch { }
+
             // register navigation message to close scratchpad when leaving Code tab
             try
             {
@@ -443,6 +455,9 @@ namespace Pivot.CodeModule.Views
                 {
                     // Show scratchpad overlay and populate from the selected snippet
                     var overlay = root?.FindName("ScratchpadOverlay") as Grid;
+                    var cardPanelLocal = root?.FindName("CardPanel") as FrameworkElement;
+                    // Ensure the parent panel is visible so the overlay can render
+                    if (cardPanelLocal != null) cardPanelLocal.Visibility = Visibility.Visible;
                     if (overlay != null) overlay.Visibility = Visibility.Visible;
                     var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
                     var titleBox = this.FindName("ScratchpadTitleBox") as TextBox;
@@ -452,6 +467,8 @@ namespace Pivot.CodeModule.Views
                         if (titleBox != null) titleBox.Text = ViewModel.SelectedSnippet.Title ?? string.Empty;
                     }
                     RefreshScratchpadTags();
+                    // adjust size to fit current page/window
+                    try { AdjustScratchpadSize(); } catch { }
                     if (scratchEditor != null) scratchEditor.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
                 });
             }
@@ -503,6 +520,10 @@ namespace Pivot.CodeModule.Views
                         var container = root.FindName("ScratchpadContainer") as FrameworkElement;
                         var title = root.FindName("ScratchpadTitle") as TextBlock;
                         var scratchEditor = root.FindName("ScratchpadEditor") as TextBox;
+                        var cardPanelLocal = root.FindName("CardPanel") as FrameworkElement;
+
+                        // Ensure card area is visible so overlay/container can be shown
+                        if (cardPanelLocal != null) cardPanelLocal.Visibility = Visibility.Visible;
 
                         if (overlay != null) overlay.Visibility = Visibility.Visible;
                         if (container != null) container.Visibility = Visibility.Visible;
@@ -514,6 +535,9 @@ namespace Pivot.CodeModule.Views
 
                         // ensure scratch editor focused
                         try { scratchEditor?.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); } catch { }
+
+                        // adjust container size to fit available area
+                        try { AdjustScratchpadSize(); } catch { }
                     }
                     catch { }
                 });
@@ -858,6 +882,12 @@ namespace Pivot.CodeModule.Views
                     list.IsItemClickEnabled = true;
                     list.SelectionMode = ListViewSelectionMode.Single;
                 }
+                // Ensure CardPanel is visible and hit testable after closing the snippet
+                if (cardPanel != null)
+                {
+                    cardPanel.Visibility = Visibility.Visible;
+                    cardPanel.IsHitTestVisible = true;
+                }
             }
             catch { }
 
@@ -1085,17 +1115,8 @@ namespace Pivot.CodeModule.Views
                 // show a brief saved toast (InfoBar)
                 try
                 {
-                    var bar = this.FindName("QuickAddInfoBar") as InfoBar;
-                    if (bar != null)
-                    {
-                        bar.Message = "Saved";
-                        bar.IsOpen = true;
-                        _ = Task.Run(async () =>
-                        {
-                            await Task.Delay(1500);
-                            App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { try { bar.IsOpen = false; } catch { } });
-                        });
-                    }
+                    // show small saved overlay at CardPanel bottom-right
+                    ShowCardSavedOverlay();
                 }
                 catch { }
             }
@@ -1540,6 +1561,51 @@ namespace Pivot.CodeModule.Views
             return null;
         }
 
+        private void RootGrid_SizeChanged(object? sender, SizeChangedEventArgs e)
+        {
+            try
+            {
+                AdjustScratchpadSize();
+            }
+            catch { }
+        }
+
+        private void AdjustScratchpadSize()
+        {
+            try
+            {
+                var root = this.Content as FrameworkElement;
+                if (root == null) return;
+                var overlay = root.FindName("ScratchpadOverlay") as FrameworkElement;
+                var container = root.FindName("ScratchpadContainer") as FrameworkElement;
+                if (overlay == null || container == null) return;
+                if (overlay.Visibility != Visibility.Visible) return;
+
+                // constraints should match XAML defaults
+                const double minW = 320.0, minH = 240.0;
+                const double maxW = 900.0, maxH = 640.0;
+
+                // prefer 90% of available root size, clamped to min/max
+                var availW = Math.Max(minW, root.ActualWidth * 0.9);
+                var availH = Math.Max(minH, root.ActualHeight * 0.9);
+
+                var w = Math.Min(maxW, availW);
+                var h = Math.Min(maxH, availH);
+
+                // Apply new size on UI thread
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        container.Width = w;
+                        container.Height = h;
+                    }
+                    catch { }
+                });
+            }
+            catch { }
+        }
+
         private bool IsControlDown()
         {
             try
@@ -1556,6 +1622,37 @@ namespace Pivot.CodeModule.Views
             catch { }
 
             return false;
+        }
+
+        private void ShowCardSavedOverlay()
+        {
+            try
+            {
+                var root = this.Content as FrameworkElement;
+                var toast = root?.FindName("CardSavedOverlay") as FrameworkElement;
+                if (toast == null) return;
+
+                // show on UI thread
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try { toast.Visibility = Visibility.Visible; } catch { }
+                });
+
+                // hide after delay
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(1500);
+                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                        {
+                            try { toast.Visibility = Visibility.Collapsed; } catch { }
+                        });
+                    }
+                    catch { }
+                });
+            }
+            catch { }
         }
 
         // Track when code editor has focus so tab behavior can be incident-specific
