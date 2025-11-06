@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Pivot.Services;
 using Pivot.ViewModels;
+using Pivot.CodeModule.Models;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Messages;
 
@@ -50,7 +51,7 @@ namespace Pivot.Controls
                     var user = _settings.GetUserSettings();
                     if (user != null && user.CodeFilters != null && user.CodeFilters.Count > 0)
                     {
-                        var prefTags = user.CodeFilters.Select(f => new { Name = f.Name }).ToList();
+                        var prefTags = user.CodeFilters.Select(f => new TagItem { Name = f.Name, IsSelected = false }).ToList();
                         TagItems.ItemsSource = prefTags;
                         return;
                     }
@@ -63,7 +64,7 @@ namespace Pivot.Controls
                         return;
                     }
 
-                    var tags = repo.GetAllTags().Select(t => new { Name = t.Name }).ToList();
+                    var tags = repo.GetAllTags().Select(t => new TagItem { Name = t.Name, IsSelected = false }).ToList();
                     if (tags == null || tags.Count == 0)
                     {
                         try
@@ -72,7 +73,7 @@ namespace Pivot.Controls
                             var derived = all.SelectMany(f => (f.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()))
                                 .Where(s => !string.IsNullOrWhiteSpace(s))
                                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                                .Select(n => new { Name = n })
+                                .Select(n => new TagItem { Name = n, IsSelected = false })
                                 .ToList();
                             tags = derived;
                         }

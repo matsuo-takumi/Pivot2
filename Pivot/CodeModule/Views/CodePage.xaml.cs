@@ -220,14 +220,8 @@ namespace Pivot.CodeModule.Views
             }
             catch { }
 
-            // ESC key to close
-            try
-            {
-                var esc = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
-                esc.Invoked += (_, __) => { if (ViewModel != null) ViewModel.SelectedSnippet = null; };
-                this.KeyboardAccelerators.Add(esc);
-            }
-            catch { }
+            // NOTE: Escape closing removed per request — closing should only occur via
+            // the Close button, tab navigation, or clicking outside the snippet.
 
             // ensure placeholder visibility reflects whether snippets exist
             try
@@ -386,7 +380,8 @@ namespace Pivot.CodeModule.Views
 
         private async Task OpenSnippetWithAnimationAsync()
         {
-            if (_isAnimationActive) return;
+            Debug.WriteLine("OpenSnippetWithAnimationAsync: called");
+            if (_isAnimationActive) { Debug.WriteLine("OpenSnippetWithAnimationAsync: animation active, returning"); return; }
             _isAnimationActive = true;
             var root = this.Content as FrameworkElement;
             var list = root?.FindName("SnippetListView") as ListView;
@@ -432,11 +427,14 @@ namespace Pivot.CodeModule.Views
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"OpenSnippetWithAnimationAsync: exception during prepare: {ex}");
+            }
 
-                // show editor and hide cards — display snippet in main editor panel instead of the overlay
-                try
-                {
+            // show editor and hide cards — display snippet in main editor panel instead of the overlay
+            try
+            {
                     if (editorPanel != null)
                     {
                         editorPanel.Opacity = 0;
@@ -459,6 +457,31 @@ namespace Pivot.CodeModule.Views
                     // Ensure the parent panel is visible so the overlay can render
                     if (cardPanelLocal != null) cardPanelLocal.Visibility = Visibility.Visible;
                     if (overlay != null) overlay.Visibility = Visibility.Visible;
+                    // Ensure overlay-level handlers are registered with handledEventsToo so
+                    // clicks inside child elements don't prevent the overlay from seeing outside clicks.
+                    if (overlay != null)
+                    {
+                        try
+                        {
+                            overlay.RemoveHandler(UIElement.PointerPressedEvent, new PointerEventHandler(ScratchpadOverlay_PointerPressed));
+                        }
+                        catch { }
+                        try
+                        {
+                            overlay.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(ScratchpadOverlay_PointerPressed), true);
+                        }
+                        catch { }
+                        try
+                        {
+                            overlay.RemoveHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(ScratchpadOverlay_PointerPressed));
+                        }
+                        catch { }
+                        try
+                        {
+                            overlay.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(ScratchpadOverlay_PointerPressed), true);
+                        }
+                        catch { }
+                    }
                     var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
                     var titleBox = this.FindName("ScratchpadTitleBox") as TextBox;
                     if (ViewModel?.SelectedSnippet != null)
@@ -495,6 +518,25 @@ namespace Pivot.CodeModule.Views
                         rootUi.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Root_PointerPressed), true);
                     }
                     catch { }
+
+                    // Also listen for PointerReleased as a reliable fallback for clicks that don't reach Pressed
+                    try
+                    {
+                        rootUi.PointerReleased -= Root_PointerReleased;
+                        rootUi.PointerReleased += Root_PointerReleased;
+                    }
+                    catch { }
+
+                    try
+                    {
+                        rootUi.RemoveHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Root_PointerReleased));
+                    }
+                    catch { }
+                    try
+                    {
+                        rootUi.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Root_PointerReleased), true);
+                    }
+                    catch { }
                 }
             }
             catch { }
@@ -512,6 +554,8 @@ namespace Pivot.CodeModule.Views
 
             // refresh tags for scratchpad UI
             try { RefreshScratchpadTags(); } catch { }
+            await Task.CompletedTask;
+            return;
         }
 
         // Show the existing scratchpad overlay and populate it. The overlay is made draggable via pointer handlers.
@@ -714,29 +758,33 @@ namespace Pivot.CodeModule.Views
                         // Close the snippet window when it loses activation (focus out) or when main app window closes.
                         try
                         {
-                            wnd.Activated += (s, args) =>
+                        wnd.Activated += (s, args) =>
+                        {
+                            try
                             {
-                                try
+                                if (args.WindowActivationState == WindowActivationState.Deactivated)
                                 {
-                                    if (args.WindowActivationState == WindowActivationState.Deactivated)
+                                    try
                                     {
-                                        try
+                                        // Save snippet contents when the snippet window loses activation,
+                                        // but do NOT close the window or deselect the snippet. Closing
+                                        // should only be performed via the Close button, tab navigation,
+                                        // or clicking outside the snippet.
+                                        if (snippet != null)
                                         {
-                                            if (snippet != null)
-                                            {
-                                                snippet.Content = contentBox.Text ?? string.Empty;
-                                                snippet.Tags = tagsBox.Text ?? string.Empty;
-                                                if (vm != null) _ = vm.SaveSnippetFileAsync(snippet);
-                                            }
+                                            snippet.Content = contentBox.Text ?? string.Empty;
+                                            snippet.Tags = tagsBox.Text ?? string.Empty;
+                                            if (vm != null) _ = vm.SaveSnippetFileAsync(snippet);
                                         }
-                                        catch { }
-                                        try { if (vm != null) vm.SelectedSnippet = null; } catch { }
-                                        try { RestoreListInteraction(); } catch { }
-                                        try { wnd.Close(); } catch { }
                                     }
+                                    catch { }
+
+                                    // Restore list interaction but do not dismiss the snippet window.
+                                    try { RestoreListInteraction(); } catch { }
                                 }
-                                catch { }
-                            };
+                            }
+                            catch { }
+                        };
                         }
                         catch { }
 
@@ -912,6 +960,18 @@ namespace Pivot.CodeModule.Views
                 {
                     try { rootUi.PointerPressed -= Root_PointerPressed; } catch { }
                     try { rootUi.RemoveHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Root_PointerPressed)); } catch { }
+                    try { rootUi.PointerReleased -= Root_PointerReleased; } catch { }
+                    try { rootUi.RemoveHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Root_PointerReleased)); } catch { }
+                    try
+                    {
+                        var overlay = (this.Content as FrameworkElement)?.FindName("ScratchpadOverlay") as UIElement;
+                        if (overlay != null)
+                        {
+                            try { overlay.RemoveHandler(UIElement.PointerPressedEvent, new PointerEventHandler(ScratchpadOverlay_PointerPressed)); } catch { }
+                            try { overlay.RemoveHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(ScratchpadOverlay_PointerPressed)); } catch { }
+                        }
+                    }
+                    catch { }
                 }
             }
             catch { }
@@ -1146,11 +1206,36 @@ namespace Pivot.CodeModule.Views
             {
                 var rootUi = this.Content as FrameworkElement;
                 if (rootUi == null) return;
+                // Determine overlay visibility early so we only ignore list/card clicks when overlay is NOT visible.
                 var overlay = rootUi.FindName("ScratchpadOverlay") as FrameworkElement;
+                bool overlayVisible = overlay != null && overlay.Visibility == Visibility.Visible;
+                try
+                {
+                    var orig = e.OriginalSource as DependencyObject;
+                    if (orig != null)
+                    {
+                        var fromListOrCard = IsAncestorNamed(orig, "SnippetListView") || IsAncestorNamed(orig, "SnippetCardBorder");
+                        // If the click originated in the list/card AND the overlay is NOT visible,
+                        // treat it as a normal list click (ignore here). If overlay is visible, do NOT ignore.
+                        if (fromListOrCard && !overlayVisible)
+                        {
+                            return;
+                        }
+                    }
+                }
+                catch { }
                 if (overlay != null && overlay.Visibility == Visibility.Visible)
                 {
                     var container = rootUi.FindName("ScratchpadContainer") as FrameworkElement;
-                    if (container == null) return;
+                    // If the container is missing or not measured yet, treat this as an outside click
+                    // so the snippet closes instead of ignoring the input.
+                    if (container == null || container.ActualWidth <= 0 || container.ActualHeight <= 0)
+                    {
+                        Debug.WriteLine("Root_PointerPressed: ScratchpadContainer missing/zero-size — treating as outside. Closing snippet.");
+                        if (ViewModel != null) ViewModel.SelectedSnippet = null;
+                        try { await CloseSnippetWithAnimationAsync(); } catch { }
+                        return;
+                    }
                     var pt = e.GetCurrentPoint(rootUi).Position;
                     var transform = container.TransformToVisual(rootUi);
                     var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
@@ -1181,13 +1266,67 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
+        // Fallback: handle PointerReleased to catch cases where Pressed was handled by child
+        private async void Root_PointerReleased(object? sender, PointerRoutedEventArgs e)
+        {
+            try
+            {
+                var rootUi = this.Content as FrameworkElement;
+                if (rootUi == null) return;
+                var overlay = rootUi.FindName("ScratchpadOverlay") as FrameworkElement;
+                if (overlay != null && overlay.Visibility == Visibility.Visible)
+                {
+                    var container = rootUi.FindName("ScratchpadContainer") as FrameworkElement;
+                    if (container == null || container.ActualWidth <= 0 || container.ActualHeight <= 0)
+                    {
+                        Debug.WriteLine("Root_PointerReleased: ScratchpadContainer missing/zero-size — treating as outside. Closing snippet.");
+                        if (ViewModel != null) ViewModel.SelectedSnippet = null;
+                        try { await CloseSnippetWithAnimationAsync(); } catch { }
+                        return;
+                    }
+                    var pt = e.GetCurrentPoint(rootUi).Position;
+                    var transform = container.TransformToVisual(rootUi);
+                    var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                    if (!bounds.Contains(pt))
+                    {
+                        Debug.WriteLine("Root_PointerReleased: Click outside ScratchpadContainer. Closing snippet.");
+                        if (ViewModel != null) ViewModel.SelectedSnippet = null;
+                        try { await CloseSnippetWithAnimationAsync(); } catch { }
+                    }
+                    return;
+                }
+
+                var editorPanel = rootUi.FindName("EditorPanel") as FrameworkElement;
+                if (editorPanel == null) return;
+
+                var pt2 = e.GetCurrentPoint(rootUi).Position;
+                var transform2 = editorPanel.TransformToVisual(rootUi);
+                var bounds2 = transform2.TransformBounds(new Rect(0, 0, editorPanel.ActualWidth, editorPanel.ActualHeight));
+                if (!bounds2.Contains(pt2))
+                {
+                    Debug.WriteLine("Root_PointerReleased: Click outside EditorPanel. Closing snippet.");
+                    if (ViewModel != null) ViewModel.SelectedSnippet = null;
+                    try { await CloseSnippetWithAnimationAsync(); } catch { }
+                }
+            }
+            catch { }
+        }
+
         private async void ScratchpadOverlay_PointerPressed(object? sender, PointerRoutedEventArgs e)
         {
             try
             {
                 if (!(sender is FrameworkElement overlay)) return;
                 var container = overlay.FindName("ScratchpadContainer") as FrameworkElement;
-                if (container == null) return;
+                // If the container is missing or not measured yet, treat as outside click
+                if (container == null || container.ActualWidth <= 0 || container.ActualHeight <= 0)
+                {
+                    Debug.WriteLine("ScratchpadOverlay_PointerPressed: ScratchpadContainer missing/zero-size — treating as outside. Closing snippet.");
+                    try { e.Handled = true; } catch { }
+                    if (ViewModel != null) ViewModel.SelectedSnippet = null;
+                    try { await CloseSnippetWithAnimationAsync(); } catch { }
+                    return;
+                }
                 var pt = e.GetCurrentPoint(overlay).Position;
                 var transform = container.TransformToVisual(overlay);
                 var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
@@ -1297,6 +1436,21 @@ namespace Pivot.CodeModule.Views
                 });
             }
             catch { }
+        }
+
+        private bool IsAncestorNamed(DependencyObject start, string name)
+        {
+            try
+            {
+                var current = start;
+                while (current != null)
+                {
+                    if (current is FrameworkElement fe && fe.Name == name) return true;
+                    current = VisualTreeHelper.GetParent(current);
+                }
+            }
+            catch { }
+            return false;
         }
 
         private T? FindDescendantOfType<T>(DependencyObject parent) where T : DependencyObject
