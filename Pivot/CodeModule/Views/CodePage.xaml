@@ -7,9 +7,12 @@
     xmlns:vm="using:Pivot.CodeModule.ViewModels"
     xmlns:models="using:Pivot.CodeModule.Models"
     xmlns:ctrls="using:Pivot.Controls"
+    xmlns:conv="using:Pivot.CodeModule.Converters"
     mc:Ignorable="d">
 
-    
+    <Page.Resources>
+        <conv:CardPanelSizeConverter x:Key="CardPanelSizeConverter" />
+    </Page.Resources>
 
     <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" Background="LightGray" PointerPressed="Root_PointerPressed">
         <!-- Header spanning both columns -->

@@ -480,8 +480,21 @@ namespace Pivot.CodeModule.Views
                 var rootUi = this.Content as UIElement;
                 if (rootUi != null)
                 {
+                    // Normal attachment
                     rootUi.PointerPressed -= Root_PointerPressed;
                     rootUi.PointerPressed += Root_PointerPressed;
+
+                    // Also register handledEventsToo so we catch clicks even if children mark events handled
+                    try
+                    {
+                        rootUi.RemoveHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Root_PointerPressed));
+                    }
+                    catch { }
+                    try
+                    {
+                        rootUi.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Root_PointerPressed), true);
+                    }
+                    catch { }
                 }
             }
             catch { }
@@ -895,7 +908,11 @@ namespace Pivot.CodeModule.Views
             try
             {
                 var rootUi = this.Content as UIElement;
-                if (rootUi != null) rootUi.PointerPressed -= Root_PointerPressed;
+                if (rootUi != null)
+                {
+                    try { rootUi.PointerPressed -= Root_PointerPressed; } catch { }
+                    try { rootUi.RemoveHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Root_PointerPressed)); } catch { }
+                }
             }
             catch { }
 
@@ -1585,9 +1602,21 @@ namespace Pivot.CodeModule.Views
                 const double minW = 320.0, minH = 240.0;
                 const double maxW = 900.0, maxH = 640.0;
 
-                // prefer 90% of available root size, clamped to min/max
-                var availW = Math.Max(minW, root.ActualWidth * 0.9);
-                var availH = Math.Max(minH, root.ActualHeight * 0.9);
+                // Prefer to size relative to the CardPanel area so the scratchpad matches the card region.
+                var cardPanel = root.FindName("CardPanel") as FrameworkElement;
+
+                double baseW = root.ActualWidth;
+                double baseH = root.ActualHeight;
+
+                if (cardPanel != null && cardPanel.ActualWidth > 0 && cardPanel.ActualHeight > 0)
+                {
+                    baseW = cardPanel.ActualWidth;
+                    baseH = cardPanel.ActualHeight;
+                }
+
+                // prefer 90% of available card area, clamped to min/max
+                var availW = Math.Max(minW, baseW * 0.9);
+                var availH = Math.Max(minH, baseH * 0.9);
 
                 var w = Math.Min(maxW, availW);
                 var h = Math.Min(maxH, availH);
