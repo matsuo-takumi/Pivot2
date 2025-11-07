@@ -68,6 +68,12 @@ namespace Pivot.Services
             _logger.LogInformation("SettingsService: Loaded ProjectDirectories count (parsed): {Count}", _cache.ProjectDirectories.Count);
             await NormalizeAndPersistIfNeededAsync("ProjectDirectories", projectPref, _cache.ProjectDirectories);
 
+            // CodeDirectories
+            var codePref = await _settingsStore.GetAsync("CodeDirectories");
+            _cache.CodeDirectories = ParseDirectoriesValue(codePref);
+            _logger.LogInformation("SettingsService: Loaded CodeDirectories count (parsed): {Count}", _cache.CodeDirectories.Count);
+            await NormalizeAndPersistIfNeededAsync("CodeDirectories", codePref, _cache.CodeDirectories);
+
             // Export output directory
             try
             {
@@ -541,6 +547,7 @@ namespace Pivot.Services
                 DirectoryCategory.Asset => "AssetDirectories",
                 DirectoryCategory.Image => "ImageDirectories",
                 DirectoryCategory.Project => "ProjectDirectories",
+                DirectoryCategory.Code => "CodeDirectories",
                 _ => throw new ArgumentOutOfRangeException(nameof(category))
             };
 
@@ -549,6 +556,7 @@ namespace Pivot.Services
                 DirectoryCategory.Asset => _cache.AssetDirectories,
                 DirectoryCategory.Image => _cache.ImageDirectories,
                 DirectoryCategory.Project => _cache.ProjectDirectories,
+                DirectoryCategory.Code => _cache.CodeDirectories,
                 _ => throw new ArgumentOutOfRangeException(nameof(category))
             };
 
@@ -585,6 +593,7 @@ namespace Pivot.Services
                 DirectoryCategory.Asset => "AssetDirectories",
                 DirectoryCategory.Image => "ImageDirectories",
                 DirectoryCategory.Project => "ProjectDirectories",
+                DirectoryCategory.Code => "CodeDirectories",
                 _ => throw new ArgumentOutOfRangeException(nameof(category))
             };
 
@@ -593,6 +602,7 @@ namespace Pivot.Services
                 DirectoryCategory.Asset => _cache.AssetDirectories,
                 DirectoryCategory.Image => _cache.ImageDirectories,
                 DirectoryCategory.Project => _cache.ProjectDirectories,
+                DirectoryCategory.Code => _cache.CodeDirectories,
                 _ => throw new ArgumentOutOfRangeException(nameof(category))
             };
 

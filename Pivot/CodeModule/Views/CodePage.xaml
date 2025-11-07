@@ -75,11 +75,7 @@
 
                                                 <!-- Title row with delete icon on the right -->
                                                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                                                <StackPanel Grid.Column="0" Orientation="Vertical">
-                                                    <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
-                                                    <!-- Tags: show comma-separated tags if present; will trim if too long -->
-                                                    <TextBlock Text="{x:Bind Tags}" Foreground="Gray" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="1" />
-                                                </StackPanel>
+                                                    <TextBlock Grid.Column="0" Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
                                                     <Button Grid.Column="1" Click="CardDeleteButton_Click" Tag="{x:Bind Id}" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Delete">
                                                         <FontIcon Glyph="&#xE74D;" FontFamily="Segoe MDL2 Assets"/>
                                                     </Button>
@@ -89,8 +85,6 @@
                                                 <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                                                     <TextBlock Text="·" Foreground="Gray" />
                                                     <TextBlock Text="{x:Bind Updated}" Foreground="Gray" FontSize="12" />
-                                                    <!-- Tags next to date as well; will trim if insufficient space -->
-                                                    <TextBlock Text="{x:Bind Tags}" Foreground="Gray" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="1" />
                                                 </StackPanel>
                                             </Grid>
                                         </Border>

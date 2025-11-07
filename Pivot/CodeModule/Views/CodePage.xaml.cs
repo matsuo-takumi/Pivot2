@@ -91,6 +91,30 @@ namespace Pivot.CodeModule.Views
                                 repo.AddTag(name);
                                 newTagBox.Text = string.Empty;
                                 RefreshScratchpadTags();
+
+                                // Also add to CodeFilters and create a CodeCategory for this tag so it appears under Preferences > Code > Categories
+                                try
+                                {
+                                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                                    if (settings != null)
+                                    {
+                                        var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+                                        if (!filters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
+                                        {
+                                            var nf = new Pivot.Models.CustomFilter { Name = name };
+                                            filters.Add(nf);
+                                            _ = settings.SetCodeFiltersAsync(filters);
+
+                                            var cats = settings.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
+                                            if (!cats.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
+                                            {
+                                                cats.Add(new Pivot.Models.CodeCategory { Name = name, FilterIds = new List<Guid> { nf.Id } });
+                                                _ = settings.SetCodeCategoriesAsync(cats);
+                                            }
+                                        }
+                                    }
+                                }
+                                catch { }
                             }
                         }
                         catch { }
@@ -115,6 +139,30 @@ namespace Pivot.CodeModule.Views
                                     repo.AddTag(name);
                                     editorNewTagBox.Text = string.Empty;
                                     RefreshScratchpadTags();
+
+                                    // Also add to CodeFilters and create a CodeCategory
+                                    try
+                                    {
+                                        var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                                        if (settings != null)
+                                        {
+                                            var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+                                            if (!filters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
+                                            {
+                                                var nf = new Pivot.Models.CustomFilter { Name = name };
+                                                filters.Add(nf);
+                                                _ = settings.SetCodeFiltersAsync(filters);
+
+                                                var cats = settings.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
+                                                if (!cats.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
+                                                {
+                                                    cats.Add(new Pivot.Models.CodeCategory { Name = name, FilterIds = new List<Guid> { nf.Id } });
+                                                    _ = settings.SetCodeCategoriesAsync(cats);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    catch { }
                                 }
                             }
                             catch { }
@@ -305,6 +353,8 @@ namespace Pivot.CodeModule.Views
                 // Categories from Preferences → Code categories (groups) with filters
                 var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
                 var categories = settings?.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
+                // hide default 'Languages' category so user-defined categories (tags) appear instead
+                try { categories = categories.Where(c => !string.Equals(c.Name, "Languages", StringComparison.OrdinalIgnoreCase)).ToList(); } catch { }
                 var filters = settings?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
 
                 if (categories.Any())
@@ -360,6 +410,28 @@ namespace Pivot.CodeModule.Views
                     ViewModel.ActiveFilters.Add(filterId);
                     ViewModel.FilterSnippets();
                     if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                }
+                else
+                {
+                    // If the clicked item is a category parent (no Tag), try to find the category and apply all its filters
+                    try
+                    {
+                        var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                        var catName = item.Content?.ToString() ?? string.Empty;
+                        if (settings != null && !string.IsNullOrWhiteSpace(catName))
+                        {
+                            var cats = settings.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
+                            var cat = cats.FirstOrDefault(c => string.Equals(c.Name, catName, StringComparison.OrdinalIgnoreCase));
+                            if (cat != null)
+                            {
+                                ViewModel.ActiveFilters.Clear();
+                                foreach (var fid in cat.FilterIds) ViewModel.ActiveFilters.Add(fid);
+                                ViewModel.FilterSnippets();
+                                if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                            }
+                        }
+                    }
+                    catch { }
                 }
             }
             catch { }

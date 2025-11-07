@@ -11,16 +11,18 @@
     x:DataType="local:DirectoryPage"
     x:Name="DirectoryPageRoot">
 
-    <!-- Grid for dynamic 3-column layout -->
-    <Grid Padding="20">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1*"/>
-            <ColumnDefinition Width="1*"/>
-            <ColumnDefinition Width="1*"/>
-        </Grid.ColumnDefinitions>
+    <!-- Grid for dynamic 4-column layout (wrapped in horizontal ScrollViewer) -->
+    <ScrollViewer x:Name="DirectoriesScrollViewer" Padding="20" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+            </Grid.ColumnDefinitions>
         
         <!-- Section 1: Asset Directories -->
-        <Border Grid.Column="0"
+        <Border Grid.Column="0" MinWidth="360"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
@@ -88,7 +90,7 @@
         </Border>
 
         <!-- Section 2: Image Directories -->
-        <Border Grid.Column="1"
+        <Border Grid.Column="1" MinWidth="360"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
@@ -156,13 +158,13 @@
         </Border>
 
         <!-- Section 3: Project Directories -->
-        <Border Grid.Column="2"
+        <Border Grid.Column="2" MinWidth="360" Margin="10,0,10,0"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="16"
-                Margin="10,0,0,0">
+                >
             <StackPanel Spacing="12">
                 <TextBlock Text="Project Directories" 
                            Style="{StaticResource SubtitleTextBlockStyle}"/>
@@ -223,7 +225,76 @@
             </StackPanel>
         </Border>
         
+        <!-- Section 4: Code Directories -->
+        <Border Grid.Column="3" MinWidth="360"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="16"
+                Margin="10,0,0,0">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Code Directories" 
+                           Style="{StaticResource SubtitleTextBlockStyle}"/>
+                
+                <!-- Add Button -->
+                <Button Content="+" 
+                        Command="{Binding SelectCodeDirectoryCommand}" 
+                        Width="40" 
+                        Height="40"
+                        HorizontalAlignment="Left"
+                        CornerRadius="4"
+                        FontSize="18"
+                        Padding="0"/>
+                
+                <!-- Directory List -->
+                <ItemsControl ItemsSource="{Binding CodeDirectories}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="4"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0"
+                                        Command="{Binding ElementName=DirectoryPageRoot, Path=DataContext.OpenDirectoryCommand}" 
+                                        CommandParameter="{Binding}"
+                                        Width="32" 
+                                        Height="32"
+                                        CornerRadius="4" 
+                                        Padding="0"
+                                        VerticalAlignment="Center">
+                                    <SymbolIcon Symbol="Folder"/>
+                                </Button>
+                                <TextBlock Text="{Binding}" 
+                                           Grid.Column="1"
+                                           VerticalAlignment="Center" 
+                                           TextWrapping="WrapWholeWords"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           FontSize="13"/>
+                                <Button Content="−" 
+                                        Command="{Binding ElementName=DirectoryPageRoot, Path=DataContext.RemoveDirectoryCommand}" 
+                                        CommandParameter="{Binding}"
+                                        Grid.Column="2"
+                                        Width="32" 
+                                        Height="32"
+                                        CornerRadius="4" 
+                                        Padding="0"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
     </Grid>
+    </ScrollViewer>
+    
 </Page>
 
 

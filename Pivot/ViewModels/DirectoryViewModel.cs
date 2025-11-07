@@ -64,14 +64,17 @@ namespace Pivot.ViewModels
                 AssetDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Assets" };
                 ImageDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Images" };
                 ProjectDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Projects" };
+                CodeDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Code" };
                 AddDirectoryCommand = new AsyncRelayCommand<DirectoryCategory>(async (_) => await Task.CompletedTask);
                 RemoveDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
                 AddAssetDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
                 AddImageDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
                 AddProjectDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
+                AddCodeDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
                 SelectAssetDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
                 SelectImageDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
                 SelectProjectDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
+                SelectCodeDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
                 OpenDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
             }
             else
@@ -94,6 +97,7 @@ namespace Pivot.ViewModels
             AssetDirectories = new ObservableCollection<string>(settings.AssetDirectories);
             ImageDirectories = new ObservableCollection<string>(settings.ImageDirectories);
             ProjectDirectories = new ObservableCollection<string>(settings.ProjectDirectories);
+            CodeDirectories = new ObservableCollection<string>(settings.CodeDirectories);
 
             AddDirectoryCommand = new AsyncRelayCommand<DirectoryCategory>(AddDirectoryAsync);
             RemoveDirectoryCommand = new AsyncRelayCommand<string>(RemoveDirectoryAsync);
@@ -103,23 +107,28 @@ namespace Pivot.ViewModels
             SelectAssetDirectoryCommand = new AsyncRelayCommand(SelectAssetDirectoryAsync);
             SelectImageDirectoryCommand = new AsyncRelayCommand(SelectImageDirectoryAsync);
             SelectProjectDirectoryCommand = new AsyncRelayCommand(SelectProjectDirectoryAsync);
+            SelectCodeDirectoryCommand = new AsyncRelayCommand(SelectCodeDirectoryAsync);
+            AddCodeDirectoryCommand = new AsyncRelayCommand<string>(AddCodeDirectoryAsync);
             OpenDirectoryCommand = new AsyncRelayCommand<string>(OpenDirectoryAsync);
         }
 
         public ObservableCollection<string> AssetDirectories { get; }
         public ObservableCollection<string> ImageDirectories { get; }
         public ObservableCollection<string> ProjectDirectories { get; }
+        public ObservableCollection<string> CodeDirectories { get; }
 
         public IAsyncRelayCommand AddDirectoryCommand { get; }
         public IAsyncRelayCommand<string> RemoveDirectoryCommand { get; }
         public IAsyncRelayCommand<string> AddAssetDirectoryCommand { get; }
         public IAsyncRelayCommand<string> AddImageDirectoryCommand { get; }
         public IAsyncRelayCommand<string> AddProjectDirectoryCommand { get; }
+        public IAsyncRelayCommand<string> AddCodeDirectoryCommand { get; }
 
         // フォルダピッカーでディレクトリ選択するコマンド
         public IAsyncRelayCommand SelectAssetDirectoryCommand { get; }
         public IAsyncRelayCommand SelectImageDirectoryCommand { get; }
         public IAsyncRelayCommand SelectProjectDirectoryCommand { get; }
+        public IAsyncRelayCommand SelectCodeDirectoryCommand { get; }
 
         // ディレクトリをエクスプローラーで開くコマンド
         public IAsyncRelayCommand<string> OpenDirectoryCommand { get; }
@@ -288,6 +297,51 @@ namespace Pivot.ViewModels
             }
         }
 
+        // Code ディレクトリ選択コマンド（FolderPickerで選択）
+        private async Task SelectCodeDirectoryAsync()
+        {
+            if (_settingsService == null) return;
+
+            try
+            {
+                var folderPicker = new Windows.Storage.Pickers.FolderPicker();
+                folderPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop;
+                folderPicker.FileTypeFilter.Add("*");
+
+                var uiWindow = App.Current.MainWindow as Microsoft.UI.Xaml.Window;
+                if (uiWindow == null) return;
+
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(uiWindow);
+                WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hwnd);
+
+                var folder = await folderPicker.PickSingleFolderAsync();
+                if (folder != null)
+                {
+                    string selectedPath = folder.Path;
+                    string normalizedSelectedPath = NormalizePath(selectedPath);
+
+                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: SelectedPath='{selectedPath}', Normalized='{normalizedSelectedPath}'");
+                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: Current CodeDirectories normalized: {string.Join(", ", CodeDirectories.Select(NormalizePath))}");
+
+                    if (!CodeDirectories.Any(d => NormalizePath(d) == normalizedSelectedPath))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: Adding '{selectedPath}' to settings and UI.");
+                        await _settingsService.AddDirectoryAsync(DirectoryCategory.Code, selectedPath);
+                        CodeDirectories.Add(selectedPath);
+                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: Added '{selectedPath}'. Current count: {CodeDirectories.Count}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: '{selectedPath}' already exists (normalized). Not adding.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SelectCodeDirectoryAsync error: {ex.Message}");
+            }
+        }
+
         private async Task RemoveDirectoryAsync(string? path)
         {
             if (string.IsNullOrWhiteSpace(path) || _settingsService == null) return;
@@ -375,6 +429,18 @@ namespace Pivot.ViewModels
             }
         }
 
+        // Code ディレクトリ追加コマンド
+        private async Task AddCodeDirectoryAsync(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || _settingsService == null) return;
+
+            if (!CodeDirectories.Contains(NormalizePath(path)))
+            {
+                await _settingsService.AddDirectoryAsync(DirectoryCategory.Code, path);
+                CodeDirectories.Add(NormalizePath(path));
+            }
+        }
+
         private ObservableCollection<string> GetDirectoryCollection(DirectoryCategory category)
         {
             return category switch
@@ -382,6 +448,7 @@ namespace Pivot.ViewModels
                 DirectoryCategory.Asset => AssetDirectories,
                 DirectoryCategory.Image => ImageDirectories,
                 DirectoryCategory.Project => ProjectDirectories,
+                DirectoryCategory.Code => CodeDirectories,
                 _ => throw new ArgumentOutOfRangeException(nameof(category))
             };
         }

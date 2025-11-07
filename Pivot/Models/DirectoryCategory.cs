@@ -4,6 +4,7 @@ namespace Pivot.Models
     {
         Asset,
         Image,
-        Project
+        Project,
+        Code
     }
 }
