@@ -75,7 +75,11 @@
 
                                                 <!-- Title row with delete icon on the right -->
                                                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                                                    <TextBlock Grid.Column="0" Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                                <StackPanel Grid.Column="0" Orientation="Vertical">
+                                                    <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                                    <!-- Tags: show comma-separated tags if present; will trim if too long -->
+                                                    <TextBlock Text="{x:Bind Tags}" Foreground="Gray" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                                                </StackPanel>
                                                     <Button Grid.Column="1" Click="CardDeleteButton_Click" Tag="{x:Bind Id}" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Delete">
                                                         <FontIcon Glyph="&#xE74D;" FontFamily="Segoe MDL2 Assets"/>
                                                     </Button>
@@ -85,6 +89,8 @@
                                                 <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                                                     <TextBlock Text="·" Foreground="Gray" />
                                                     <TextBlock Text="{x:Bind Updated}" Foreground="Gray" FontSize="12" />
+                                                    <!-- Tags next to date as well; will trim if insufficient space -->
+                                                    <TextBlock Text="{x:Bind Tags}" Foreground="Gray" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="1" />
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -94,7 +100,7 @@
                             </ScrollViewer>
 
                             <!-- Scratchpad overlay moved into CardPanel so it covers the card area only -->
-                            <Grid x:Name="ScratchpadOverlay" Visibility="Collapsed" Background="#80808080" IsHitTestVisible="True" PointerPressed="ScratchpadOverlay_PointerPressed" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Grid x:Name="ScratchpadOverlay" Visibility="Collapsed" Background="Transparent" IsHitTestVisible="True" PointerPressed="ScratchpadOverlay_PointerPressed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <Border x:Name="ScratchpadContainer" MinWidth="320" MinHeight="240" MaxWidth="900" MaxHeight="640" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                         <Grid RowDefinitions="Auto,Auto,*,Auto" ColumnDefinitions="*">

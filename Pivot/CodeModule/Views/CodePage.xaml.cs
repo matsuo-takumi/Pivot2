@@ -170,22 +170,7 @@ namespace Pivot.CodeModule.Views
             }
             catch { }
 
-            // wire scratchpad container drag handlers (make overlay movable)
-            try
-            {
-                var container = this.FindName("ScratchpadContainer") as FrameworkElement;
-                if (container != null)
-                {
-                    container.PointerPressed -= ScratchpadContainer_PointerPressed;
-                    container.PointerMoved -= ScratchpadContainer_PointerMoved;
-                    container.PointerReleased -= ScratchpadContainer_PointerReleased;
-
-                    container.PointerPressed += ScratchpadContainer_PointerPressed;
-                    container.PointerMoved += ScratchpadContainer_PointerMoved;
-                    container.PointerReleased += ScratchpadContainer_PointerReleased;
-                }
-            }
-            catch { }
+            // Scratchpad drag disabled — keep editor fixed centered. (No pointer handlers attached.)
 
             // keep scratchpad sized to available area when page resizes
             try
@@ -365,6 +350,7 @@ namespace Pivot.CodeModule.Views
                 {
                     ViewModel.ActiveFilters.Clear();
                     ViewModel.FilterSnippets();
+                    if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
                     return;
                 }
 
@@ -373,6 +359,7 @@ namespace Pivot.CodeModule.Views
                     ViewModel.ActiveFilters.Clear();
                     ViewModel.ActiveFilters.Add(filterId);
                     ViewModel.FilterSnippets();
+                    if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
                 }
             }
             catch { }
@@ -1006,9 +993,14 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private void SnippetListView_ItemClick(object sender, ItemClickEventArgs e)
+        private async void SnippetListView_ItemClick(object sender, ItemClickEventArgs e)
         {
             if (_isAnimationActive) { Debug.WriteLine("SnippetListView_ItemClick: Animation is active, ignoring click."); return; }
+            // If a snippet is already open, close it before opening another
+            if (ViewModel != null && ViewModel.SelectedSnippet != null)
+            {
+                await CloseSnippetWithAnimationAsync();
+            }
             if (e.ClickedItem is Pivot.CodeModule.Models.CodeFile clickedSnippet)
             {
                 if (ViewModel != null)
@@ -1312,36 +1304,38 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private async void ScratchpadOverlay_PointerPressed(object? sender, PointerRoutedEventArgs e)
+        private void ScratchpadOverlay_PointerPressed(object? sender, PointerRoutedEventArgs e)
         {
+            // Only close when click occurs outside the ScratchpadContainer.
             try
             {
-                if (!(sender is FrameworkElement overlay)) return;
-                var container = overlay.FindName("ScratchpadContainer") as FrameworkElement;
-                // If the container is missing or not measured yet, treat as outside click
+                var overlay = sender as FrameworkElement ?? (this.Content as FrameworkElement);
+                var container = overlay?.FindName("ScratchpadContainer") as FrameworkElement;
+                if (container == null)
+                {
+                    // Fallback: try finding from root
+                    var root = this.Content as FrameworkElement;
+                    container = root?.FindName("ScratchpadContainer") as FrameworkElement;
+                }
+
+                // If container missing or not measured yet, treat as outside click and close
                 if (container == null || container.ActualWidth <= 0 || container.ActualHeight <= 0)
                 {
-                    Debug.WriteLine("ScratchpadOverlay_PointerPressed: ScratchpadContainer missing/zero-size — treating as outside. Closing snippet.");
+                    try { CloseScratchpadSimple(); } catch { }
                     try { e.Handled = true; } catch { }
-                    if (ViewModel != null) ViewModel.SelectedSnippet = null;
-                    try { await CloseSnippetWithAnimationAsync(); } catch { }
                     return;
                 }
+
+                // Determine pointer position relative to overlay and test against container bounds
                 var pt = e.GetCurrentPoint(overlay).Position;
                 var transform = container.TransformToVisual(overlay);
                 var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
                 if (!bounds.Contains(pt))
                 {
-                    Debug.WriteLine("ScratchpadOverlay_PointerPressed: Click outside ScratchpadContainer. Closing snippet.");
-                    // mark handled so other handlers don't interfere
+                    try { CloseScratchpadSimple(); } catch { }
                     try { e.Handled = true; } catch { }
-
-                    // clear selection on viewmodel
-                    if (ViewModel != null) ViewModel.SelectedSnippet = null;
-
-                    // ensure close sequence runs even if binding didn't trigger (fallback)
-                    try { await CloseSnippetWithAnimationAsync(); } catch { }
                 }
+                // If inside bounds, do nothing so inner controls (tabs/title) receive the event normally.
             }
             catch { }
         }
@@ -1911,6 +1905,17 @@ namespace Pivot.CodeModule.Views
         {
             try
             {
+                // Escape closes the scratchpad immediately
+                if (e.Key == Windows.System.VirtualKey.Escape)
+                {
+                    try
+                    {
+                        CloseScratchpadSimple();
+                        e.Handled = true;
+                    }
+                    catch { }
+                    return;
+                }
                 if (e.Key == Windows.System.VirtualKey.Enter && IsControlDown())
                 {
                     try
