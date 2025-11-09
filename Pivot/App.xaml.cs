@@ -101,12 +101,53 @@ namespace Pivot
                 sc.AddTransient<ICodeRepository, CodeRepository>();
                 sc.AddTransient<CodeViewModel>();
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort registration; if System.IO or EF unavailable at runtime the app should still start.
+                System.Diagnostics.Debug.WriteLine($"ConfigureServices: Code module registration failed: {ex}");
+                // Register a file-based fallback repository so CodeViewModel can still save/export without SQLite.
+                try
+                {
+                    var asm = typeof(Pivot.CodeModule.Services.CodeRepository).Assembly;
+                    var t = asm.GetType("Pivot.CodeModule.Services.FileCodeRepository");
+                    if (t != null)
+                    {
+                        sc.AddTransient(typeof(ICodeRepository), sp => (ICodeRepository)Activator.CreateInstance(t, sp.GetRequiredService<SettingsService>())!);
+                        System.Diagnostics.Debug.WriteLine("ConfigureServices: registered FileCodeRepository fallback via reflection.");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("ConfigureServices: FileCodeRepository type not found in assembly; fallback not registered.");
+                    }
+                }
+                catch (Exception ex2)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ConfigureServices: failed to register FileCodeRepository fallback: {ex2}");
+                }
             }
 
+            // Ensure CodeViewModel is always registered so UI can still function even if DB registration failed.
+            sc.AddTransient<CodeViewModel>();
+
 			Services = sc.BuildServiceProvider();
+			// Ensure SQLite DB is created if possible so EF queries don't fail due to missing tables.
+			try
+			{
+				using var scope = Services.CreateScope();
+				var ctx = scope.ServiceProvider.GetService<SQLiteDbContext>();
+				if (ctx != null)
+				{
+					try
+					{
+						ctx.Database.EnsureCreated();
+					}
+					catch (Exception ex)
+					{
+						System.Diagnostics.Debug.WriteLine($"ConfigureServices: EnsureCreated failed: {ex}");
+					}
+				}
+			}
+			catch { }
 		}
 
 		public void Receive(ThemeChangedMessage message)

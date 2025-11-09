@@ -27,6 +27,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.CodeModule.Models;
 using Pivot.Services;
+using Pivot.Messages;
 
 // Note: editing is implemented with WinUI TextBox controls (replaced WebView2)
 
@@ -41,6 +42,24 @@ namespace Pivot.CodeModule.Views
         private Windows.Foundation.Point _scratchpadDragStart;
         private double _scratchpadStartX = 0;
         private double _scratchpadStartY = 0;
+        // Helper types for storing filter metadata in TreeViewNode.Content
+        private class FilterNodeInfo
+        {
+            public Guid Id { get; set; }
+            public string Name { get; set; } = string.Empty;
+            public override string ToString() => Name;
+        }
+        private class CategoryNodeInfo
+        {
+            public string Name { get; set; } = string.Empty;
+            public override string ToString() => Name;
+        }
+        private class SnippetNodeInfo
+        {
+            public Guid Id { get; set; }
+            public string Title { get; set; } = string.Empty;
+            public override string ToString() => Title;
+        }
 
         public CodePage()
         {
@@ -63,6 +82,29 @@ namespace Pivot.CodeModule.Views
 
             // build left navigation (Snippets/Categories)
             try { BuildNavigationMenu(); } catch { }
+            // populate tag ComboBoxes with existing tags on load
+            try { PopulateTagCombos(); } catch { }
+            // Restore previously selected snippet (persisted) if available
+            try
+            {
+                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                if (settings != null && ViewModel != null && repo != null)
+                {
+                    var lastId = settings.GetLastSelectedSnippetId();
+                    if (lastId != Guid.Empty)
+                    {
+                        var all = repo.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>();
+                        var found = all.FirstOrDefault(s => s.Id == lastId);
+                        if (found != null)
+                        {
+                            ViewModel.SelectedSnippet = found;
+                            _ = SendSelectedSnippetToEditorAsync();
+                        }
+                    }
+                }
+            }
+            catch { }
 
             // subscribe to selection changes to push content to editor
             if (DataContext is INotifyPropertyChanged pc)
@@ -77,7 +119,7 @@ namespace Pivot.CodeModule.Views
                 var tmpCloseBtn = this.FindName("ScratchpadCloseButton") as Button;
                 // no-op here
                 var addTagBtn = this.FindName("ScratchpadAddTagButton") as Button;
-                var newTagBox = this.FindName("ScratchpadNewTagBox") as TextBox;
+                var newTagBox = this.FindName("ScratchpadNewTagBox") as ComboBox;
                 if (addTagBtn != null && newTagBox != null)
                 {
                     addTagBtn.Click += (_, __) =>
@@ -85,6 +127,7 @@ namespace Pivot.CodeModule.Views
                         try
                         {
                             var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                            var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
                             var name = newTagBox.Text?.Trim() ?? string.Empty;
                             if (!string.IsNullOrWhiteSpace(name) && repo != null)
                             {
@@ -92,29 +135,37 @@ namespace Pivot.CodeModule.Views
                                 newTagBox.Text = string.Empty;
                                 RefreshScratchpadTags();
 
-                                // Also add to CodeFilters and create a CodeCategory for this tag so it appears under Preferences > Code > Categories
+                                // Attach tag to currently selected snippet (if any) and persist
                                 try
                                 {
-                                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                                    if (ViewModel?.SelectedSnippet != null)
+                                    {
+                                        var snippet = ViewModel.SelectedSnippet;
+                                        var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                                        if (!current.Contains(name, StringComparer.OrdinalIgnoreCase)) current.Add(name);
+                                        snippet.Tags = string.Join(",", current);
+                                        _ = ViewModel.SaveSnippetFileAsync(snippet);
+                                    }
+                                }
+                                catch { }
+
+                                // Also register into Preferences > Code Filters if missing
+                                try
+                                {
                                     if (settings != null)
                                     {
                                         var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
                                         if (!filters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
                                         {
-                                            var nf = new Pivot.Models.CustomFilter { Name = name };
-                                            filters.Add(nf);
+                                            filters.Add(new Pivot.Models.CustomFilter { Name = name });
                                             _ = settings.SetCodeFiltersAsync(filters);
-
-                                            var cats = settings.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
-                                            if (!cats.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
-                                            {
-                                                cats.Add(new Pivot.Models.CodeCategory { Name = name, FilterIds = new List<Guid> { nf.Id } });
-                                                _ = settings.SetCodeCategoriesAsync(cats);
-                                            }
                                         }
                                     }
                                 }
                                 catch { }
+
+                                // Refresh left navigation and tag combos to show the new tag
+                                try { BuildNavigationMenu(); PopulateTagCombos(); } catch { }
                             }
                         }
                         catch { }
@@ -125,7 +176,7 @@ namespace Pivot.CodeModule.Views
                 try
                 {
                     var editorAddBtn = this.FindName("EditorAddTagButton") as Button;
-                    var editorNewTagBox = this.FindName("EditorNewTagBox") as TextBox;
+                    var editorNewTagBox = this.FindName("EditorNewTagBox") as ComboBox;
                     if (editorAddBtn != null && editorNewTagBox != null)
                     {
                         editorAddBtn.Click += (_, __) =>
@@ -140,29 +191,39 @@ namespace Pivot.CodeModule.Views
                                     editorNewTagBox.Text = string.Empty;
                                     RefreshScratchpadTags();
 
-                                    // Also add to CodeFilters and create a CodeCategory
+                                    // Attach tag to currently selected snippet (if any) and persist
                                     try
                                     {
-                                        var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                                        if (settings != null)
+                                        if (ViewModel?.SelectedSnippet != null)
                                         {
-                                            var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
-                                            if (!filters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
-                                            {
-                                                var nf = new Pivot.Models.CustomFilter { Name = name };
-                                                filters.Add(nf);
-                                                _ = settings.SetCodeFiltersAsync(filters);
+                                            var snippet = ViewModel.SelectedSnippet;
+                                            var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                                            if (!current.Contains(name, StringComparer.OrdinalIgnoreCase)) current.Add(name);
+                                            snippet.Tags = string.Join(",", current);
+                                            _ = ViewModel.SaveSnippetFileAsync(snippet);
+                                        }
+                                    }
+                                    catch { }
 
-                                                var cats = settings.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
-                                                if (!cats.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
-                                                {
-                                                    cats.Add(new Pivot.Models.CodeCategory { Name = name, FilterIds = new List<Guid> { nf.Id } });
-                                                    _ = settings.SetCodeCategoriesAsync(cats);
-                                                }
+                                    // Also register into Preferences > Code Filters if missing
+                                    try
+                                    {
+                                        var settings2 = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                                        if (settings2 != null)
+                                        {
+                                            var filters2 = settings2.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+                                            if (!filters2.Any(flt => string.Equals(flt.Name, name, StringComparison.OrdinalIgnoreCase)))
+                                            {
+                                                filters2.Add(new Pivot.Models.CustomFilter { Name = name });
+                                                _ = settings2.SetCodeFiltersAsync(filters2);
                                             }
                                         }
                                     }
                                     catch { }
+
+                                    
+                                    // Refresh left navigation and tag combos to show the new tag
+                                    try { BuildNavigationMenu(); PopulateTagCombos(); } catch { }
                                 }
                             }
                             catch { }
@@ -213,7 +274,7 @@ namespace Pivot.CodeModule.Views
                     // Always remove to prevent duplicate attachments, then add
                     overlayRoot.PointerPressed -= ScratchpadOverlay_PointerPressed;
                     overlayRoot.PointerPressed += ScratchpadOverlay_PointerPressed;
-                    Debug.WriteLine("Constructor: ensured ScratchpadOverlay.PointerPressed is attached");
+                    
                 }
             }
             catch { }
@@ -244,7 +305,17 @@ namespace Pivot.CodeModule.Views
                         {
                             if (m.Value != Pivot.Models.NavigationRegion.Code)
                             {
-                                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { if (ViewModel != null) ViewModel.SelectedSnippet = null; });
+                                // When navigating away from Code tab, ensure current snippet is saved.
+                                try
+                                {
+                                    var vm = ViewModel;
+                                    if (vm != null && vm.SelectedSnippet != null)
+                                    {
+                                        _ = vm.SaveSnippetFileAsync(vm.SelectedSnippet);
+                                    }
+                                }
+                                catch { }
+                                // Do not clear SelectedSnippet automatically; preserve state.
                             }
                         }
                         catch { }
@@ -295,9 +366,28 @@ namespace Pivot.CodeModule.Views
         private void OnAddClicked(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         {
             var newSnippet = new Models.CodeFile { Title = "New Snippet", Language = "Python" };
-            ViewModel?.Snippets.Add(newSnippet);
+            try
+            {
+                // Persist immediately via repository if available
+                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                if (repo != null)
+                {
+                    repo.Save(newSnippet);
+                }
+            }
+            catch { }
+
             if (ViewModel != null)
             {
+                if (ViewModel.Snippets != null)
+                {
+                    var insertIndex = ViewModel.Snippets.Count > 0 && ViewModel.Snippets[0].Id == Guid.Empty ? 1 : 0;
+                    ViewModel.Snippets.Insert(insertIndex, newSnippet);
+                }
+                else
+                {
+                    ViewModel.Snippets = new System.Collections.ObjectModel.ObservableCollection<Models.CodeFile> { newSnippet };
+                }
                 ViewModel.SelectedSnippet = newSnippet;
             }
         }
@@ -310,18 +400,8 @@ namespace Pivot.CodeModule.Views
         {
             if (e.PropertyName == nameof(CodeViewModel.SelectedSnippet))
             {
-                Debug.WriteLine($"OnViewModelPropertyChanged: SelectedSnippet changed -> {(ViewModel?.SelectedSnippet==null?"null":"set")}");
-                // auto-save previous snippet (Google Keep style)
-                try
-                {
-                    var prev = _previousSelectedSnippet;
-                    if (prev != null && ViewModel != null)
-                    {
-                        // if content changed, persist
-                        _ = ViewModel.SaveSnippetFileAsync(prev);
-                    }
-                }
-                catch { }
+                
+                // Do not auto-save on selection change; saving occurs on explicit Save or on close.
 
                 _ = SendSelectedSnippetToEditorAsync();
 
@@ -335,6 +415,17 @@ namespace Pivot.CodeModule.Views
                 {
                     _ = CloseSnippetWithAnimationAsync();
                 }
+                // Persist last selected snippet id for restoration across page instances
+                try
+                {
+                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                    if (settings != null)
+                    {
+                        var id = ViewModel?.SelectedSnippet?.Id ?? Guid.Empty;
+                        _ = settings.SetLastSelectedSnippetIdAsync(id);
+                    }
+                }
+                catch { }
             }
         }
 
@@ -346,43 +437,74 @@ namespace Pivot.CodeModule.Views
                 if (nav == null) return;
                 nav.MenuItems.Clear();
 
-                // "All" entry with icon for compact mode
+                // Keep a single "All" menu item for compact/navigation behavior
                 var allItem = new NavigationViewItem { Content = "All Snippets", Tag = "all", Icon = new SymbolIcon(Symbol.AllApps) };
                 nav.MenuItems.Add(allItem);
 
-                // Categories from Preferences → Code categories (groups) with filters
+                // Prepare hierarchical tag tree in the left pane (TreeView)
+                var tree = this.FindName("CodeTagTree") as TreeView;
+
                 var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                // Use Preferences > Code のタグ（CodeFilters）を左ナビに使用
                 var categories = settings?.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
-                // hide default 'Languages' category so user-defined categories (tags) appear instead
                 try { categories = categories.Where(c => !string.Equals(c.Name, "Languages", StringComparison.OrdinalIgnoreCase)).ToList(); } catch { }
                 var filters = settings?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
 
-                if (categories.Any())
+                if (tree != null)
                 {
-                    nav.MenuItems.Add(new NavigationViewItemSeparator());
-                    foreach (var cat in categories.OrderBy(c => c.SortOrder).ThenBy(c => c.Name))
+                    // ensure we handle item invoked to apply filters when nodes are clicked
+                    try
                     {
-                        var parent = new NavigationViewItem { Content = cat.Name, Icon = new SymbolIcon(Symbol.Folder) };
-                        foreach (var fid in cat.FilterIds)
-                        {
-                            var f = filters.FirstOrDefault(x => x.Id == fid);
-                            if (f == null) continue;
-                            parent.MenuItems.Add(new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Document) });
-                        }
-                        nav.MenuItems.Add(parent);
+                        tree.ItemInvoked -= CodeTagTree_ItemInvoked;
+                        tree.ItemInvoked += CodeTagTree_ItemInvoked;
                     }
-                }
-                else
-                {
-                    // Fallback: list all filters flat
-                    nav.MenuItems.Add(new NavigationViewItemSeparator());
+                    catch { }
+                    tree.RootNodes.Clear();
+
+                    // Root "All" node
+                    var allNode = new TreeViewNode { Content = "All Snippets" };
+                    tree.RootNodes.Add(allNode);
+
+                    // Build per-tag root nodes (each tag becomes a root; snippets with that tag are children)
                     foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
                     {
-                        nav.MenuItems.Add(new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Document) });
+                        var tagNode = new TreeViewNode { Content = new FilterNodeInfo { Id = f.Id, Name = f.Name } };
+
+                        // Find snippets that include this tag name
+                        try
+                        {
+                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                            var snippets = ViewModel?.Snippets ?? new System.Collections.ObjectModel.ObservableCollection<Pivot.CodeModule.Models.CodeFile>((repo?.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>()).ToList());
+                            foreach (var sn in snippets)
+                            {
+                                var snipTags = (sn.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+                                if (snipTags.Any(t => string.Equals(t, f.Name, StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    var childNode = new TreeViewNode { Content = new SnippetNodeInfo { Id = sn.Id, Title = sn.Title ?? "Snippet" } };
+                                    tagNode.Children.Add(childNode);
+                                }
+                            }
+                        }
+                        catch { }
+
+                        tree.RootNodes.Add(tagNode);
                     }
                 }
 
                 nav.SelectedItem = allItem;
+            }
+            catch { }
+        }
+
+        private void CodeTagCheckBox_Toggled(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is CheckBox cb)) return;
+                var tagName = cb.Content?.ToString() ?? string.Empty;
+                var isSelected = cb.IsChecked == true;
+                var messenger = App.Current.Services.GetService(typeof(IMessenger)) as IMessenger;
+                messenger?.Send(new TagSelectionMessage("Code", tagName, isSelected));
             }
             catch { }
         }
@@ -437,16 +559,116 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
+        // Handle clicks in the left TreeView to apply category/filter selection
+        private void CodeTagTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+        {
+            try
+            {
+                var invoked = args.InvokedItem;
+                if (invoked == null) return;
+
+                // If root "All Snippets" clicked (string content)
+                if (invoked is string s && string.Equals(s, "All Snippets", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (ViewModel != null)
+                    {
+                        ViewModel.ActiveFilters.Clear();
+                        ViewModel.FilterSnippets();
+                        if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                    }
+                    return;
+                }
+
+                // If a filter node was clicked (we stored FilterNodeInfo in Content)
+                if (invoked is FilterNodeInfo fi)
+                {
+                    if (ViewModel != null)
+                    {
+                        try
+                        {
+                            var matches = ViewModel.GetSnippetsByTag(fi.Name) ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>();
+                            ViewModel.Snippets = new System.Collections.ObjectModel.ObservableCollection<Pivot.CodeModule.Models.CodeFile>(matches);
+                        }
+                        catch { }
+                        if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                    }
+                    return;
+                }
+
+                // If a snippet node was clicked, open it in the editor (we stored SnippetNodeInfo in Content)
+                if (invoked is SnippetNodeInfo sni)
+                {
+                    try
+                    {
+                        if (ViewModel == null) return;
+                        var snippet = ViewModel.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
+                        if (snippet != null)
+                        {
+                            ViewModel.SelectedSnippet = snippet;
+                            _ = SendSelectedSnippetToEditorAsync();
+                            _ = OpenSnippetWithAnimationAsync();
+                        }
+                    }
+                    catch { }
+                    return;
+                }
+
+                // If a category node was clicked, toggle expand/collapse
+                if (invoked is CategoryNodeInfo)
+                {
+                    try
+                    {
+                        var found = FindTreeNodeByContent(sender.RootNodes, invoked);
+                        if (found != null) found.IsExpanded = !found.IsExpanded;
+                    }
+                    catch { }
+                    return;
+                }
+            }
+            catch { }
+        }
+
         private async Task OpenSnippetWithAnimationAsync()
         {
-            Debug.WriteLine("OpenSnippetWithAnimationAsync: called");
-            if (_isAnimationActive) { Debug.WriteLine("OpenSnippetWithAnimationAsync: animation active, returning"); return; }
+            
+            // Ensure we run UI work on the UI thread to avoid COM RPC_E_DISCONNECTED errors.
+            try
+            {
+                var dq = App.Current.MainWindow?.DispatcherQueue;
+                if (dq != null && !dq.HasThreadAccess)
+                {
+                    var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+                    dq.TryEnqueue(() =>
+                    {
+                        try
+                        {
+                            _ = OpenSnippetWithAnimationAsync();
+                        }
+                        catch { }
+                        try { tcs.SetResult(true); } catch { }
+                    });
+                    await tcs.Task.ConfigureAwait(false);
+                    return;
+                }
+            }
+            catch { }
+
+            if (_isAnimationActive) { return; }
             _isAnimationActive = true;
+            try
+            {
             var root = this.Content as FrameworkElement;
             var list = root?.FindName("SnippetListView") as ListView;
             var editorPanel = root?.FindName("EditorPanel") as Grid;
             var cardPanel = root?.FindName("CardPanel") as Grid;
             var placeholder = root?.FindName("PlaceholderBorder") as Border;
+            // Capture DataContext/ViewModel once on UI thread to avoid COM RPC issues
+            Pivot.CodeModule.ViewModels.CodeViewModel? viewModel = null;
+            try
+            {
+                viewModel = (root?.DataContext) as Pivot.CodeModule.ViewModels.CodeViewModel;
+            }
+            catch { viewModel = null; }
 
             // Temporarily disable list interaction during open animation
             if (list != null)
@@ -457,30 +679,38 @@ namespace Pivot.CodeModule.Views
             UIElement? source = null;
             try
             {
-                if (list != null && ViewModel?.SelectedSnippet != null)
+                if (list != null && viewModel?.SelectedSnippet != null)
                 {
-                    Debug.WriteLine($"OpenSnippetWithAnimationAsync: SelectedSnippet='{ViewModel.SelectedSnippet?.Title}'");
-                    list.ScrollIntoView(ViewModel.SelectedSnippet);
+                    
+                    list.ScrollIntoView(viewModel.SelectedSnippet);
                     await Task.Delay(80).ConfigureAwait(false);
                     App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { });
-                    var container = list.ContainerFromItem(ViewModel.SelectedSnippet) as ListViewItem;
-                    Debug.WriteLine($"OpenSnippetWithAnimationAsync: container={(container==null?"null":"found")}");
+                    ListViewItem? container = null;
+                    try
+                    {
+                        container = list.ContainerFromItem(viewModel.SelectedSnippet) as ListViewItem;
+                        
+                    }
+                    catch
+                    {
+                        // ContainerFromItem threw; fallback to non-animated open.
+                        container = null;
+                    }
                     if (container != null)
                     {
                         // Prefer ListView helper to prepare connected animation from item -> named element inside template
                         try
                         {
-                            _pendingOpenAnimation = list.PrepareConnectedAnimation("OpenSnippet", ViewModel.SelectedSnippet, "SnippetCardBorder");
-                            Debug.WriteLine($"OpenSnippetWithAnimationAsync: PrepareConnectedAnimation returned {(_pendingOpenAnimation==null?"null":"animation")}");
+                            _pendingOpenAnimation = list.PrepareConnectedAnimation("OpenSnippet", viewModel.SelectedSnippet, "SnippetCardBorder");
+                            
                         }
-                        catch (Exception ex)
+                        catch
                         {
-                            Debug.WriteLine($"OpenSnippetWithAnimationAsync: PrepareConnectedAnimation threw: {ex}");
                             // Fallback: try to find the element and prepare via ConnectedAnimationService
                             source = FindDescendantByName(container, "SnippetCardBorder") as UIElement;
                             if (source != null)
                             {
-                                try { _pendingOpenAnimation = ConnectedAnimationService.GetForCurrentView()?.PrepareToAnimate("OpenSnippet", source); Debug.WriteLine($"OpenSnippetWithAnimationAsync: Fallback prepare returned {(_pendingOpenAnimation==null?"null":"animation")} "); } catch (Exception ex2) { Debug.WriteLine($"OpenSnippet fallback threw: {ex2}"); _pendingOpenAnimation = null; }
+                                try { _pendingOpenAnimation = ConnectedAnimationService.GetForCurrentView()?.PrepareToAnimate("OpenSnippet", source); } catch { _pendingOpenAnimation = null; }
                             }
                         }
                     }
@@ -543,10 +773,10 @@ namespace Pivot.CodeModule.Views
                     }
                     var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
                     var titleBox = this.FindName("ScratchpadTitleBox") as TextBox;
-                    if (ViewModel?.SelectedSnippet != null)
+                    if (viewModel?.SelectedSnippet != null)
                     {
-                        if (scratchEditor != null) scratchEditor.Text = ViewModel.SelectedSnippet.Content ?? string.Empty;
-                        if (titleBox != null) titleBox.Text = ViewModel.SelectedSnippet.Title ?? string.Empty;
+                        if (scratchEditor != null) scratchEditor.Text = viewModel.SelectedSnippet.Content ?? string.Empty;
+                        if (titleBox != null) titleBox.Text = viewModel.SelectedSnippet.Title ?? string.Empty;
                     }
                     RefreshScratchpadTags();
                     // adjust size to fit current page/window
@@ -602,7 +832,7 @@ namespace Pivot.CodeModule.Views
 
             // snippet content already posted to available editors
 
-            _previousSelectedSnippet = ViewModel?.SelectedSnippet;
+            _previousSelectedSnippet = viewModel?.SelectedSnippet;
             _isAnimationActive = false;
 
             // Re-enable list interaction after open animation
@@ -615,6 +845,11 @@ namespace Pivot.CodeModule.Views
             try { RefreshScratchpadTags(); } catch { }
             await Task.CompletedTask;
             return;
+            }
+            finally
+            {
+                try { _isAnimationActive = false; } catch { }
+            }
         }
 
         // Show the existing scratchpad overlay and populate it. The overlay is made draggable via pointer handlers.
@@ -893,6 +1128,30 @@ namespace Pivot.CodeModule.Views
         {
             if (_isAnimationActive) return;
             _isAnimationActive = true;
+            // Debug: mark close start and persist current/previous snippet before closing so cards reflect changes.
+            try
+            {
+#if DEBUG
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] CloseSnippetWithAnimationAsync: start. prevSelectedId={_previousSelectedSnippet?.Id}, currentSelectedId={ViewModel?.SelectedSnippet?.Id}");
+#endif
+                var vm = ViewModel;
+                var toSave = vm?.SelectedSnippet ?? _previousSelectedSnippet;
+                if (toSave != null)
+                {
+                    try
+                    {
+#if DEBUG
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] CloseSnippetWithAnimationAsync: saving snippet id={toSave.Id}");
+#endif
+                        await vm.SaveSnippetFileAsync(toSave);
+#if DEBUG
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] CloseSnippetWithAnimationAsync: save completed for snippet id={toSave.Id}");
+#endif
+                    }
+                    catch { }
+                }
+            }
+            catch { }
             var root = this.Content as FrameworkElement;
             var list = root?.FindName("SnippetListView") as ListView;
             var editorPanel = root?.FindName("EditorPanel") as Grid;
@@ -932,13 +1191,13 @@ namespace Pivot.CodeModule.Views
                         {
                             try
                             {
-                                Debug.WriteLine("CloseSnippetWithAnimationAsync: attempting TryStartConnectedAnimationAsync via ListView helper");
+                        
                                 await list.TryStartConnectedAnimationAsync(_pendingCloseAnimation, _previousSelectedSnippet, "SnippetCardBorder");
                                 _pendingCloseAnimation = null;
                             }
-                            catch (System.Runtime.InteropServices.COMException ex)
+                            catch (System.Runtime.InteropServices.COMException)
                             {
-                                Debug.WriteLine($"TryStartConnectedAnimationAsync threw: {ex}");
+                                
                                 // Fallback to manual TryStart on target if helper fails
                                 var container = list.ContainerFromItem(_previousSelectedSnippet) as ListViewItem;
                                 if (container != null)
@@ -953,9 +1212,9 @@ namespace Pivot.CodeModule.Views
                             }
                         }
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        Debug.WriteLine($"CloseSnippetWithAnimationAsync fallback overall threw: {ex}");
+                        
                     }
                 }
             }
@@ -1067,7 +1326,7 @@ namespace Pivot.CodeModule.Views
 
         private async void SnippetListView_ItemClick(object sender, ItemClickEventArgs e)
         {
-            if (_isAnimationActive) { Debug.WriteLine("SnippetListView_ItemClick: Animation is active, ignoring click."); return; }
+            if (_isAnimationActive) { return; }
             // If a snippet is already open, close it before opening another
             if (ViewModel != null && ViewModel.SelectedSnippet != null)
             {
@@ -1077,7 +1336,7 @@ namespace Pivot.CodeModule.Views
             {
                 if (ViewModel != null)
                 {
-                    Debug.WriteLine($"SnippetListView_ItemClick: clicked='{clickedSnippet?.Title}'");
+                    
                     // If this is the placeholder "New" card (Id == Guid.Empty), create a new snippet instead
                     if (clickedSnippet != null && clickedSnippet.Id == Guid.Empty)
                     {
@@ -1295,7 +1554,7 @@ namespace Pivot.CodeModule.Views
                     // so the snippet closes instead of ignoring the input.
                     if (container == null || container.ActualWidth <= 0 || container.ActualHeight <= 0)
                     {
-                        Debug.WriteLine("Root_PointerPressed: ScratchpadContainer missing/zero-size — treating as outside. Closing snippet.");
+                        
                         if (ViewModel != null) ViewModel.SelectedSnippet = null;
                         try { await CloseSnippetWithAnimationAsync(); } catch { }
                         return;
@@ -1305,7 +1564,7 @@ namespace Pivot.CodeModule.Views
                     var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
                     if (!bounds.Contains(pt))
                     {
-                        Debug.WriteLine("Root_PointerPressed: Click outside ScratchpadContainer. Closing snippet.");
+                        
                         // Clear selection on viewmodel and trigger close animation
                         if (ViewModel != null) ViewModel.SelectedSnippet = null;
                         try { await CloseSnippetWithAnimationAsync(); } catch { }
@@ -1321,7 +1580,7 @@ namespace Pivot.CodeModule.Views
                 var bounds2 = transform2.TransformBounds(new Rect(0, 0, editorPanel.ActualWidth, editorPanel.ActualHeight));
                 if (!bounds2.Contains(pt2))
                 {
-                    Debug.WriteLine("Root_PointerPressed: Click outside EditorPanel. Closing snippet.");
+                        
                     // click outside editor -> close
                     if (ViewModel != null) ViewModel.SelectedSnippet = null;
                     try { await CloseSnippetWithAnimationAsync(); } catch { }
@@ -1343,7 +1602,7 @@ namespace Pivot.CodeModule.Views
                     var container = rootUi.FindName("ScratchpadContainer") as FrameworkElement;
                     if (container == null || container.ActualWidth <= 0 || container.ActualHeight <= 0)
                     {
-                        Debug.WriteLine("Root_PointerReleased: ScratchpadContainer missing/zero-size — treating as outside. Closing snippet.");
+                        
                         if (ViewModel != null) ViewModel.SelectedSnippet = null;
                         try { await CloseSnippetWithAnimationAsync(); } catch { }
                         return;
@@ -1353,7 +1612,7 @@ namespace Pivot.CodeModule.Views
                     var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
                     if (!bounds.Contains(pt))
                     {
-                        Debug.WriteLine("Root_PointerReleased: Click outside ScratchpadContainer. Closing snippet.");
+                        
                         if (ViewModel != null) ViewModel.SelectedSnippet = null;
                         try { await CloseSnippetWithAnimationAsync(); } catch { }
                     }
@@ -1368,7 +1627,7 @@ namespace Pivot.CodeModule.Views
                 var bounds2 = transform2.TransformBounds(new Rect(0, 0, editorPanel.ActualWidth, editorPanel.ActualHeight));
                 if (!bounds2.Contains(pt2))
                 {
-                    Debug.WriteLine("Root_PointerReleased: Click outside EditorPanel. Closing snippet.");
+                        
                     if (ViewModel != null) ViewModel.SelectedSnippet = null;
                     try { await CloseSnippetWithAnimationAsync(); } catch { }
                 }
@@ -1416,17 +1675,40 @@ namespace Pivot.CodeModule.Views
 
         private void ScratchpadCloseButton_Click(object? sender, RoutedEventArgs e)
         {
-            Debug.WriteLine("ScratchpadCloseButton clicked");
+            
             CloseScratchpadSimple();
         }
 
-        private void CloseScratchpadSimple()
+        private async void CloseScratchpadSimple()
         {
             try
             {
                 var root = this.Content as FrameworkElement;
                 var overlay = root?.FindName("ScratchpadOverlay") as UIElement;
                 if (overlay != null) overlay.Visibility = Visibility.Collapsed;
+                // Save current snippet before closing if present, then clear selection
+                try
+                {
+                    var vm = ViewModel;
+                    var snip = vm?.SelectedSnippet;
+                    if (vm != null && snip != null)
+                    {
+                        try
+                        {
+#if DEBUG
+                            System.Diagnostics.Debug.WriteLine($"[DEBUG] CloseScratchpadSimple: saving snippet id={snip.Id}");
+#endif
+                            await vm.SaveSnippetFileAsync(snip);
+#if DEBUG
+                            System.Diagnostics.Debug.WriteLine($"[DEBUG] CloseScratchpadSimple: save returned for snippet id={snip.Id}");
+#endif
+                        }
+                        catch { }
+                        vm.IsDirty = false;
+                    }
+                }
+                catch { }
+
                 if (ViewModel != null) ViewModel.SelectedSnippet = null;
                 _previousSelectedSnippet = null;
                 _isAnimationActive = false;
@@ -1452,17 +1734,23 @@ namespace Pivot.CodeModule.Views
         {
             try
             {
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
                 var scratchList = this.FindName("ScratchpadTagList") as ItemsControl;
                 var editorList = this.FindName("EditorTagList") as ItemsControl;
-                if (repo == null || (scratchList == null && editorList == null)) return;
-                var tags = repo.GetAllTags().ToList();
+                if (settings == null || (scratchList == null && editorList == null)) return;
+                var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
 
                 // convert to simple view items with IsChecked state
                 var selected = ViewModel?.SelectedSnippet;
                 var selectedTags = selected != null ? (selected.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                var items = tags.Select(t => new TagItem { Id = t.Id, Name = t.Name, IsSelected = selectedTags.Contains(t.Name) }).ToList();
+                var items = filters.Select(f => new TagItem { Id = 0, Name = f.Name, IsSelected = selectedTags.Contains(f.Name) }).ToList();
+                // Limit number of shown tags to avoid overflow in scratchpad; omit extras
+                const int maxShownTags = 8;
+                if (items.Count > maxShownTags)
+                {
+                    items = items.Take(maxShownTags).ToList();
+                }
 
                 App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
                 {
@@ -1470,6 +1758,17 @@ namespace Pivot.CodeModule.Views
                     {
                         if (scratchList != null) scratchList.ItemsSource = items;
                         if (editorList != null) editorList.ItemsSource = items;
+
+                        // Also populate editable ComboBoxes with tag names for quick selection
+                        try
+                        {
+                            var scratchCombo = this.FindName("ScratchpadNewTagBox") as ComboBox;
+                            var editorCombo = this.FindName("EditorNewTagBox") as ComboBox;
+                            var tagNames = filters.Select(f => f.Name).ToList();
+                            if (scratchCombo != null) scratchCombo.ItemsSource = tagNames;
+                            if (editorCombo != null) editorCombo.ItemsSource = tagNames;
+                        }
+                        catch { }
                     }
                     catch { }
 
@@ -1500,6 +1799,20 @@ namespace Pivot.CodeModule.Views
                     }
                     catch { }
                 });
+            }
+            catch { }
+        }
+
+        private void EditorCollapseButton_Click(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var root = this.Content as FrameworkElement;
+                var editorPanel = root?.FindName("EditorPanel") as FrameworkElement;
+                var cardPanel = root?.FindName("CardPanel") as FrameworkElement;
+                if (editorPanel != null) editorPanel.Visibility = Visibility.Collapsed;
+                if (cardPanel != null) cardPanel.Visibility = Visibility.Visible;
+                // Do not change selection; closing is separate action
             }
             catch { }
         }
@@ -1596,8 +1909,6 @@ namespace Pivot.CodeModule.Views
                 {
                     ViewModel.SelectedSnippet.Content = tb.Text ?? string.Empty;
                     ViewModel.IsDirty = true;
-                    // auto-save on input
-                    try { _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); } catch { }
                 }
             }
             catch { }
@@ -1613,8 +1924,6 @@ namespace Pivot.CodeModule.Views
                 {
                     ViewModel.SelectedSnippet.Content = tb.Text ?? string.Empty;
                     ViewModel.IsDirty = true;
-                    // auto-save on input
-                    try { _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); } catch { }
                 }
             }
             catch { }
@@ -1630,7 +1939,6 @@ namespace Pivot.CodeModule.Views
                 {
                     ViewModel.SelectedSnippet.Title = tb.Text ?? string.Empty;
                     ViewModel.IsDirty = true;
-                    try { _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet); } catch { }
                 }
             }
             catch { }
@@ -1798,6 +2106,45 @@ namespace Pivot.CodeModule.Views
             return null;
         }
 
+        // Find a TreeViewNode by matching its Content object (recursively)
+        private TreeViewNode? FindTreeNodeByContent(IEnumerable<TreeViewNode> nodes, object content)
+        {
+            if (nodes == null || content == null) return null;
+            foreach (var node in nodes)
+            {
+                try
+                {
+                    if (ReferenceEquals(node.Content, content) || (node.Content != null && node.Content.Equals(content))) return node;
+                    var found = FindTreeNodeByContent(node.Children, content);
+                    if (found != null) return found;
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        // Populate editable tag ComboBoxes with existing tag names from repository
+        private void PopulateTagCombos()
+        {
+            try
+            {
+                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                var tagNames = settings?.GetCodeFilters()?.Select(f => f.Name).ToList() ?? new List<string>();
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        var scratchCombo = this.FindName("ScratchpadNewTagBox") as ComboBox;
+                        var editorCombo = this.FindName("EditorNewTagBox") as ComboBox;
+                        if (scratchCombo != null) scratchCombo.ItemsSource = tagNames;
+                        if (editorCombo != null) editorCombo.ItemsSource = tagNames;
+                    }
+                    catch { }
+                });
+            }
+            catch { }
+        }
+
         private void RootGrid_SizeChanged(object? sender, SizeChangedEventArgs e)
         {
             try
@@ -1914,7 +2261,7 @@ namespace Pivot.CodeModule.Views
             {
                 _isCodeEditorTabMode = true;
                 // When focused, prefer inserting tabs rather than moving focus
-                Debug.WriteLine("CodeEditor got focus: enabling tab-insert mode.");
+                
             }
             catch { }
         }
@@ -1924,7 +2271,7 @@ namespace Pivot.CodeModule.Views
             try
             {
                 _isCodeEditorTabMode = false;
-                Debug.WriteLine("CodeEditor lost focus: disabling tab-insert mode.");
+                
             }
             catch { }
         }
@@ -2017,7 +2364,7 @@ namespace Pivot.CodeModule.Views
             try
             {
                 _isQuickAddTabMode = true;
-                Debug.WriteLine("QuickAddBox got focus: enabling tab-insert mode.");
+                
             }
             catch { }
         }

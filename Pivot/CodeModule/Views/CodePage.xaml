@@ -24,13 +24,17 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-                    <ctrls:TagFilterControl TabId="Code" Margin="0,0,0,0" />
+                    <!-- TagFilterControl removed for Code tab (tags are shown in left pane TreeView) -->
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- NavigationView hosts the left pane and the main content to avoid gaps in Compact mode -->
         <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked" Background="LightCoral">
+            <!-- Left pane: code tags shown as a TreeView to allow hierarchical selection/filtering -->
+            <NavigationView.PaneCustomContent>
+                <TreeView x:Name="CodeTagTree" Margin="8" />
+            </NavigationView.PaneCustomContent>
             <!-- Items will be populated in code-behind -->
             <NavigationView.Content>
                 <!-- Editor area: toolbar + editor -->
@@ -119,7 +123,7 @@
                                                 </ItemsControl>
 
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                                    <TextBox x:Name="ScratchpadNewTagBox" Width="160" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
+                                                    <ComboBox x:Name="ScratchpadNewTagBox" Width="160" IsEditable="True" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
                                                     <Button x:Name="ScratchpadAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
                                                 </StackPanel>
                                             </StackPanel>
@@ -148,7 +152,14 @@
 
                         <Grid x:Name="EditorPanel" Visibility="Collapsed" Background="LightCyan">
                             <Border Background="Transparent" Padding="8">
-                                <TextBlock x:Name="EditorHeader" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="EditorHeader" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button Grid.Column="1" Content="Collapse" Click="EditorCollapseButton_Click" Margin="8,0,0,0" />
+                                </Grid>
                             </Border>
 
                             <!-- Tag picker moved into main editor area so tags appear in the main section instead of the overlay -->
@@ -167,7 +178,7 @@
                                 </ItemsControl>
 
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                    <TextBox x:Name="EditorNewTagBox" Width="160" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
+                                    <ComboBox x:Name="EditorNewTagBox" Width="160" IsEditable="True" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
                                     <Button x:Name="EditorAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
                                 </StackPanel>
                             </StackPanel>

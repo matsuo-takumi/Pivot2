@@ -6,6 +6,7 @@ using System;
 using CommunityToolkit.Mvvm.Input;
 using Pivot.CodeModule.Models;
 using Pivot.CodeModule.Services;
+using Pivot.Services;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Messages;
@@ -35,11 +36,8 @@ namespace Pivot.CodeModule.ViewModels
 
         partial void OnSelectedSnippetChanging(CodeFile? oldValue, CodeFile? newValue)
         {
-            // Auto-save the old snippet when a new one is selected
-            if (oldValue != null && _repo != null && _isDirty)
-            {
-                Task.Run(() => _repo.Save(oldValue));
-            }
+            // Do not auto-save while typing or on selection change.
+            // Saving occurs explicitly on editor close or when the user triggers Save.
         }
 
         public CodeViewModel(ICodeRepository repo)
@@ -57,6 +55,8 @@ namespace Pivot.CodeModule.ViewModels
             }
             catch { }
 
+            System.Diagnostics.Debug.WriteLine("CodeViewModel: constructed with repository.");
+
             // No test seeding in production — snippets come from repository (may be empty)
         }
 
@@ -66,6 +66,8 @@ namespace Pivot.CodeModule.ViewModels
             _repo = null;
             _snippets = new ObservableCollection<CodeFile>();
             _allSnippets = _snippets.ToList();
+
+            System.Diagnostics.Debug.WriteLine("CodeViewModel: constructed WITHOUT repository (fallback). Saving will be disabled.");
 
             // No test seeding in fallback; start with an empty collection
         }
@@ -172,6 +174,22 @@ namespace Pivot.CodeModule.ViewModels
                 }
                 SelectedSnippet = newSnippet;
                 IsDirty = true;
+                // Persist new snippet immediately if repository available
+                try
+                {
+                    if (_repo != null)
+                    {
+                        _repo.Save(newSnippet);
+                        // refresh internal lists to reflect persisted state
+                        Refresh();
+                        System.Diagnostics.Debug.WriteLine("CodeViewModel.AddSnippet: saved new snippet via repository.");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("CodeViewModel.AddSnippet: repository is null, new snippet not persisted.");
+                    }
+                }
+                catch { }
             }
             catch { }
         }
@@ -182,7 +200,8 @@ namespace Pivot.CodeModule.ViewModels
             if (SelectedSnippet is null) return;
             if (_repo != null)
             {
-                await Task.Run(() => _repo.Save(SelectedSnippet));
+                // Save synchronously to avoid DbContext concurrent use across threads
+                _repo.Save(SelectedSnippet);
                 IsDirty = false;
                 Refresh();
             }
@@ -190,6 +209,7 @@ namespace Pivot.CodeModule.ViewModels
             {
                 // No repository available: mark as not dirty but do not persist
                 IsDirty = false;
+                System.Diagnostics.Debug.WriteLine("CodeViewModel.SaveSnippetAsync: repository is null; Save not performed.");
             }
         }
 
@@ -197,10 +217,100 @@ namespace Pivot.CodeModule.ViewModels
         public async Task SaveSnippetFileAsync(CodeFile? file)
         {
             if (file is null) return;
-            if (_repo != null)
+            // Debuggable save flow (debug logs only in DEBUG builds)
+            try
             {
-                await Task.Run(() => _repo.Save(file));
+#if DEBUG
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: invoked for id={file.Id}, repoPresent={_repo != null}");
+#endif
+                if (_repo != null)
+                {
+                    // Save synchronously on calling thread to avoid concurrent DbContext access
+                    _repo.Save(file);
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: saved via repository id={file.Id}");
+#endif
+                    try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh()); } catch { }
+                }
+                else
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: repository null, using fallback export id={file.Id}");
+#endif
+                    try
+                    {
+                        var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                        var exportDir = settings?.GetExportOutputDirectory() ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(exportDir))
+                        {
+                            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                            exportDir = System.IO.Path.Combine(docs, "Pivot", "CodeSnippets");
+                        }
+                        try { if (!System.IO.Directory.Exists(exportDir)) System.IO.Directory.CreateDirectory(exportDir); } catch { }
+
+                        var outPath = System.IO.Path.Combine(exportDir, file.Id.ToString() + ".json");
+                        var json = System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            file.Id,
+                            file.Title,
+                            file.Language,
+                            file.Tool,
+                            file.Tags,
+                            file.Content,
+                            file.Updated
+                        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                        System.IO.File.WriteAllText(outPath, json);
+#if DEBUG
+                        System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: fallback exported json to '{outPath}'");
+#endif
+                        try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh()); } catch { }
+                    }
+                    catch
+                    {
+#if DEBUG
+                        System.Diagnostics.Debug.WriteLine("[DEBUG] SaveSnippetFileAsync: fallback export failed");
+#endif
+                    }
+                }
             }
+            catch
+            {
+#if DEBUG
+                System.Diagnostics.Debug.WriteLine("[DEBUG] SaveSnippetFileAsync: unexpected save error");
+#endif
+            }
+            // Ensure UI list reflects saved changes immediately
+            try
+            {
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        var existing = _allSnippets.FirstOrDefault(s => s.Id == file.Id);
+                        if (existing != null)
+                        {
+                            existing.Title = file.Title;
+                            existing.Content = file.Content;
+                            existing.Tags = file.Tags;
+                            existing.Language = file.Language;
+                            existing.Tool = file.Tool;
+                            existing.Updated = file.Updated;
+                            // Refresh visible collection
+                            ApplyCodeTagFilters();
+                        }
+                        else
+                        {
+                            // Insert after placeholder if present
+                            if (_allSnippets == null) _allSnippets = new List<CodeFile>();
+                            var insertIndex = _allSnippets.Count > 0 && _allSnippets[0].Id == Guid.Empty ? 1 : 0;
+                            _allSnippets.Insert(insertIndex, file);
+                            ApplyCodeTagFilters();
+                        }
+                    }
+                    catch { }
+                });
+            }
+            catch { }
         }
 
         [RelayCommand]
@@ -228,6 +338,42 @@ namespace Pivot.CodeModule.ViewModels
                 var q = (SearchQuery ?? string.Empty).ToLowerInvariant();
                 var results = _snippets.Where(s => (s.Title ?? string.Empty).ToLowerInvariant().Contains(q) || (s.Content ?? string.Empty).ToLowerInvariant().Contains(q) || (s.Tags ?? string.Empty).ToLowerInvariant().Contains(q));
                 Snippets = new ObservableCollection<CodeFile>(results);
+            }
+        }
+
+        // Helper: expose repository tags
+        public IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags()
+        {
+            if (_repo == null) return Enumerable.Empty<Pivot.CodeModule.Models.CodeTag>();
+            return _repo.GetAllTags();
+        }
+
+        // Helper: get snippets that contain a given tag name
+        public IEnumerable<CodeFile> GetSnippetsByTag(string tagName)
+        {
+            if (string.IsNullOrWhiteSpace(tagName)) return Enumerable.Empty<CodeFile>();
+            var all = _repo != null ? (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()) : _allSnippets.AsEnumerable();
+            var matches = all.Where(s =>
+            {
+                var tags = (s.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim());
+                return tags.Any(t => string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase));
+            });
+            return matches;
+        }
+
+        // Helper: attach a tag to a snippet and persist
+        public async Task AddTagToSnippetAsync(CodeFile? snippet, string tagName)
+        {
+            if (snippet == null || string.IsNullOrWhiteSpace(tagName)) return;
+            var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+            if (!current.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+            {
+                current.Add(tagName.Trim());
+                snippet.Tags = string.Join(",", current);
+                if (_repo != null)
+                {
+                    _repo.Save(snippet);
+                }
             }
         }
     }

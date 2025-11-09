@@ -6,6 +6,8 @@ using Pivot.Models;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace Pivot.Views
 {
@@ -19,6 +21,78 @@ namespace Pivot.Views
             _settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
             LoadFilters();
             LoadCategories();
+            LoadSaveFormat();
+            LoadSaveOutputDirectory();
+        }
+        
+        private void LoadSaveOutputDirectory()
+        {
+            try
+            {
+                var dir = _settings?.GetExportOutputDirectory() ?? string.Empty;
+                var box = this.FindName("OutputDirBox") as TextBox;
+                if (box != null) box.Text = dir;
+                var status = this.FindName("StatusText") as TextBlock;
+                if (status != null) status.Text = "";
+            }
+            catch { }
+        }
+
+        private async void SaveButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var box = this.FindName("OutputDirBox") as TextBox;
+                if (box == null) return;
+                var path = box.Text?.Trim() ?? string.Empty;
+                if (_settings != null)
+                {
+                    await _settings.SetExportOutputDirectoryAsync(path);
+                    var status = this.FindName("StatusText") as TextBlock;
+                    if (status != null) status.Text = "Saved.";
+                }
+            }
+            catch (Exception ex)
+            {
+                var status = this.FindName("StatusText") as TextBlock;
+                if (status != null) status.Text = "Failed to save: " + ex.Message;
+            }
+        }
+
+        private async void BrowseButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var folderPicker = new FolderPicker();
+                folderPicker.SuggestedStartLocation = PickerLocationId.Desktop;
+                folderPicker.FileTypeFilter.Add("*");
+
+                var uiWindow = App.Current.MainWindow as Microsoft.UI.Xaml.Window;
+                if (uiWindow == null)
+                {
+                    var status = this.FindName("StatusText") as TextBlock;
+                    if (status != null) status.Text = "Unable to access application window.";
+                    return;
+                }
+
+                var hwnd = WindowNative.GetWindowHandle(uiWindow);
+                WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hwnd);
+                var folder = await folderPicker.PickSingleFolderAsync();
+                if (folder != null)
+                {
+                    var box = this.FindName("OutputDirBox") as TextBox;
+                    if (box != null) box.Text = folder.Path;
+                    // Optionally save immediately
+                    if (_settings != null) await _settings.SetExportOutputDirectoryAsync(folder.Path);
+                    var status = this.FindName("StatusText") as TextBlock;
+                    if (status != null) status.Text = "Saved.";
+                }
+            }
+            catch (Exception ex)
+            {
+                var status = this.FindName("StatusText") as TextBlock;
+                if (status != null) status.Text = "Failed to pick folder: " + ex.Message;
+            }
         }
 
         private void LoadFilters()
@@ -28,7 +102,7 @@ namespace Pivot.Views
                 var settings = _settings?.GetUserSettings();
                 if (settings != null)
                 {
-                    var visible = _settings.GetVisibleFiltersForTab("Code");
+                    var visible = _settings!.GetVisibleFiltersForTab("Code");
                     var viewItems = settings.CodeFilters.Select(f => new CodeFilterViewItem
                     {
                         Id = f.Id,
@@ -111,7 +185,7 @@ namespace Pivot.Views
                     {
                         var name = nameBox.Text?.Trim() ?? string.Empty;
                         target.Name = name;
-                        await _settings.SetCodeFiltersAsync(user.CodeFilters);
+                        await _settings!.SetCodeFiltersAsync(user.CodeFilters);
                         LoadFilters();
                     }
                     catch { }
@@ -295,6 +369,41 @@ namespace Pivot.Views
             public string Name { get; set; } = string.Empty;
             public List<Guid> FilterIds { get; set; } = new List<Guid>();
             public string FilterNames { get; set; } = string.Empty;
+        }
+
+        private void LoadSaveFormat()
+        {
+            try
+            {
+                var fmt = _settings?.GetCodeExportFormat() ?? Pivot.Models.CodeExportFormat.Json;
+                var combo = this.FindName("SaveFormatCombo") as ComboBox;
+                if (combo != null)
+                {
+                    for (int i = 0; i < combo.Items.Count; i++)
+                    {
+                        if (combo.Items[i] is ComboBoxItem cbi && string.Equals(cbi.Tag?.ToString(), fmt.ToString(), StringComparison.OrdinalIgnoreCase))
+                        {
+                            combo.SelectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private async void SaveFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (_settings == null) return;
+                if (!(sender is ComboBox cb)) return;
+                var sel = cb.SelectedItem as ComboBoxItem;
+                var tag = sel?.Tag?.ToString() ?? "Json";
+                if (!Enum.TryParse<Pivot.Models.CodeExportFormat>(tag, out var fmt)) fmt = Pivot.Models.CodeExportFormat.Json;
+                await _settings.SetCodeExportFormatAsync(fmt);
+            }
+            catch { }
         }
     }
 }

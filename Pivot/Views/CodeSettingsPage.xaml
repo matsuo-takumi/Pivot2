@@ -100,6 +100,33 @@
                     </Border>
                 </Grid>
             </PivotItem>
+
+            <!-- Save/Export Tab -->
+            <PivotItem Header="Save">
+                <Grid Padding="12">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Snippet Save Format" FontSize="18" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Format:" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="SaveFormatCombo" Width="220" SelectionChanged="SaveFormatCombo_SelectionChanged">
+                                <ComboBoxItem Content="JSON (.json)" Tag="Json" />
+                                <ComboBoxItem Content="Markdown (.md)" Tag="Markdown" />
+                            </ComboBox>
+                        </StackPanel>
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Output directory for saved snippets" FontWeight="SemiBold" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBox x:Name="OutputDirBox" Width="420" TextWrapping="NoWrap" />
+                                    <Button Content="Browse..." Click="BrowseButton_Click" />
+                                    <Button Content="Save" Click="SaveButton_Click" />
+                                </StackPanel>
+                                <TextBlock x:Name="StatusText" Foreground="Gray" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </PivotItem>
         </Pivot>
     </Grid>
 

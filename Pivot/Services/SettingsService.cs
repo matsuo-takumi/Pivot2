@@ -74,18 +74,67 @@ namespace Pivot.Services
             _logger.LogInformation("SettingsService: Loaded CodeDirectories count (parsed): {Count}", _cache.CodeDirectories.Count);
             await NormalizeAndPersistIfNeededAsync("CodeDirectories", codePref, _cache.CodeDirectories);
 
-            // Export output directory
+            // Code save output directory (migrated from Export.OutputDirectory)
             try
             {
-                var exportDir = await _settingsStore.GetAsync("Export.OutputDirectory");
-                _cache.ExportOutputDirectory = exportDir ?? string.Empty;
-                _logger.LogInformation("SettingsService: Loaded Export.OutputDirectory: {Dir}", _cache.ExportOutputDirectory);
+                // Prefer new key used by Preferences Code > Save
+                var codeSaveDir = await _settingsStore.GetAsync("Code.Save.OutputDirectory");
+                if (string.IsNullOrWhiteSpace(codeSaveDir))
+                {
+                    // Fallback to legacy Export key for migration
+                    codeSaveDir = await _settingsStore.GetAsync("Export.OutputDirectory");
+                    if (!string.IsNullOrWhiteSpace(codeSaveDir))
+                    {
+                        // Persist into new key for future reads
+                        try { await _settingsStore.UpsertAsync("Code.Save.OutputDirectory", codeSaveDir); } catch { }
+                    }
+                }
+                _cache.CodeSaveOutputDirectory = codeSaveDir ?? string.Empty;
+                _logger.LogInformation("SettingsService: Loaded Code.Save.OutputDirectory: {Dir}", _cache.CodeSaveOutputDirectory);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Export.OutputDirectory. Using empty string.");
-                _cache.ExportOutputDirectory = string.Empty;
+                _logger.LogWarning(ex, "SettingsService: Failed to load Code.Save.OutputDirectory. Using empty string.");
+                _cache.CodeSaveOutputDirectory = string.Empty;
             }
+
+            // Code export format (migrated from Export.CodeFormat)
+            try
+            {
+                var codeFmt = await _settingsStore.GetAsync("Code.Save.Format");
+                if (string.IsNullOrWhiteSpace(codeFmt))
+                {
+                    codeFmt = await _settingsStore.GetAsync("Export.CodeFormat");
+                }
+                if (!string.IsNullOrWhiteSpace(codeFmt))
+                {
+                    _cache.CodeExportFormat = codeFmt;
+                }
+                else
+                {
+                    _cache.CodeExportFormat = "Json";
+                }
+                _logger.LogInformation("SettingsService: Loaded Code.Save.Format: {Fmt}", _cache.CodeExportFormat);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Code.Save.Format. Using default Json.");
+                _cache.CodeExportFormat = "Json";
+            }
+            // Last selected snippet id
+            try
+            {
+                var lastIdStr = await _settingsStore.GetAsync("Code.LastSelectedSnippetId");
+                if (!string.IsNullOrWhiteSpace(lastIdStr) && Guid.TryParse(lastIdStr, out var lid))
+                {
+                    _cache.LastSelectedSnippetId = lid;
+                }
+                else
+                {
+                    _cache.LastSelectedSnippetId = Guid.Empty;
+                }
+            }
+            catch { _cache.LastSelectedSnippetId = Guid.Empty; }
 
             if (Enum.TryParse<ElementTheme>(await _settingsStore.GetAsync("AppTheme"), out var theme))
             {
@@ -497,18 +546,62 @@ namespace Pivot.Services
         }
 
         // Export output directory accessors
-        public string GetExportOutputDirectory() => _cache.ExportOutputDirectory ?? string.Empty;
+        // Backwards-compatible accessor: returns the configured code save output directory.
+        public string GetExportOutputDirectory() => _cache.CodeSaveOutputDirectory ?? string.Empty;
 
+        // Persist the code save output directory under the new key used by Preferences > Code > Save.
         public async Task SetExportOutputDirectoryAsync(string path)
         {
-            _cache.ExportOutputDirectory = path ?? string.Empty;
+            _cache.CodeSaveOutputDirectory = path ?? string.Empty;
             try
             {
-                await _settingsStore.UpsertAsync("Export.OutputDirectory", _cache.ExportOutputDirectory);
+                await _settingsStore.UpsertAsync("Code.Save.OutputDirectory", _cache.CodeSaveOutputDirectory);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Export.OutputDirectory.");
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Code.Save.OutputDirectory.");
+            }
+        }
+
+        public Pivot.Models.CodeExportFormat GetCodeExportFormat()
+        {
+            try
+            {
+                if (Enum.TryParse<Pivot.Models.CodeExportFormat>(_cache.CodeExportFormat, out var fmt)) return fmt;
+            }
+            catch { }
+            return Pivot.Models.CodeExportFormat.Json;
+        }
+
+        public async Task SetCodeExportFormatAsync(Pivot.Models.CodeExportFormat format)
+        {
+            _cache.CodeExportFormat = format.ToString();
+            try
+            {
+                // Persist under the Code.Save namespace
+                await _settingsStore.UpsertAsync("Code.Save.Format", _cache.CodeExportFormat);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Export.CodeFormat.");
+            }
+        }
+
+        public Guid GetLastSelectedSnippetId()
+        {
+            try { return _cache.LastSelectedSnippetId; } catch { return Guid.Empty; }
+        }
+
+        public async Task SetLastSelectedSnippetIdAsync(Guid id)
+        {
+            _cache.LastSelectedSnippetId = id;
+            try
+            {
+                await _settingsStore.UpsertAsync("Code.LastSelectedSnippetId", id.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Code.LastSelectedSnippetId.");
             }
         }
 

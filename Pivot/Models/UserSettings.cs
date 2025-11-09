@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
 // using static Pivot.MainWindow; // BackdropTypeを使用するために追加
@@ -34,6 +35,15 @@ namespace Pivot.Models
 
         // Export settings
         public string ExportOutputDirectory { get; set; } = string.Empty;
+
+        // Code save output directory (migrated from ExportOutputDirectory)
+        public string CodeSaveOutputDirectory { get; set; } = string.Empty;
+
+        // Code export format (e.g., Json, Markdown)
+        public string CodeExportFormat { get; set; } = "Json";
+        
+        // Last selected snippet id (persisted to restore selection between page instances)
+        public Guid LastSelectedSnippetId { get; set; } = Guid.Empty;
 
         // Visible filters per tab (tab id -> list of filter Ids)
         public Dictionary<string, List<System.Guid>> VisibleFiltersByTab { get; set; } = new Dictionary<string, List<System.Guid>>();
