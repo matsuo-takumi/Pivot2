@@ -28,6 +28,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Pivot.CodeModule.Models;
 using Pivot.Services;
 using Pivot.Messages;
+using Windows.ApplicationModel.DataTransfer;
 
 // Note: editing is implemented with WinUI TextBox controls (replaced WebView2)
 
@@ -1337,13 +1338,7 @@ namespace Pivot.CodeModule.Views
                 if (ViewModel != null)
                 {
                     
-                    // If this is the placeholder "New" card (Id == Guid.Empty), create a new snippet instead
-                    if (clickedSnippet != null && clickedSnippet.Id == Guid.Empty)
-                    {
-                        try { ViewModel.AddSnippetCommand?.Execute(null); } catch { }
-                        return;
-                    }
-
+                    // Select clicked snippet for editing
                     ViewModel.SelectedSnippet = clickedSnippet;
                     // Fallback: explicitly push content to the editor and open it in case ViewModel change didn't trigger the UI update
                     try
@@ -1944,25 +1939,7 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private async void ScratchpadDeleteButton_Click(object? sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (ViewModel?.SelectedSnippet == null) return;
-                var snippet = ViewModel.SelectedSnippet;
-                var dlg = new ContentDialog { Title = "Delete this snippet?", PrimaryButtonText = "Delete", CloseButtonText = "Cancel" };
-                dlg.XamlRoot = this.XamlRoot;
-                var result = await dlg.ShowAsync();
-                if (result != ContentDialogResult.Primary) return;
-
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                try { if (snippet.Id != Guid.Empty) repo?.Delete(snippet.Id); } catch { }
-                try { ViewModel.Snippets.Remove(snippet); } catch { }
-                ViewModel.SelectedSnippet = null;
-                try { await CloseSnippetWithAnimationAsync(); } catch { }
-            }
-            catch { }
-        }
+        // Scratchpad delete button removed from UI; deletion via card delete remains.
 
         private async void CardDeleteButton_Click(object sender, RoutedEventArgs e)
         {
@@ -2019,6 +1996,48 @@ namespace Pivot.CodeModule.Views
                     ViewModel.SelectedSnippet = null;
                     try { await CloseSnippetWithAnimationAsync(); } catch { }
                 }
+            }
+            catch { }
+        }
+
+        // Copy snippet content to clipboard from card
+        private void CardCopyButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement fe)) return;
+                var snippet = fe.DataContext as Pivot.CodeModule.Models.CodeFile;
+                if (snippet == null) return;
+                var dp = new DataPackage();
+                dp.SetText(snippet.Content ?? string.Empty);
+                Clipboard.SetContent(dp);
+            }
+            catch { }
+        }
+
+        // Copy snippet content to clipboard from scratchpad editor
+        private void ScratchpadCopyButton_Click(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var content = ViewModel?.SelectedSnippet?.Content ?? string.Empty;
+                var dp = new DataPackage();
+                dp.SetText(content);
+                Clipboard.SetContent(dp);
+            }
+            catch { }
+        }
+
+        // Copy content from main editor textbox
+        private void EditorCopyButton_Click(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var editor = this.FindName("CodeEditor") as TextBox;
+                var content = editor?.Text ?? ViewModel?.SelectedSnippet?.Content ?? string.Empty;
+                var dp = new DataPackage();
+                dp.SetText(content);
+                Clipboard.SetContent(dp);
             }
             catch { }
         }
@@ -2104,6 +2123,22 @@ namespace Pivot.CodeModule.Views
                 if (found != null) return found;
             }
             return null;
+        }
+
+        private void SnippetListView_DragItemsCompleted(object sender, DragItemsCompletedEventArgs e)
+        {
+            try
+            {
+                var root = this.Content as FrameworkElement;
+                var list = root?.FindName("SnippetListView") as ListView;
+                if (list != null)
+                {
+                    list.IsItemClickEnabled = true;
+                    list.IsHitTestVisible = true;
+                    list.SelectionMode = ListViewSelectionMode.Single;
+                }
+            }
+            catch { }
         }
 
         // Find a TreeViewNode by matching its Content object (recursively)

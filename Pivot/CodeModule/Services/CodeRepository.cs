@@ -148,6 +148,13 @@ namespace Pivot.CodeModule.Services
             // Export saved snippet to user-configured output directory (format configurable; default JSON)
             try
             {
+                // Do not export empty content files to disk (they may be transient/new placeholders)
+                if (string.IsNullOrWhiteSpace(file.Content))
+                {
+                    System.Diagnostics.Debug.WriteLine($"CodeRepository.Save: skipping export for empty content id={file.Id}");
+                    return;
+                }
+
                 var exportDir = _settingsService?.GetExportOutputDirectory();
                 System.Diagnostics.Debug.WriteLine($"CodeRepository.Save: exportDir='{exportDir}'");
                 // Fallback directory if not configured or invalid
@@ -322,6 +329,74 @@ namespace Pivot.CodeModule.Services
                 _context.CodeFiles.Remove(item);
                 _context.SaveChanges();
             }
+
+            // Also attempt to delete any exported files for this snippet.
+            try
+            {
+                var exportDir = _settingsService?.GetExportOutputDirectory();
+                if (string.IsNullOrWhiteSpace(exportDir))
+                {
+                    try
+                    {
+                        var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                        exportDir = System.IO.Path.Combine(docs, "Pivot", "CodeSnippets");
+                    }
+                    catch
+                    {
+                        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                        exportDir = System.IO.Path.Combine(local, "Pivot", "CodeSnippets");
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(exportDir) && Directory.Exists(exportDir))
+                {
+                    var patterns = new[] { $"{id}.json", $"{id}.md", $"{id}.txt", $"{id}.py", $"{id}.cs" };
+                    foreach (var pat in patterns)
+                    {
+                        try
+                        {
+                            var p = Path.Combine(exportDir, pat);
+                            if (File.Exists(p))
+                            {
+                                File.Delete(p);
+                                System.Diagnostics.Debug.WriteLine($"CodeRepository.Delete: removed exported file '{p}' for id={id}");
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // Also scan user configured CodeDirectories for originating files and delete them if their deterministic Id matches.
+                try
+                {
+                    var userSettings = _settingsService?.GetUserSettings();
+                    var dirs = userSettings?.CodeDirectories ?? new List<string>();
+                    var allowedExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".json", ".cs", ".py", ".md", ".txt" };
+                    foreach (var dir in dirs)
+                    {
+                        try
+                        {
+                            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) continue;
+                            var files = Directory.EnumerateFiles(dir, "*.*", SearchOption.TopDirectoryOnly)
+                                                 .Where(f => allowedExts.Contains(Path.GetExtension(f)));
+                            foreach (var file in files)
+                            {
+                                try
+                                {
+                                    if (CreateDeterministicGuid(file) == id)
+                                    {
+                                        try { File.Delete(file); System.Diagnostics.Debug.WriteLine($"CodeRepository.Delete: removed originating file '{file}' for id={id}"); } catch { }
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+            catch { }
         }
 
         public IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags()

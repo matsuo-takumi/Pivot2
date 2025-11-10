@@ -17,6 +17,8 @@ namespace Pivot.CodeModule.ViewModels
     {
         private readonly ICodeRepository? _repo;
         private List<CodeFile> _allSnippets = new List<CodeFile>();
+        // track snippets that were created in-memory and not yet persisted
+        private HashSet<Guid> _transientSnippetIds = new HashSet<Guid>();
         private HashSet<string> _selectedCodeTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         [ObservableProperty]
@@ -72,19 +74,11 @@ namespace Pivot.CodeModule.ViewModels
             // No test seeding in fallback; start with an empty collection
         }
 
-        // Ensure a placeholder "New" item is always present at index 0 for UI
+        // Previously ensured a placeholder "New" item at index 0.
+        // This behavior was removed: do not auto-insert a "+ New" placeholder.
         partial void OnSnippetsChanged(ObservableCollection<CodeFile> value)
         {
-            try
-            {
-                if (value == null) return;
-                if (!value.Any(s => s.Id == Guid.Empty))
-                {
-                    var placeholder = new CodeFile { Id = Guid.Empty, Title = "+ New", Content = string.Empty, Updated = DateTime.MinValue };
-                    value.Insert(0, placeholder);
-                }
-            }
-            catch { }
+            // intentionally left blank to avoid inserting placeholder items
         }
 
         public void Refresh()
@@ -174,19 +168,13 @@ namespace Pivot.CodeModule.ViewModels
                 }
                 SelectedSnippet = newSnippet;
                 IsDirty = true;
-                // Persist new snippet immediately if repository available
+                // Mark as transient (in-memory) — only persist when content is provided or explicit save
                 try
                 {
-                    if (_repo != null)
+                    if (newSnippet != null && newSnippet.Id != Guid.Empty)
                     {
-                        _repo.Save(newSnippet);
-                        // refresh internal lists to reflect persisted state
-                        Refresh();
-                        System.Diagnostics.Debug.WriteLine("CodeViewModel.AddSnippet: saved new snippet via repository.");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("CodeViewModel.AddSnippet: repository is null, new snippet not persisted.");
+                        _transientSnippetIds.Add(newSnippet.Id);
+                        System.Diagnostics.Debug.WriteLine("CodeViewModel.AddSnippet: created transient new snippet (not persisted).");
                     }
                 }
                 catch { }
@@ -198,12 +186,28 @@ namespace Pivot.CodeModule.ViewModels
         private async Task SaveSnippetAsync()
         {
             if (SelectedSnippet is null) return;
+            // If snippet is transient and has no content, do not persist — remove it instead
+            if (string.IsNullOrWhiteSpace(SelectedSnippet.Content) && _transientSnippetIds.Contains(SelectedSnippet.Id))
+            {
+                try
+                {
+                    _transientSnippetIds.Remove(SelectedSnippet.Id);
+                    Snippets.Remove(SelectedSnippet);
+                    SelectedSnippet = null;
+                    IsDirty = false;
+                    return;
+                }
+                catch { }
+            }
+
             if (_repo != null)
             {
                 // Save synchronously to avoid DbContext concurrent use across threads
                 _repo.Save(SelectedSnippet);
                 IsDirty = false;
                 Refresh();
+                // if it was transient, it's now persisted
+                try { _transientSnippetIds.Remove(SelectedSnippet.Id); } catch { }
             }
             else
             {
@@ -223,6 +227,21 @@ namespace Pivot.CodeModule.ViewModels
 #if DEBUG
                 System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: invoked for id={file.Id}, repoPresent={_repo != null}");
 #endif
+                // If this was a transient snippet and there's no content, do not persist — remove it
+                if (string.IsNullOrWhiteSpace(file.Content) && _transientSnippetIds.Contains(file.Id))
+                {
+                    try
+                    {
+                        _transientSnippetIds.Remove(file.Id);
+                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                        {
+                            try { Snippets.Remove(file); } catch { }
+                        });
+                    }
+                    catch { }
+                    return;
+                }
+
                 if (_repo != null)
                 {
                     // Save synchronously on calling thread to avoid concurrent DbContext access
@@ -231,6 +250,8 @@ namespace Pivot.CodeModule.ViewModels
                     System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: saved via repository id={file.Id}");
 #endif
                     try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh()); } catch { }
+                    // if it was transient, it's now persisted
+                    try { _transientSnippetIds.Remove(file.Id); } catch { }
                 }
                 else
                 {

@@ -14,9 +14,9 @@
         <conv:CardPanelSizeConverter x:Key="CardPanelSizeConverter" />
     </Page.Resources>
 
-    <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" Background="LightGray" PointerPressed="Root_PointerPressed">
+    <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" PointerPressed="Root_PointerPressed">
         <!-- Header spanning both columns -->
-        <Border Grid.Row="0" Background="LightBlue" Padding="8" CornerRadius="6" Margin="0,0,0,8">
+        <Border Grid.Row="0" Padding="8" CornerRadius="6" Margin="0,0,0,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -30,7 +30,7 @@
         </Border>
 
         <!-- NavigationView hosts the left pane and the main content to avoid gaps in Compact mode -->
-        <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked" Background="LightCoral">
+        <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked">
             <!-- Left pane: code tags shown as a TreeView to allow hierarchical selection/filtering -->
             <NavigationView.PaneCustomContent>
                 <TreeView x:Name="CodeTagTree" Margin="8" />
@@ -38,25 +38,25 @@
             <!-- Items will be populated in code-behind -->
             <NavigationView.Content>
                 <!-- Editor area: toolbar + editor -->
-                <Grid Background="LightYellow">
+                <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
                     <!-- Quick add (Google Keep style): type and blur to create card) -->
-                    <StackPanel Grid.Row="0" Background="LightGreen">
+                    <StackPanel Grid.Row="0">
                         <InfoBar x:Name="QuickAddInfoBar" IsOpen="False" Severity="Success" Margin="0,0,0,8" Message="Saved" />
                         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
-                            <TextBox x:Name="QuickAddBox" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" GotFocus="QuickAddBox_GotFocus" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12"/>
+                            <TextBox x:Name="QuickAddBox" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" GotFocus="QuickAddBox_GotFocus" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                         </Border>
                     </StackPanel>
 
                     <!-- Main area: show cards when no selection, editor when selected -->
                     <Grid Grid.Row="1">
-                        <Grid x:Name="CardPanel" Background="LightPink">
+                        <Grid x:Name="CardPanel">
                             <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollMode="Auto">
-                                <ListView x:Name="SnippetListView" ItemsSource="{Binding Snippets}" SelectedItem="{Binding SelectedSnippet, Mode=TwoWay}" SelectionMode="Single" CanDragItems="True" CanReorderItems="True" AllowDrop="True" IsItemClickEnabled="True" ItemClick="SnippetListView_ItemClick">
+                                <ListView x:Name="SnippetListView" ItemsSource="{Binding Snippets}" SelectedItem="{Binding SelectedSnippet, Mode=TwoWay}" SelectionMode="Single" CanDragItems="True" CanReorderItems="True" AllowDrop="True" IsItemClickEnabled="True" ItemClick="SnippetListView_ItemClick" DragItemsCompleted="SnippetListView_DragItemsCompleted">
                                     <ListView.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <ItemsWrapGrid MaximumRowsOrColumns="4" Orientation="Horizontal" />
@@ -78,9 +78,12 @@
                                                 </Grid.RowDefinitions>
 
                                                 <!-- Title row with delete icon on the right -->
-                                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
                                                     <TextBlock Grid.Column="0" Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
-                                                    <Button Grid.Column="1" Click="CardDeleteButton_Click" Tag="{x:Bind Id}" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Delete">
+                                                    <Button Grid.Column="1" Click="CardCopyButton_Click" Tag="{x:Bind Id}" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Copy">
+                                                        <FontIcon Glyph="&#xE8C8;" FontFamily="Segoe MDL2 Assets"/>
+                                                    </Button>
+                                                    <Button Grid.Column="2" Click="CardDeleteButton_Click" Tag="{x:Bind Id}" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Delete">
                                                         <FontIcon Glyph="&#xE74D;" FontFamily="Segoe MDL2 Assets"/>
                                                     </Button>
                                                 </Grid>
@@ -135,7 +138,7 @@
 
                                             <!-- Footer: action buttons (separated from editor) -->
                                             <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
-                                                <Button x:Name="ScratchpadDeleteButton" Content="Delete" Click="ScratchpadDeleteButton_Click" />
+                                                <Button x:Name="ScratchpadCopyButton" Content="Copy" Click="ScratchpadCopyButton_Click" />
                                                 <Button x:Name="ScratchpadCloseButton" Content="Close" Margin="8,0,0,0" TabIndex="30" IsTabStop="True" Click="ScratchpadCloseButton_Click" />
                                             </StackPanel>
                                         </Grid>
@@ -150,7 +153,7 @@
 
                         </Grid>
 
-                        <Grid x:Name="EditorPanel" Visibility="Collapsed" Background="LightCyan">
+                        <Grid x:Name="EditorPanel" Visibility="Collapsed">
                             <Border Background="Transparent" Padding="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -158,7 +161,10 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock x:Name="EditorHeader" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                    <Button Grid.Column="1" Content="Collapse" Click="EditorCollapseButton_Click" Margin="8,0,0,0" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <Button x:Name="EditorCopyButton" Content="Copy" Click="EditorCopyButton_Click" />
+                                        <Button Content="Collapse" Click="EditorCollapseButton_Click" Margin="8,0,0,0" />
+                                    </StackPanel>
                                 </Grid>
                             </Border>
 
