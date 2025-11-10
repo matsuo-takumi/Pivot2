@@ -78,12 +78,18 @@
                                                 </Grid.RowDefinitions>
 
                                                 <!-- Title row with delete icon on the right -->
-                                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+                                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
                                                     <TextBlock Grid.Column="0" Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
-                                                    <Button Grid.Column="1" Click="CardCopyButton_Click" Tag="{x:Bind Id}" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Copy">
+                                                    <!-- Open directory button -->
+                                                    <Button Grid.Column="1" Click="CardOpenDirectoryButton_Click" Tag="{x:Bind Id}" Margin="6,0,0,0" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Open containing folder">
+                                                        <SymbolIcon Symbol="Folder"/>
+                                                    </Button>
+                                                    <!-- Copy button -->
+                                                    <Button Grid.Column="2" Click="CardCopyButton_Click" Tag="{x:Bind Id}" Margin="6,0,0,0" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Copy">
                                                         <FontIcon Glyph="&#xE8C8;" FontFamily="Segoe MDL2 Assets"/>
                                                     </Button>
-                                                    <Button Grid.Column="2" Click="CardDeleteButton_Click" Tag="{x:Bind Id}" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Delete">
+                                                    <!-- Delete button -->
+                                                    <Button Grid.Column="3" Click="CardDeleteButton_Click" Tag="{x:Bind Id}" Margin="6,0,0,0" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Delete">
                                                         <FontIcon Glyph="&#xE74D;" FontFamily="Segoe MDL2 Assets"/>
                                                     </Button>
                                                 </Grid>

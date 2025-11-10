@@ -1733,19 +1733,15 @@ namespace Pivot.CodeModule.Views
                 var scratchList = this.FindName("ScratchpadTagList") as ItemsControl;
                 var editorList = this.FindName("EditorTagList") as ItemsControl;
                 if (settings == null || (scratchList == null && editorList == null)) return;
-                var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
-
-                // convert to simple view items with IsChecked state
+                // Show only tags assigned to the selected snippet (ScratchpadTagList)
+                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
                 var selected = ViewModel?.SelectedSnippet;
-                var selectedTags = selected != null ? (selected.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var selectedTags = selected != null
+                    ? (selected.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                    : new System.Collections.Generic.List<string>();
 
-                var items = filters.Select(f => new TagItem { Id = 0, Name = f.Name, IsSelected = selectedTags.Contains(f.Name) }).ToList();
-                // Limit number of shown tags to avoid overflow in scratchpad; omit extras
-                const int maxShownTags = 8;
-                if (items.Count > maxShownTags)
-                {
-                    items = items.Take(maxShownTags).ToList();
-                }
+                // Build TagItem list only from assigned tags (IsSelected = true)
+                var items = selectedTags.Select((t, idx) => new TagItem { Id = idx, Name = t, IsSelected = true }).ToList();
 
                 App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
                 {
@@ -1759,7 +1755,7 @@ namespace Pivot.CodeModule.Views
                         {
                             var scratchCombo = this.FindName("ScratchpadNewTagBox") as ComboBox;
                             var editorCombo = this.FindName("EditorNewTagBox") as ComboBox;
-                            var tagNames = filters.Select(f => f.Name).ToList();
+                            var tagNames = repo?.GetAllTags().Select(t => t.Name).ToList() ?? new System.Collections.Generic.List<string>();
                             if (scratchCombo != null) scratchCombo.ItemsSource = tagNames;
                             if (editorCombo != null) editorCombo.ItemsSource = tagNames;
                         }
@@ -2013,6 +2009,127 @@ namespace Pivot.CodeModule.Views
                 Clipboard.SetContent(dp);
             }
             catch { }
+        }
+
+        // Open the containing directory for a snippet (select the source file if found)
+        private void CardOpenDirectoryButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("CardOpenDirectoryButton_Click invoked");
+                if (!(sender is FrameworkElement fe)) return;
+                Guid id = Guid.Empty;
+                try { if (fe.Tag is Guid gid) id = gid; else if (Guid.TryParse(fe.Tag?.ToString(), out var parsed)) id = parsed; } catch { }
+                var snippet = fe.DataContext as Pivot.CodeModule.Models.CodeFile ?? ViewModel?.Snippets?.FirstOrDefault(s => s.Id == id);
+                if (snippet == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("CardOpenDirectoryButton_Click: snippet null");
+                    return;
+                }
+
+                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                var userSettings = settings?.GetUserSettings();
+                var dirs = new System.Collections.Generic.List<string>(userSettings?.CodeDirectories ?? new System.Collections.Generic.List<string>());
+                var allowedExts = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase) { ".json", ".cs", ".py", ".md", ".txt" };
+
+                // include export directory as a fallback
+                try
+                {
+                    var exportDir = settings?.GetExportOutputDirectory();
+                    if (!string.IsNullOrWhiteSpace(exportDir) && !dirs.Contains(exportDir) && System.IO.Directory.Exists(exportDir))
+                    {
+                        dirs.Add(exportDir);
+                    }
+                }
+                catch { }
+
+                foreach (var dir in dirs)
+                {
+                    try
+                    {
+                        if (string.IsNullOrWhiteSpace(dir) || !System.IO.Directory.Exists(dir)) continue;
+                        var files = System.IO.Directory.EnumerateFiles(dir, "*.*", System.IO.SearchOption.TopDirectoryOnly)
+                                             .Where(f => allowedExts.Contains(System.IO.Path.GetExtension(f) ?? string.Empty));
+                        foreach (var file in files)
+                        {
+                            try
+                            {
+                                if (CreateDeterministicGuid(file) == snippet.Id)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: found file {file}");
+                                    var processInfo = new System.Diagnostics.ProcessStartInfo
+                                    {
+                                        FileName = "explorer.exe",
+                                        Arguments = $"/select,\"{file}\"",
+                                        UseShellExecute = true
+                                    };
+                                    System.Diagnostics.Process.Start(processInfo);
+                                    return;
+                                }
+                            }
+                            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: file check error {ex.Message}"); }
+                        }
+                    }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: dir scan error {ex.Message}"); }
+                }
+
+                // If file not found, try direct export filename match
+                try
+                {
+                    var exportDir = settings?.GetExportOutputDirectory();
+                    if (!string.IsNullOrWhiteSpace(exportDir) && System.IO.Directory.Exists(exportDir))
+                    {
+                        var jsonPath = System.IO.Path.Combine(exportDir, snippet.Id.ToString() + ".json");
+                        var mdPath = System.IO.Path.Combine(exportDir, snippet.Id.ToString() + ".md");
+                        if (System.IO.File.Exists(jsonPath))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: found exported json {jsonPath}");
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{jsonPath}\"", UseShellExecute = true });
+                            return;
+                        }
+                        if (System.IO.File.Exists(mdPath))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: found exported md {mdPath}");
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{mdPath}\"", UseShellExecute = true });
+                            return;
+                        }
+                    }
+                }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: export check error {ex.Message}"); }
+
+                // Fallback: open first configured code directory if available
+                try
+                {
+                    var firstDir = userSettings?.CodeDirectories?.FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(firstDir) && System.IO.Directory.Exists(firstDir))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: opening directory {firstDir}");
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"\"{firstDir}\"", UseShellExecute = true });
+                        return;
+                    }
+                }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: fallback open error {ex.Message}"); }
+
+                System.Diagnostics.Debug.WriteLine("CardOpenDirectoryButton_Click: no file or directory found to open");
+            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: unexpected error {ex.Message}"); }
+        }
+
+        private static Guid CreateDeterministicGuid(string input)
+        {
+            try
+            {
+                using var md5 = System.Security.Cryptography.MD5.Create();
+                var bytes = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input.ToLowerInvariant()));
+                if (bytes.Length >= 16)
+                {
+                    var guidBytes = new byte[16];
+                    System.Array.Copy(bytes, guidBytes, 16);
+                    return new Guid(guidBytes);
+                }
+            }
+            catch { }
+            return Guid.NewGuid();
         }
 
         // Copy snippet content to clipboard from scratchpad editor

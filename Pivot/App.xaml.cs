@@ -140,6 +140,42 @@ namespace Pivot
 					try
 					{
 						ctx.Database.EnsureCreated();
+                        // Ensure Tags column exists in CodeFiles table; if missing, add it (SQLite ALTER TABLE ADD COLUMN)
+                        try
+                        {
+                            var conn = ctx.Database.GetDbConnection();
+                            conn.Open();
+                            using (var cmd = conn.CreateCommand())
+                            {
+                                cmd.CommandText = "PRAGMA table_info('CodeFiles');";
+                                using var rdr = cmd.ExecuteReader();
+                                var hasTags = false;
+                                while (rdr.Read())
+                                {
+                                    try
+                                    {
+                                        var name = rdr["name"]?.ToString();
+                                        if (string.Equals(name, "Tags", StringComparison.OrdinalIgnoreCase)) { hasTags = true; break; }
+                                    }
+                                    catch { }
+                                }
+                                rdr.Close();
+                                if (!hasTags)
+                                {
+                                    try
+                                    {
+                                        ctx.Database.ExecuteSqlRaw("ALTER TABLE CodeFiles ADD COLUMN Tags TEXT;");
+                                        System.Diagnostics.Debug.WriteLine("ConfigureServices: added Tags column to CodeFiles table.");
+                                    }
+                                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ConfigureServices: failed to add Tags column: {ex}"); }
+                                }
+                            }
+                            try { conn.Close(); } catch { }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"ConfigureServices: EnsureTagsColumn check failed: {ex}");
+                        }
 					}
 					catch (Exception ex)
 					{
