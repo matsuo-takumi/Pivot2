@@ -587,10 +587,22 @@ namespace Pivot.CodeModule.Views
                     {
                         try
                         {
-                            var matches = ViewModel.GetSnippetsByTag(fi.Name) ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>();
+                            // Treat tree tag selection as filter selection: clear other filters and apply this one.
+                            ViewModel.ActiveFilters.Clear();
+                            if (fi.Id != Guid.Empty) ViewModel.ActiveFilters.Add(fi.Id);
+                            // Perform a direct, case-insensitive match on tag name to ensure only tagged snippets are shown.
+                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                            var source = (repo?.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>()).ToList();
+                            var matches = source.Where(s =>
+                            {
+                                var snipTags = (s.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                                   .Select(t => t.Trim()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+                                return snipTags.Any(t => string.Equals(t, fi.Name, StringComparison.OrdinalIgnoreCase));
+                            }).ToList();
                             ViewModel.Snippets = new System.Collections.ObjectModel.ObservableCollection<Pivot.CodeModule.Models.CodeFile>(matches);
                         }
                         catch { }
+                        // Close any open editor so the filtered list is visible
                         if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
                     }
                     return;
@@ -603,6 +615,24 @@ namespace Pivot.CodeModule.Views
                     {
                         if (ViewModel == null) return;
                         var snippet = ViewModel.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
+                        if (snippet == null)
+                        {
+                            // Fallback: try to resolve from repository or all known snippets
+                            try
+                            {
+                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                                var all = repo?.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>();
+                                snippet = all.FirstOrDefault(s => s.Id == sni.Id);
+                                // If still null, try ViewModel.Refresh then lookup again
+                                if (snippet == null)
+                                {
+                                    try { ViewModel?.Refresh(); } catch { }
+                                    snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
+                                }
+                            }
+                            catch { snippet = null; }
+                        }
+
                         if (snippet != null)
                         {
                             ViewModel.SelectedSnippet = snippet;
@@ -1740,8 +1770,14 @@ namespace Pivot.CodeModule.Views
                     ? (selected.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
                     : new System.Collections.Generic.List<string>();
 
-                // Build TagItem list only from assigned tags (IsSelected = true)
-                var items = selectedTags.Select((t, idx) => new TagItem { Id = idx, Name = t, IsSelected = true }).ToList();
+                // Filter out tags that are not defined in CodeFilters (Preferences)
+                var allowedFilterNames = settings.GetCodeFilters()?.Select(f => f.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                    ?? new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var filteredTags = selectedTags.Where(t => allowedFilterNames.Contains(t)).ToList();
+
+                // Build TagItem list only from assigned & allowed tags (IsSelected = true)
+                var items = filteredTags.Select((t, idx) => new TagItem { Id = idx, Name = t, IsSelected = true }).ToList();
 
                 App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
                 {
@@ -1755,7 +1791,9 @@ namespace Pivot.CodeModule.Views
                         {
                             var scratchCombo = this.FindName("ScratchpadNewTagBox") as ComboBox;
                             var editorCombo = this.FindName("EditorNewTagBox") as ComboBox;
-                            var tagNames = repo?.GetAllTags().Select(t => t.Name).ToList() ?? new System.Collections.Generic.List<string>();
+                            // Use Preferences CodeFilters as the authoritative list of tag candidates
+                            var tagNames = settings.GetCodeFilters()?.Select(f => f.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                                ?? new System.Collections.Generic.List<string>();
                             if (scratchCombo != null) scratchCombo.ItemsSource = tagNames;
                             if (editorCombo != null) editorCombo.ItemsSource = tagNames;
                         }

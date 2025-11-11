@@ -103,12 +103,13 @@ namespace Pivot.Views
                 if (settings != null)
                 {
                     var visible = _settings!.GetVisibleFiltersForTab("Code");
-                    var viewItems = settings.CodeFilters.Select(f => new CodeFilterViewItem
-                    {
-                        Id = f.Id,
-                        Name = f.Name,
-                        Visible = visible != null && visible.Contains(f.Id)
-                    }).ToList();
+                var viewItems = settings.CodeFilters.Select(f => new CodeFilterViewItem
+                {
+                    Id = f.Id,
+                    Name = f.Name,
+                    AllowedExtensions = f.AllowedExtensions ?? new List<string>(),
+                    Visible = visible != null && visible.Contains(f.Id)
+                }).ToList();
 
                     FiltersList.ItemsSource = viewItems;
                 }
@@ -119,9 +120,11 @@ namespace Pivot.Views
         private async void AddFilter_Click(object sender, RoutedEventArgs e)
         {
             var nameBox = new TextBox { Header = "Name" };
+            var extBox = new TextBox { Header = "Extensions (comma separated)" };
 
             var panel = new StackPanel();
             panel.Children.Add(nameBox);
+            panel.Children.Add(extBox);
 
             var dialog = new ContentDialog()
             {
@@ -141,11 +144,19 @@ namespace Pivot.Views
                 {
                     var name = nameBox.Text?.Trim() ?? string.Empty;
 
+                    var exts = (extBox.Text ?? string.Empty)
+                        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(s => s.Trim().ToLowerInvariant())
+                        .Where(s => s.Length > 0)
+                        .Select(s => s.StartsWith('.') ? s : "." + s)
+                        .Distinct()
+                        .ToList();
+
                     if (!string.IsNullOrWhiteSpace(name) && _settings != null)
                     {
                         var user = _settings.GetUserSettings();
                         var list = user.CodeFilters;
-                        var nf = new CustomFilter { Name = name };
+                        var nf = new CustomFilter { Name = name, AllowedExtensions = exts };
                         list.Add(nf);
                         await _settings.SetCodeFiltersAsync(list);
                         LoadFilters();
@@ -164,8 +175,10 @@ namespace Pivot.Views
                 if (target == null) return;
 
                 var nameBox = new TextBox { Header = "Name", Text = target.Name };
+                var extBox = new TextBox { Header = "Extensions (comma separated)", Text = string.Join(",", target.AllowedExtensions ?? new List<string>()) };
                 var panel = new StackPanel();
                 panel.Children.Add(nameBox);
+                panel.Children.Add(extBox);
 
                 var dialog = new ContentDialog()
                 {
@@ -184,7 +197,15 @@ namespace Pivot.Views
                     try
                     {
                         var name = nameBox.Text?.Trim() ?? string.Empty;
+                        var exts = (extBox.Text ?? string.Empty)
+                            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(s => s.Trim().ToLowerInvariant())
+                            .Where(s => s.Length > 0)
+                            .Select(s => s.StartsWith('.') ? s : "." + s)
+                            .Distinct()
+                            .ToList();
                         target.Name = name;
+                        target.AllowedExtensions = exts;
                         await _settings!.SetCodeFiltersAsync(user.CodeFilters);
                         LoadFilters();
                     }
@@ -200,7 +221,7 @@ namespace Pivot.Views
                 var user = _settings.GetUserSettings();
                 var target = user.CodeFilters.FirstOrDefault(f => f.Id == id);
                 if (target == null) return;
-                if (target.IsBuiltIn) return; // do not delete built-in
+                // allow deleting built-in as requested
                 user.CodeFilters.Remove(target);
                 await _settings.SetCodeFiltersAsync(user.CodeFilters);
                 LoadFilters();
@@ -252,6 +273,8 @@ namespace Pivot.Views
         {
             public Guid Id { get; set; }
             public string Name { get; set; } = string.Empty;
+            public List<string> AllowedExtensions { get; set; } = new List<string>();
+            public string AllowedExtensionsString => string.Join(", ", AllowedExtensions);
             public bool Visible { get; set; } = true;
         }
 
