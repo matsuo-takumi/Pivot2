@@ -19,6 +19,12 @@ namespace Pivot.CodeModule.Models
         public string Content { get; set; } = string.Empty;
 
         public DateTime Updated { get; set; } = DateTime.Now;
+		
+        // Soft-delete support: when true the snippet is considered in Trash and can be restored within 30 days.
+        public bool IsDeleted { get; set; } = false;
+
+        // Timestamp when item was moved to Trash (UTC). Null when not deleted.
+        public DateTime? DeletedAt { get; set; } = null;
     }
 }
 

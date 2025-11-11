@@ -92,6 +92,19 @@ namespace Pivot.CodeModule.ViewModels
             }
         }
 
+        // Show snippets that are in Trash (soft-deleted) and still within the restore window.
+        public void ShowDeletedSnippets()
+        {
+            if (_repo == null) return;
+            try
+            {
+                var deleted = (_repo.GetAllDeleted() ?? Enumerable.Empty<CodeFile>()).ToList();
+                _allSnippets = deleted;
+                ApplyCodeTagFilters();
+            }
+            catch { }
+        }
+
         public void FilterSnippets()
         {
             if (_repo == null) return;

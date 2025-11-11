@@ -33,7 +33,7 @@
         <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked">
             <!-- Left pane: code tags shown as a TreeView to allow hierarchical selection/filtering -->
             <NavigationView.PaneCustomContent>
-                <TreeView x:Name="CodeTagTree" Margin="8" />
+                <TreeView x:Name="CodeTagTree" Margin="8" Visibility="Collapsed" />
             </NavigationView.PaneCustomContent>
             <!-- Items will be populated in code-behind -->
             <NavigationView.Content>
@@ -68,6 +68,7 @@
                                             <Border.ContextFlyout>
                                                 <MenuFlyout>
                                                     <MenuFlyoutItem Text="Delete" Click="CardDeleteFlyout_Click" Tag="{x:Bind Id}" />
+                                                    <MenuFlyoutItem Text="Restore" Click="CardRestoreFlyout_Click" Tag="{x:Bind Id}" />
                                                 </MenuFlyout>
                                             </Border.ContextFlyout>
                                             <Grid>
@@ -124,17 +125,20 @@
                                                             <WrapGrid Orientation="Horizontal" HorizontalChildrenAlignment="Left" />
                                                         </ItemsPanelTemplate>
                                                     </ItemsControl.ItemsPanel>
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate x:DataType="models:TagItem">
-                                                            <ToggleButton Content="{x:Bind Name}" Margin="4" Padding="8,4" Checked="ScratchpadTag_Toggled" Unchecked="ScratchpadTag_Toggled" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:TagItem">
+                                        <StackPanel Orientation="Horizontal" Margin="2">
+                                            <ToggleButton Content="{x:Bind Name}" Margin="4" Padding="8,4" Checked="ScratchpadTag_Toggled" Unchecked="ScratchpadTag_Toggled" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+                                            <Button Content="✕" Click="ScratchpadTagRemove_Click" Tag="{x:Bind Name}" Margin="4,0,0,0" MinWidth="28" MinHeight="28" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
 
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                                    <ComboBox x:Name="ScratchpadNewTagBox" Width="160" IsEditable="True" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
-                                                    <Button x:Name="ScratchpadAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
-                                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                    <ComboBox x:Name="ScratchpadNewTagBox" Width="160" IsEditable="True" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" SelectionChanged="ScratchpadNewTagBox_SelectionChanged" />
+                                    <Button x:Name="ScratchpadAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
+                                </StackPanel>
                                             </StackPanel>
 
                                             <!-- Editor area (scrollable) -->
@@ -182,15 +186,18 @@
                                             <WrapGrid Orientation="Horizontal" HorizontalChildrenAlignment="Left" />
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="models:TagItem">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="models:TagItem">
+                                        <StackPanel Orientation="Horizontal" Margin="2">
                                             <ToggleButton Content="{x:Bind Name}" Margin="4" Padding="8,4" Checked="ScratchpadTag_Toggled" Unchecked="ScratchpadTag_Toggled" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
+                                            <Button Content="✕" Click="ScratchpadTagRemove_Click" Tag="{x:Bind Name}" Margin="4,0,0,0" MinWidth="28" MinHeight="28" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                    <ComboBox x:Name="EditorNewTagBox" Width="160" IsEditable="True" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" />
+                                    <ComboBox x:Name="EditorNewTagBox" Width="160" IsEditable="True" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" SelectionChanged="EditorNewTagBox_SelectionChanged" />
                                     <Button x:Name="EditorAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
                                 </StackPanel>
                             </StackPanel>

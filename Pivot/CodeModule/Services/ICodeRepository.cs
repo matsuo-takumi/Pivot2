@@ -15,6 +15,8 @@ namespace Pivot.CodeModule.Services
         void Save(CodeFile file);
 
         void Delete(Guid id);
+        IEnumerable<CodeFile> GetAllDeleted();
+        void Restore(Guid id);
 
         IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags();
         void AddTag(string name);

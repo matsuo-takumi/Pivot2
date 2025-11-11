@@ -130,11 +130,11 @@ namespace Pivot.CodeModule.Views
                             var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
                             var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
                             var name = newTagBox.Text?.Trim() ?? string.Empty;
-                            if (!string.IsNullOrWhiteSpace(name) && repo != null)
+                            if (!string.IsNullOrWhiteSpace(name))
                             {
-                                repo.AddTag(name);
+                                // Add tag to repository and ensure it's registered in Preferences > Code Filters
+                                AddTagAndRegister(name);
                                 newTagBox.Text = string.Empty;
-                                RefreshScratchpadTags();
 
                                 // Attach tag to currently selected snippet (if any) and persist
                                 try
@@ -149,29 +149,36 @@ namespace Pivot.CodeModule.Views
                                     }
                                 }
                                 catch { }
-
-                                // Also register into Preferences > Code Filters if missing
-                                try
-                                {
-                                    if (settings != null)
-                                    {
-                                        var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
-                                        if (!filters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
-                                        {
-                                            filters.Add(new Pivot.Models.CustomFilter { Name = name });
-                                            _ = settings.SetCodeFiltersAsync(filters);
-                                        }
-                                    }
-                                }
-                                catch { }
-
-                                // Refresh left navigation and tag combos to show the new tag
-                                try { BuildNavigationMenu(); PopulateTagCombos(); } catch { }
                             }
                         }
                         catch { }
                     };
                 }
+                // selection from combobox should add tag immediately
+                try
+                {
+                    if (newTagBox != null)
+                    {
+                        newTagBox.SelectionChanged += (s, ev) =>
+                        {
+                            try
+                            {
+                                var cb = s as ComboBox;
+                                if (cb == null) return;
+                                var name = (cb.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? cb.Text?.Trim() ?? string.Empty;
+                                if (string.IsNullOrWhiteSpace(name)) return;
+                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                                if (repo != null)
+                                {
+                                    AddTagAndRegister(name);
+                                    cb.Text = string.Empty;
+                                }
+                            }
+                            catch { }
+                        };
+                    }
+                }
+                catch { }
 
                 // Also wire the editor-level add tag controls (moved into main section)
                 try
@@ -186,11 +193,10 @@ namespace Pivot.CodeModule.Views
                             {
                                 var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
                                 var name = editorNewTagBox.Text?.Trim() ?? string.Empty;
-                                if (!string.IsNullOrWhiteSpace(name) && repo != null)
+                                if (!string.IsNullOrWhiteSpace(name))
                                 {
-                                    repo.AddTag(name);
+                                    AddTagAndRegister(name);
                                     editorNewTagBox.Text = string.Empty;
-                                    RefreshScratchpadTags();
 
                                     // Attach tag to currently selected snippet (if any) and persist
                                     try
@@ -205,31 +211,35 @@ namespace Pivot.CodeModule.Views
                                         }
                                     }
                                     catch { }
-
-                                    // Also register into Preferences > Code Filters if missing
-                                    try
-                                    {
-                                        var settings2 = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                                        if (settings2 != null)
-                                        {
-                                            var filters2 = settings2.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
-                                            if (!filters2.Any(flt => string.Equals(flt.Name, name, StringComparison.OrdinalIgnoreCase)))
-                                            {
-                                                filters2.Add(new Pivot.Models.CustomFilter { Name = name });
-                                                _ = settings2.SetCodeFiltersAsync(filters2);
-                                            }
-                                        }
-                                    }
-                                    catch { }
-
-                                    
-                                    // Refresh left navigation and tag combos to show the new tag
-                                    try { BuildNavigationMenu(); PopulateTagCombos(); } catch { }
                                 }
                             }
                             catch { }
                         };
                     }
+                try
+                {
+                    if (editorNewTagBox != null)
+                    {
+                        editorNewTagBox.SelectionChanged += (s, ev) =>
+                        {
+                            try
+                            {
+                                var cb = s as ComboBox;
+                                if (cb == null) return;
+                                var name = (cb.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? cb.Text?.Trim() ?? string.Empty;
+                                if (string.IsNullOrWhiteSpace(name)) return;
+                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                                if (repo != null)
+                                {
+                                    AddTagAndRegister(name);
+                                    cb.Text = string.Empty;
+                                }
+                            }
+                            catch { }
+                        };
+                    }
+                }
+                catch { }
                 }
                 catch { }
             }
@@ -357,6 +367,36 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
+        private void RegisterCodeFilterIfMissing(string name)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                if (settings == null) return;
+                var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+                if (!filters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    filters.Add(new Pivot.Models.CustomFilter { Name = name });
+                    _ = settings.SetCodeFiltersAsync(filters);
+                }
+            }
+            catch { }
+        }
+
+        private void AddTagAndRegister(string name)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                // Persist tag into Preferences (JSON-backed) only — unified source of truth.
+                RegisterCodeFilterIfMissing(name);
+                try { RefreshScratchpadTags(); } catch { }
+                try { BuildNavigationMenu(); PopulateTagCombos(); } catch { }
+            }
+            catch { }
+        }
+
         // Text-based editors (TextBox) are used instead of WebView2. Text change events update the ViewModel.
 
         private void OnSearchClicked(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -442,18 +482,36 @@ namespace Pivot.CodeModule.Views
                 var allItem = new NavigationViewItem { Content = "All Snippets", Tag = "all", Icon = new SymbolIcon(Symbol.AllApps) };
                 nav.MenuItems.Add(allItem);
 
-                // Prepare hierarchical tag tree in the left pane (TreeView)
-                var tree = this.FindName("CodeTagTree") as TreeView;
-
                 var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                // Use Preferences > Code のタグ（CodeFilters）を左ナビに使用
-                var categories = settings?.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
-                try { categories = categories.Where(c => !string.Equals(c.Name, "Languages", StringComparison.OrdinalIgnoreCase)).ToList(); } catch { }
+                // Use Preferences > Code のタグ（CodeFilters）を左ナビに追加して、All Snippets のような挙動にする
                 var filters = settings?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
 
+                try
+                {
+                    foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
+                    {
+                        try
+                        {
+                            var ni = new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Tag) };
+                            nav.MenuItems.Add(ni);
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
+                // Add Trash nav item
+                try
+                {
+                    var trashNav = new NavigationViewItem { Content = "ごみ箱", Tag = "trash", Icon = new SymbolIcon(Symbol.Delete) };
+                    nav.MenuItems.Add(trashNav);
+                }
+                catch { }
+
+                // Also populate the TreeView for hierarchical display (kept for compatibility)
+                var tree = this.FindName("CodeTagTree") as TreeView;
                 if (tree != null)
                 {
-                    // ensure we handle item invoked to apply filters when nodes are clicked
                     try
                     {
                         tree.ItemInvoked -= CodeTagTree_ItemInvoked;
@@ -466,12 +524,9 @@ namespace Pivot.CodeModule.Views
                     var allNode = new TreeViewNode { Content = "All Snippets" };
                     tree.RootNodes.Add(allNode);
 
-                    // Build per-tag root nodes (each tag becomes a root; snippets with that tag are children)
                     foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
                     {
                         var tagNode = new TreeViewNode { Content = new FilterNodeInfo { Id = f.Id, Name = f.Name } };
-
-                        // Find snippets that include this tag name
                         try
                         {
                             var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
@@ -487,12 +542,14 @@ namespace Pivot.CodeModule.Views
                             }
                         }
                         catch { }
-
                         tree.RootNodes.Add(tagNode);
                     }
+
+                    try { tree.RootNodes.Add(new TreeViewNode { Content = "ごみ箱" }); } catch { }
                 }
 
                 nav.SelectedItem = allItem;
+                try { ViewModel?.Refresh(); } catch { }
             }
             catch { }
         }
@@ -527,6 +584,12 @@ namespace Pivot.CodeModule.Views
                     return;
                 }
 
+                if (string.Equals(tagStr, "trash", StringComparison.OrdinalIgnoreCase))
+                {
+                    try { ViewModel?.GetType().GetMethod("ShowDeletedSnippets")?.Invoke(ViewModel, null); } catch { }
+                    return;
+                }
+
                 if (Guid.TryParse(tagStr, out var filterId))
                 {
                     ViewModel.ActiveFilters.Clear();
@@ -541,6 +604,12 @@ namespace Pivot.CodeModule.Views
                     {
                         var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
                         var catName = item.Content?.ToString() ?? string.Empty;
+                            if (string.Equals(catName, "ごみ箱", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Show deleted snippets (Trash)
+                                try { ViewModel?.GetType().GetMethod("ShowDeletedSnippets")?.Invoke(ViewModel, null); } catch { }
+                                return;
+                            }
                         if (settings != null && !string.IsNullOrWhiteSpace(catName))
                         {
                             var cats = settings.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
@@ -1928,6 +1997,66 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
+        private void ScratchpadTagRemove_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement fe)) return;
+                var tagName = fe.Tag?.ToString() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(tagName)) return;
+                if (ViewModel?.SelectedSnippet == null) return;
+                var snippet = ViewModel.SelectedSnippet;
+                var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                current.RemoveAll(x => string.Equals(x, tagName, StringComparison.OrdinalIgnoreCase));
+                snippet.Tags = string.Join(",", current);
+                try { var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository; repo?.Save(snippet); } catch { }
+                try { RefreshScratchpadTags(); } catch { }
+            }
+            catch { }
+        }
+
+        private void ScratchpadNewTagBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                var cb = sender as ComboBox;
+                if (cb == null) return;
+                var name = (cb.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? cb.Text?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(name)) return;
+                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                if (repo != null)
+                {
+                    repo.AddTag(name);
+                    cb.Text = string.Empty;
+                    RefreshScratchpadTags();
+                    BuildNavigationMenu();
+                    PopulateTagCombos();
+                }
+            }
+            catch { }
+        }
+
+        private void EditorNewTagBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                var cb = sender as ComboBox;
+                if (cb == null) return;
+                var name = (cb.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? cb.Text?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(name)) return;
+                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                if (repo != null)
+                {
+                    repo.AddTag(name);
+                    cb.Text = string.Empty;
+                    RefreshScratchpadTags();
+                    BuildNavigationMenu();
+                    PopulateTagCombos();
+                }
+            }
+            catch { }
+        }
+
         private void CodeEditor_TextChanged(object? sender, TextChangedEventArgs e)
         {
             try
@@ -1989,12 +2118,7 @@ namespace Pivot.CodeModule.Views
                     snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == id);
                 }
                 if (snippet == null || snippet.Id == Guid.Empty) return; // don't delete placeholder
-
-                var dlg = new ContentDialog { Title = "Delete this snippet?", PrimaryButtonText = "Delete", CloseButtonText = "Cancel" };
-                dlg.XamlRoot = this.XamlRoot;
-                var result = await dlg.ShowAsync();
-                if (result != ContentDialogResult.Primary) return;
-
+                // No confirmation dialog: move snippet to Trash (soft-delete)
                 var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
                 try { repo?.Delete(snippet.Id); } catch { }
                 try { ViewModel?.Snippets?.Remove(snippet); } catch { }
@@ -2016,12 +2140,7 @@ namespace Pivot.CodeModule.Views
                 try { if (fe.Tag is Guid gid) id = gid; else if (Guid.TryParse(fe.Tag?.ToString(), out var parsed)) id = parsed; } catch { }
                 var snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == id);
                 if (snippet == null || snippet.Id == Guid.Empty) return;
-
-                var dlg = new ContentDialog { Title = "Delete this snippet?", PrimaryButtonText = "Delete", CloseButtonText = "Cancel" };
-                dlg.XamlRoot = this.XamlRoot;
-                var result = await dlg.ShowAsync();
-                if (result != ContentDialogResult.Primary) return;
-
+                // No confirmation dialog for flyout delete: soft-delete immediately
                 var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
                 try { repo?.Delete(snippet.Id); } catch { }
                 try { ViewModel?.Snippets?.Remove(snippet); } catch { }
@@ -2030,6 +2149,52 @@ namespace Pivot.CodeModule.Views
                     ViewModel.SelectedSnippet = null;
                     try { await CloseSnippetWithAnimationAsync(); } catch { }
                 }
+            }
+            catch { }
+        }
+
+        private void CardRestoreFlyout_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement fe)) return;
+                Guid id = Guid.Empty;
+                try { if (fe.Tag is Guid gid) id = gid; else if (Guid.TryParse(fe.Tag?.ToString(), out var parsed)) id = parsed; } catch { }
+                var snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == id);
+                // If not found in current snippets, try repo
+                if (snippet == null && id != Guid.Empty)
+                {
+                    // Attempt to locate in deleted set via repo (use reflection to avoid compile-time coupling)
+                    var repoObj = App.Current.Services.GetService(typeof(ICodeRepository));
+                    try
+                    {
+                        var getAllDeleted = repoObj?.GetType().GetMethod("GetAllDeleted");
+                        if (getAllDeleted != null)
+                        {
+                            var deletedEnum = getAllDeleted.Invoke(repoObj, null) as System.Collections.IEnumerable;
+                            if (deletedEnum != null)
+                            {
+                                foreach (var o in deletedEnum)
+                                {
+                                    if (o is Pivot.CodeModule.Models.CodeFile cf && cf.Id == id) { snippet = cf; break; }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+                if (snippet == null) return;
+
+                try
+                {
+                    var repoObj2 = App.Current.Services.GetService(typeof(ICodeRepository));
+                    var restoreMethod = repoObj2?.GetType().GetMethod("Restore");
+                    restoreMethod?.Invoke(repoObj2, new object[] { snippet.Id });
+                }
+                catch { }
+                // Refresh UI lists
+                try { ViewModel?.Refresh(); } catch { }
+                try { if (ViewModel?.SelectedSnippet == snippet) ViewModel.SelectedSnippet = null; } catch { }
             }
             catch { }
         }

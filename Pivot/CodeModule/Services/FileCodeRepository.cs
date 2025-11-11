@@ -59,7 +59,7 @@ namespace Pivot.CodeModule.Services
                                     };
                                     parsed.Id = CreateDeterministicGuid(file);
                                 }
-                                if (!list.Any(l => l.Id == parsed.Id)) list.Add(parsed);
+                                if (!list.Any(l => l.Id == parsed.Id) && (parsed.IsDeleted == false)) list.Add(parsed);
                             }
                             catch { }
                         }
@@ -71,7 +71,7 @@ namespace Pivot.CodeModule.Services
                 try
                 {
                     var exportDir = _settings.GetExportOutputDirectory();
-                    if (!string.IsNullOrWhiteSpace(exportDir) && Directory.Exists(exportDir))
+                if (!string.IsNullOrWhiteSpace(exportDir) && Directory.Exists(exportDir))
                     {
                         var files = Directory.EnumerateFiles(exportDir, "*.*", SearchOption.TopDirectoryOnly)
                                              .Where(f => f.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".md", StringComparison.OrdinalIgnoreCase));
@@ -83,7 +83,7 @@ namespace Pivot.CodeModule.Services
                                 {
                                     var txt = File.ReadAllText(file);
                                     var parsed = JsonSerializer.Deserialize<CodeFile>(txt);
-                                    if (parsed != null && !list.Any(l => l.Id == parsed.Id)) list.Add(parsed);
+                                    if (parsed != null && !list.Any(l => l.Id == parsed.Id) && (parsed.IsDeleted == false)) list.Add(parsed);
                                 }
                                 else
                                 {
@@ -206,19 +206,188 @@ namespace Pivot.CodeModule.Services
         {
             try
             {
+                // Mark deleted in any JSON export, or write a deleted JSON sentinel in export directory
+                var exportDir = _settings.GetExportOutputDirectory();
+                if (string.IsNullOrWhiteSpace(exportDir))
+                {
+                    var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                    exportDir = Path.Combine(docs, "Pivot", "CodeSnippets");
+                }
+                try { if (!Directory.Exists(exportDir)) Directory.CreateDirectory(exportDir); } catch { }
+
+                var path = Path.Combine(exportDir, id.ToString() + ".json");
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        var txt = File.ReadAllText(path);
+                        var parsed = JsonSerializer.Deserialize<CodeFile>(txt);
+                        if (parsed != null)
+                        {
+                            parsed.IsDeleted = true;
+                            parsed.DeletedAt = DateTime.UtcNow;
+                            File.WriteAllText(path, JsonSerializer.Serialize(parsed, new JsonSerializerOptions { WriteIndented = true }));
+                            return;
+                        }
+                    }
+                    catch { }
+                }
+
+                // If no existing export, create a minimal deleted JSON to represent the trash state
+                var deletedJson = JsonSerializer.Serialize(new CodeFile { Id = id, IsDeleted = true, DeletedAt = DateTime.UtcNow }, new JsonSerializerOptions { WriteIndented = true });
+                try { File.WriteAllText(path, deletedJson); } catch { }
+            }
+            catch { }
+        }
+
+        public IEnumerable<CodeFile> GetAllDeleted()
+        {
+            var list = new List<CodeFile>();
+            try
+            {
+                var userSettings = _settings.GetUserSettings();
+                var dirs = userSettings?.CodeDirectories ?? new List<string>();
+                var allowedExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".json", ".cs", ".py", ".md", ".txt" };
+
+                foreach (var dir in dirs)
+                {
+                    try
+                    {
+                        if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) continue;
+                        var files = Directory.EnumerateFiles(dir, "*.*", SearchOption.TopDirectoryOnly)
+                                             .Where(f => allowedExts.Contains(Path.GetExtension(f) ?? string.Empty));
+                        foreach (var file in files)
+                        {
+                            try
+                            {
+                                var ext = Path.GetExtension(file);
+                                if (string.Equals(ext, ".json", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var txt = File.ReadAllText(file);
+                                    var parsed = JsonSerializer.Deserialize<CodeFile>(txt);
+                                    if (parsed != null && parsed.IsDeleted) list.Add(parsed);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+                }
+
+                // Also include exported snippets in the configured export directory
+                try
+                {
+                    var exportDir = _settings.GetExportOutputDirectory();
+                    if (!string.IsNullOrWhiteSpace(exportDir) && Directory.Exists(exportDir))
+                    {
+                        var files = Directory.EnumerateFiles(exportDir, "*.*", SearchOption.TopDirectoryOnly)
+                                             .Where(f => f.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".md", StringComparison.OrdinalIgnoreCase));
+                        foreach (var file in files)
+                        {
+                            try
+                            {
+                                if (file.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var txt = File.ReadAllText(file);
+                                    var parsed = JsonSerializer.Deserialize<CodeFile>(txt);
+                                    if (parsed != null && parsed.IsDeleted) list.Add(parsed);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+            }
+            catch { }
+
+            // Purge items older than 30 days from export directory
+            try
+            {
+                var cutoff = DateTime.UtcNow.AddDays(-30);
                 var exportDir = _settings.GetExportOutputDirectory();
                 if (!string.IsNullOrWhiteSpace(exportDir) && Directory.Exists(exportDir))
                 {
-                    var path = Path.Combine(exportDir, id.ToString() + ".json");
-                    if (File.Exists(path)) File.Delete(path);
+                    var files = Directory.EnumerateFiles(exportDir, "*.json", SearchOption.TopDirectoryOnly);
+                    foreach (var file in files)
+                    {
+                        try
+                        {
+                            var txt = File.ReadAllText(file);
+                            var parsed = JsonSerializer.Deserialize<CodeFile>(txt);
+                            if (parsed != null && parsed.IsDeleted && parsed.DeletedAt.HasValue && parsed.DeletedAt.Value < cutoff)
+                            {
+                                try { File.Delete(file); } catch { }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+
+            return list.OrderByDescending(c => c.DeletedAt);
+        }
+
+        public void Restore(Guid id)
+        {
+            try
+            {
+                var exportDir = _settings.GetExportOutputDirectory();
+                if (string.IsNullOrWhiteSpace(exportDir))
+                {
+                    var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                    exportDir = Path.Combine(docs, "Pivot", "CodeSnippets");
+                }
+                var path = Path.Combine(exportDir, id.ToString() + ".json");
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        var txt = File.ReadAllText(path);
+                        var parsed = JsonSerializer.Deserialize<CodeFile>(txt);
+                        if (parsed != null)
+                        {
+                            parsed.IsDeleted = false;
+                            parsed.DeletedAt = null;
+                            File.WriteAllText(path, JsonSerializer.Serialize(parsed, new JsonSerializerOptions { WriteIndented = true }));
+                        }
+                    }
+                    catch { }
                 }
             }
             catch { }
         }
 
-        public IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags() => Enumerable.Empty<Pivot.CodeModule.Models.CodeTag>();
+        public void AddTag(string name)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                var filters = _settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+                if (filters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase))) return;
+                filters.Add(new Pivot.Models.CustomFilter { Name = name });
+                _settings.SetCodeFiltersAsync(filters).ConfigureAwait(false);
+            }
+            catch { }
+        }
 
-        public void AddTag(string name) { /* no-op */ }
+        public IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags()
+        {
+            try
+            {
+                var list = new List<Pivot.CodeModule.Models.CodeTag>();
+                var filters = _settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+                int idx = 1;
+                foreach (var f in filters.OrderBy(ff => ff.SortOrder).ThenBy(ff => ff.Name))
+                {
+                    list.Add(new Pivot.CodeModule.Models.CodeTag { Id = idx++, Name = f.Name ?? string.Empty });
+                }
+                return list;
+            }
+            catch { }
+            return Enumerable.Empty<Pivot.CodeModule.Models.CodeTag>();
+        }
 
         public string GetFilterNameById(Guid filterId) => _settings.GetFilterNameById(filterId);
 

@@ -7,6 +7,9 @@ using System.IO;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Data.Common;
+using System.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Pivot.CodeModule.Services
 {
@@ -20,12 +23,62 @@ namespace Pivot.CodeModule.Services
         {
             _context = context;
             _settingsService = settingsService;
+            // Ensure DB schema contains soft-delete columns so queries won't fail on older DBs.
+            try { EnsureCodeFilesSchema(); } catch { }
+        }
+
+        private void EnsureCodeFilesSchema()
+        {
+            DbConnection? conn = null;
+            try
+            {
+                conn = _context.Database.GetDbConnection();
+                if (conn == null) return;
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "PRAGMA table_info('CodeFiles');";
+                using var reader = cmd.ExecuteReader();
+                var hasIsDeleted = false;
+                var hasDeletedAt = false;
+                while (reader.Read())
+                {
+                    try
+                    {
+                        var name = reader["name"]?.ToString() ?? string.Empty;
+                        if (string.Equals(name, "IsDeleted", StringComparison.OrdinalIgnoreCase)) hasIsDeleted = true;
+                        if (string.Equals(name, "DeletedAt", StringComparison.OrdinalIgnoreCase)) hasDeletedAt = true;
+                    }
+                    catch { }
+                }
+                reader.Close();
+
+                if (!hasIsDeleted)
+                {
+                    using var a = conn.CreateCommand();
+                    a.CommandText = "ALTER TABLE CodeFiles ADD COLUMN IsDeleted INTEGER DEFAULT 0;";
+                    a.ExecuteNonQuery();
+                }
+                if (!hasDeletedAt)
+                {
+                    using var b = conn.CreateCommand();
+                    b.CommandText = "ALTER TABLE CodeFiles ADD COLUMN DeletedAt TEXT;";
+                    b.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"EnsureCodeFilesSchema: failed - {ex}");
+            }
+            finally
+            {
+                try { if (conn != null && conn.State == ConnectionState.Open) conn.Close(); } catch { }
+            }
         }
 
         public IEnumerable<CodeFile> GetAll()
         {
-            // Start with persisted snippets from DB
-            var dbList = _context.CodeFiles.OrderByDescending(c => c.Updated).ToList();
+            // Start with persisted snippets from DB (exclude soft-deleted)
+            var dbList = _context.CodeFiles.Where(c => !c.IsDeleted).OrderByDescending(c => c.Updated).ToList();
 
             // Try to augment with files found in user-configured code directories
             try
@@ -117,10 +170,10 @@ namespace Pivot.CodeModule.Services
 
         public IEnumerable<CodeFile> Search(string query)
             => _context.CodeFiles
-               .Where(c => c.Title.Contains(query) || c.Content.Contains(query) || c.Tags.Contains(query));
+               .Where(c => !c.IsDeleted && (c.Title.Contains(query) || c.Content.Contains(query) || c.Tags.Contains(query)));
 
         public IEnumerable<CodeFile> Filter(string language, string tool, string tag)
-            => _context.CodeFiles.Where(c =>
+            => _context.CodeFiles.Where(c => !c.IsDeleted &&
                 (string.IsNullOrEmpty(language) || c.Language == language) &&
                 (string.IsNullOrEmpty(tool) || c.Tool == tool) &&
                 (string.IsNullOrEmpty(tag) || c.Tags.Contains(tag)));
@@ -323,14 +376,62 @@ namespace Pivot.CodeModule.Services
 
         public void Delete(Guid id)
         {
+            // Soft-delete: mark as deleted and set timestamp. This moves the snippet to Trash for 30 days.
             var item = _context.CodeFiles.Find(id);
             if (item != null)
             {
-                _context.CodeFiles.Remove(item);
-                _context.SaveChanges();
+                item.IsDeleted = true;
+                item.DeletedAt = DateTime.UtcNow;
+                try
+                {
+                    lock (_saveLock) { _context.Update(item); _context.SaveChanges(); }
+                }
+                catch { }
             }
+        }
 
-            // Also attempt to delete any exported files for this snippet.
+        // Return deleted items that are still within the 30-day restore window.
+        public IEnumerable<CodeFile> GetAllDeleted()
+        {
+            try
+            {
+                var cutoff = DateTime.UtcNow.AddDays(-30);
+                // Purge items older than 30 days (permanent delete)
+                var toPurge = _context.CodeFiles.Where(c => c.IsDeleted && c.DeletedAt.HasValue && c.DeletedAt.Value < cutoff).ToList();
+                foreach (var p in toPurge)
+                {
+                    try
+                    {
+                        // attempt to remove exported/originating files
+                        PermanentlyRemoveFilesForId(p.Id);
+                    }
+                    catch { }
+                    try { _context.CodeFiles.Remove(p); } catch { }
+                }
+                if (toPurge.Any())
+                {
+                    try { lock (_saveLock) { _context.SaveChanges(); } } catch { }
+                }
+
+                return _context.CodeFiles.Where(c => c.IsDeleted && (!c.DeletedAt.HasValue || c.DeletedAt.Value >= cutoff)).OrderByDescending(c => c.DeletedAt).ToList();
+            }
+            catch
+            {
+                return Enumerable.Empty<CodeFile>();
+            }
+        }
+
+        public void Restore(Guid id)
+        {
+            var item = _context.CodeFiles.Find(id);
+            if (item == null) return;
+            item.IsDeleted = false;
+            item.DeletedAt = null;
+            try { lock (_saveLock) { _context.Update(item); _context.SaveChanges(); } } catch { }
+        }
+
+        private void PermanentlyRemoveFilesForId(Guid id)
+        {
             try
             {
                 var exportDir = _settingsService?.GetExportOutputDirectory();
@@ -359,14 +460,14 @@ namespace Pivot.CodeModule.Services
                             if (File.Exists(p))
                             {
                                 File.Delete(p);
-                                System.Diagnostics.Debug.WriteLine($"CodeRepository.Delete: removed exported file '{p}' for id={id}");
+                                System.Diagnostics.Debug.WriteLine($"CodeRepository: permanently removed exported file '{p}' for id={id}");
                             }
                         }
                         catch { }
                     }
                 }
 
-                // Also scan user configured CodeDirectories for originating files and delete them if their deterministic Id matches.
+                // Also attempt to delete originating files in user code directories
                 try
                 {
                     var userSettings = _settingsService?.GetUserSettings();
@@ -385,7 +486,7 @@ namespace Pivot.CodeModule.Services
                                 {
                                     if (CreateDeterministicGuid(file) == id)
                                     {
-                                        try { File.Delete(file); System.Diagnostics.Debug.WriteLine($"CodeRepository.Delete: removed originating file '{file}' for id={id}"); } catch { }
+                                        try { File.Delete(file); System.Diagnostics.Debug.WriteLine($"CodeRepository: permanently removed originating file '{file}' for id={id}"); } catch { }
                                     }
                                 }
                                 catch { }
@@ -399,23 +500,43 @@ namespace Pivot.CodeModule.Services
             catch { }
         }
 
-        public IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags()
-        {
-            return _context.Tags.OrderBy(t => t.Name).ToList();
-        }
-
         public void AddTag(string name)
         {
-            if (string.IsNullOrWhiteSpace(name)) return;
-            var trimmed = name.Trim();
-            if (_context.Tags.Any(t => t.Name == trimmed)) return;
-            _context.Tags.Add(new Pivot.CodeModule.Models.CodeTag { Name = trimmed });
-            _context.SaveChanges();
+            // Tag persistence moved to SettingsService (JSON-backed CodeFilters) for single source of truth.
+            try
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                var trimmed = name.Trim();
+                var filters = _settingsService?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+                if (filters.Any(f => string.Equals(f.Name, trimmed, StringComparison.OrdinalIgnoreCase))) return;
+                filters.Add(new Pivot.Models.CustomFilter { Name = trimmed });
+                _settingsService?.SetCodeFiltersAsync(filters).ConfigureAwait(false);
+            }
+            catch { }
         }
 
         public string GetFilterNameById(Guid filterId)
         {
             return _settingsService.GetFilterNameById(filterId);
+        }
+        
+        public IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags()
+        {
+            try
+            {
+                var list = new List<Pivot.CodeModule.Models.CodeTag>();
+                var filters = _settingsService?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
+                int idx = 1;
+                foreach (var f in filters.OrderBy(ff => ff.SortOrder).ThenBy(ff => ff.Name))
+                {
+                    list.Add(new Pivot.CodeModule.Models.CodeTag { Id = idx++, Name = f.Name ?? string.Empty });
+                }
+                return list;
+            }
+            catch
+            {
+                return Enumerable.Empty<Pivot.CodeModule.Models.CodeTag>();
+            }
         }
     }
 }
