@@ -28,6 +28,7 @@ namespace Pivot.ViewModels
                 "Directories" => new DirectoryPage(),
                 "Theme" => new ThemePage(),
                 "Code" => CreateCodeSettingsPage(),
+                "Color" => CreateColorSettingsPage(),
                 "MenuItem2" => new MenuItem2ContentControl(),
                 "MenuItem3" => new MenuItem3ContentControl(),
                 "MenuItem4" => new MenuItem4ContentControl(),
@@ -40,6 +41,17 @@ namespace Pivot.ViewModels
             try
             {
                 var t = Type.GetType("Pivot.Views.CodeSettingsPage");
+                if (t != null) return Activator.CreateInstance(t);
+            }
+            catch { }
+            return null;
+        }
+
+        private object? CreateColorSettingsPage()
+        {
+            try
+            {
+                var t = Type.GetType("Pivot.Views.ColorSettingsPage");
                 if (t != null) return Activator.CreateInstance(t);
             }
             catch { }

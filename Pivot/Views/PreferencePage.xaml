@@ -35,6 +35,11 @@
                         <FontIcon Glyph="&#xE943;"/> <!-- Code icon -->
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem Content="Color" Tag="Color">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE790;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem Content="Theme" Tag="Theme">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE793;"/>

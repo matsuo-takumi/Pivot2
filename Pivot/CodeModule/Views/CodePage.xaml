@@ -12,6 +12,7 @@
 
     <Page.Resources>
         <conv:CardPanelSizeConverter x:Key="CardPanelSizeConverter" />
+        <conv:TagStringToListConverter x:Key="TagStringToListConverter" />
     </Page.Resources>
 
     <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" PointerPressed="Root_PointerPressed">
@@ -96,7 +97,27 @@
                                                 </Grid>
 
                                                 <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="#444" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
-                                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+
+                                                <!-- Tag display for snippet card -->
+                                                <ItemsControl Grid.Row="2" Margin="0,8,0,4" ItemsSource="{x:Bind Tags, Converter={StaticResource TagStringToListConverter}}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapGrid Orientation="Horizontal" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:TagItem">
+                                                        <StackPanel Orientation="Horizontal" Margin="2">
+                                                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Margin="4" Padding="6,2">
+                                                                    <TextBlock Text="{x:Bind Name}" />
+                                                                </Border>
+                                                                <Button Content="✕" Click="CardTagRemove_Click" Tag="{x:Bind Name}" Margin="4,0,0,0" MinWidth="28" MinHeight="28" />
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+
+                                                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                                                     <TextBlock Text="·" Foreground="Gray" />
                                                     <TextBlock Text="{x:Bind Updated}" Foreground="Gray" FontSize="12" />
                                                 </StackPanel>

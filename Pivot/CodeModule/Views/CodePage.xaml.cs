@@ -20,6 +20,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Input;
+using Microsoft.UI;
 using Windows.Foundation;
 using System.Collections.Generic;
 using Pivot.CodeModule.Services;
@@ -979,7 +980,28 @@ namespace Pivot.CodeModule.Views
                         if (overlay != null) overlay.Visibility = Visibility.Visible;
                         if (container != null) container.Visibility = Visibility.Visible;
                         if (title != null) title.Text = vm.SelectedSnippet.Title ?? "Scratchpad";
-                        if (scratchEditor != null) scratchEditor.Text = vm.SelectedSnippet.Content ?? string.Empty;
+                        if (scratchEditor != null)
+                        {
+                            scratchEditor.Text = vm.SelectedSnippet.Content ?? string.Empty;
+                            try
+                            {
+                                var settings = App.Current.Services.GetService(typeof(Pivot.Services.SettingsService)) as Pivot.Services.SettingsService;
+                                var color = settings?.GetScratchpadEditorColor();
+                                if (!string.IsNullOrWhiteSpace(color))
+                                {
+                                    try
+                                    {
+                                        var c = ColorHelper.FromArgb(255,
+                                            Convert.ToByte(color.Substring(1, 2), 16),
+                                            Convert.ToByte(color.Substring(3, 2), 16),
+                                            Convert.ToByte(color.Substring(5, 2), 16));
+                                        scratchEditor.Background = new SolidColorBrush(c);
+                                    }
+                                    catch { }
+                                }
+                            }
+                            catch { }
+                        }
 
                         // refresh tags
                         try { RefreshScratchpadTags(); } catch { }
@@ -1944,6 +1966,36 @@ namespace Pivot.CodeModule.Views
             return default;
         }
 
+    private Pivot.CodeModule.Models.CodeFile? FindContainingSnippet(DependencyObject start)
+    {
+        var current = start;
+        while (current != null)
+        {
+            if (current is FrameworkElement fe && fe.DataContext is Pivot.CodeModule.Models.CodeFile cf) return cf;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    private void CardTagRemove_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (!(sender is FrameworkElement fe)) return;
+            var tagName = fe.Tag?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(tagName)) return;
+            var snippet = FindContainingSnippet(fe);
+            if (snippet == null) return;
+            var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+            current.RemoveAll(x => string.Equals(x, tagName, StringComparison.OrdinalIgnoreCase));
+            snippet.Tags = string.Join(",", current);
+            try { var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository; repo?.Save(snippet); } catch { }
+            try { RefreshScratchpadTags(); } catch { }
+            try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => ViewModel?.Refresh()); } catch { }
+        }
+        catch { }
+    }
+
         private Task SendSelectedSnippetToEditorAsync()
         {
             if (CodeEditor == null) return Task.CompletedTask;
@@ -1960,7 +2012,28 @@ namespace Pivot.CodeModule.Views
                         var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
                         var titleBox = this.FindName("ScratchpadTitleBox") as TextBox;
                         if (codeEditor != null) codeEditor.Text = content;
-                        if (scratchEditor != null) scratchEditor.Text = content;
+                            if (scratchEditor != null)
+                            {
+                                scratchEditor.Text = content;
+                                try
+                                {
+                                    var settings = App.Current.Services.GetService(typeof(Pivot.Services.SettingsService)) as Pivot.Services.SettingsService;
+                                    var color = settings?.GetScratchpadEditorColor();
+                                    if (!string.IsNullOrWhiteSpace(color))
+                                    {
+                                        try
+                                        {
+                                            var c = ColorHelper.FromArgb(255,
+                                                Convert.ToByte(color.Substring(1, 2), 16),
+                                                Convert.ToByte(color.Substring(3, 2), 16),
+                                                Convert.ToByte(color.Substring(5, 2), 16));
+                                            scratchEditor.Background = new SolidColorBrush(c);
+                                        }
+                                        catch { }
+                                    }
+                                }
+                                catch { }
+                            }
                         if (titleBox != null) titleBox.Text = vm.SelectedSnippet.Title ?? string.Empty;
                     }
                     catch { }
@@ -1992,7 +2065,14 @@ namespace Pivot.CodeModule.Views
                 }
                 snippet.Tags = string.Join(",", current);
                 // persist
-                try { var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository; repo?.Save(snippet); } catch { }
+                try
+                {
+                    var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                    repo?.Save(snippet);
+                }
+                catch { }
+                // Ensure UI list reflects changes immediately
+                try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => ViewModel?.Refresh()); } catch { }
             }
             catch { }
         }
@@ -2011,6 +2091,8 @@ namespace Pivot.CodeModule.Views
                 snippet.Tags = string.Join(",", current);
                 try { var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository; repo?.Save(snippet); } catch { }
                 try { RefreshScratchpadTags(); } catch { }
+                // Ensure the main snippet list reflects the tag removal
+                try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => ViewModel?.Refresh()); } catch { }
             }
             catch { }
         }

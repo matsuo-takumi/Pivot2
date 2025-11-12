@@ -121,6 +121,24 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load Code.Save.Format. Using default Json.");
                 _cache.CodeExportFormat = "Json";
             }
+            // Color preferences (Scratchpad Editor)
+            try
+            {
+                var scratchpadColor = await _settingsStore.GetAsync("Color.ScratchpadEditorColor");
+                if (!string.IsNullOrWhiteSpace(scratchpadColor))
+                {
+                    _cache.ScratchpadEditorColor = scratchpadColor;
+                }
+                else
+                {
+                    // keep default from model
+                }
+                _logger.LogInformation("SettingsService: Loaded Color.ScratchpadEditorColor: {Color}", _cache.ScratchpadEditorColor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Color.ScratchpadEditorColor. Using default.");
+            }
             // Last selected snippet id
             try
             {
@@ -876,6 +894,22 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to persist SelectedFiltersByTab.");
+            }
+        }
+
+        // Color preferences accessors
+        public string GetScratchpadEditorColor() => _cache.ScratchpadEditorColor ?? "#FFFFFF";
+
+        public async Task SetScratchpadEditorColorAsync(string color)
+        {
+            _cache.ScratchpadEditorColor = color ?? "#FFFFFF";
+            try
+            {
+                await _settingsStore.UpsertAsync("Color.ScratchpadEditorColor", _cache.ScratchpadEditorColor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.ScratchpadEditorColor.");
             }
         }
     }

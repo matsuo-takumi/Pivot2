@@ -51,5 +51,7 @@ namespace Pivot.Models
         public Dictionary<string, List<System.Guid>> SelectedFiltersByTab { get; set; } = new Dictionary<string, List<System.Guid>>();
 
         // (カスタムAcrylic/Luminosity設定は削除)
+        // Color preferences
+        public string ScratchpadEditorColor { get; set; } = "#FFFFFF";
     }
 }
