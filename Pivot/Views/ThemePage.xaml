@@ -41,6 +41,11 @@
                         Click="BackdropButton_Click"
                         Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
+                    <Button Content="Overlay"
+                        Tag="Overlay"
+                        Click="BackdropButton_Click"
+                        Style="{StaticResource SubtleButtonStyle}"
+                        Padding="12,8"/>
                 </StackPanel>
             </StackPanel>
 

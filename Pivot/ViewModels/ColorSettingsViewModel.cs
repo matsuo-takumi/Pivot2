@@ -5,6 +5,9 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI;
 using System;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Messaging;
+using Pivot.Messages;
+using Windows.UI;
 
 namespace Pivot.ViewModels
 {
@@ -17,6 +20,20 @@ namespace Pivot.ViewModels
             _settings = settings;
             ScratchpadColor = _settings?.GetScratchpadEditorColor() ?? "#FFFFFF";
             UpdateBrushFromColor(ScratchpadColor);
+            // Initialize overlay color from settings (hex RRGGBB)
+            try
+            {
+                var hex = _settings?.GetOverlayTintColor() ?? "#0000FF";
+                if (!hex.StartsWith("#")) hex = "#" + hex;
+                if (hex.Length == 7)
+                {
+                    OverlayColor = ColorHelper.FromArgb(255,
+                        Convert.ToByte(hex.Substring(1, 2), 16),
+                        Convert.ToByte(hex.Substring(3, 2), 16),
+                        Convert.ToByte(hex.Substring(5, 2), 16));
+                }
+            }
+            catch { }
         }
 
         [ObservableProperty]
@@ -27,6 +44,14 @@ namespace Pivot.ViewModels
 
         [ObservableProperty]
         private string _statusText = string.Empty;
+
+        [ObservableProperty]
+        private Color _overlayColor = Color.FromArgb(255, 0, 0, 255);
+
+        partial void OnOverlayColorChanged(Color value)
+        {
+            // no-op for now; view binds directly
+        }
 
         partial void OnScratchpadColorChanged(string value)
         {
@@ -59,6 +84,23 @@ namespace Pivot.ViewModels
                 if (!v.StartsWith("#")) v = "#" + v;
                 if (v.Length != 7) { StatusText = "Invalid"; return; }
                 if (_settings != null) await _settings.SetScratchpadEditorColorAsync(v);
+                StatusText = "Saved";
+            }
+            catch
+            {
+                StatusText = "Error";
+            }
+        }
+        [RelayCommand]
+        private async Task SaveOverlayAsync()
+        {
+            try
+            {
+                var c = OverlayColor;
+                var hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+                if (_settings != null) await _settings.SetOverlayTintColorAsync(hex);
+                // Notify other parts of app to update overlay brush
+                try { WeakReferenceMessenger.Default.Send(new OverlayColorChangedMessage(hex)); } catch { }
                 StatusText = "Saved";
             }
             catch

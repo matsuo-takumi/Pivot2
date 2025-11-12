@@ -139,6 +139,35 @@ namespace Pivot.Services
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to load Color.ScratchpadEditorColor. Using default.");
             }
+
+            // Overlay tint preferences
+            try
+            {
+                var overlayColor = await _settingsStore.GetAsync("Color.OverlayTintColor");
+                if (!string.IsNullOrWhiteSpace(overlayColor))
+                {
+                    _cache.OverlayTintColor = overlayColor;
+                }
+                _logger.LogInformation("SettingsService: Loaded Color.OverlayTintColor: {Color}", _cache.OverlayTintColor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintColor. Using default.");
+            }
+
+            try
+            {
+                var overlayOpacity = await _settingsStore.GetAsync("Color.OverlayTintOpacity");
+                if (!string.IsNullOrWhiteSpace(overlayOpacity) && double.TryParse(overlayOpacity, out var op))
+                {
+                    _cache.OverlayTintOpacity = Math.Clamp(op, 0.0, 1.0);
+                }
+                _logger.LogInformation("SettingsService: Loaded Color.OverlayTintOpacity: {Opacity}", _cache.OverlayTintOpacity);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintOpacity. Using default.");
+            }
             // Last selected snippet id
             try
             {
@@ -910,6 +939,36 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to persist Color.ScratchpadEditorColor.");
+            }
+        }
+        // Overlay tint accessors
+        public string GetOverlayTintColor() => _cache.OverlayTintColor ?? "#0000FF";
+
+        public async Task SetOverlayTintColorAsync(string color)
+        {
+            _cache.OverlayTintColor = color ?? "#0000FF";
+            try
+            {
+                await _settingsStore.UpsertAsync("Color.OverlayTintColor", _cache.OverlayTintColor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintColor.");
+            }
+        }
+
+        public double GetOverlayTintOpacity() => _cache.OverlayTintOpacity;
+
+        public async Task SetOverlayTintOpacityAsync(double opacity)
+        {
+            _cache.OverlayTintOpacity = Math.Clamp(opacity, 0.0, 1.0);
+            try
+            {
+                await _settingsStore.UpsertAsync("Color.OverlayTintOpacity", _cache.OverlayTintOpacity.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintOpacity.");
             }
         }
     }

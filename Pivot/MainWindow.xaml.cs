@@ -33,7 +33,7 @@ namespace Pivot
     /// <summary>
     /// An empty window that can be used on its own or navigated to within a Frame.
     /// </summary>
-    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<NavigationRequestMessage>
+    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<NavigationRequestMessage>, IRecipient<OverlayColorChangedMessage>
     {
         // Provide an implicit conversion so generated binding code can pass 'this' (MainWindow)
         // to APIs that expect a FrameworkElement (the generated code calls SetConverterLookupRoot(this)).
@@ -78,6 +78,8 @@ namespace Pivot
 
             // BackdropTypeChangedMessageを購読
             _messenger.Register<BackdropTypeChangedMessage>(this);
+            // Overlay color changesを購読
+            _messenger.Register<OverlayColorChangedMessage>(this);
 
             // 初期ナビゲーション（ViewModelからの要求でも遷移可能）
             NavigateTo(NavigationRegion.Asset);
@@ -94,6 +96,19 @@ namespace Pivot
         public void Receive(BackdropTypeChangedMessage message)
         {
             SetSystemBackdrop(message.Value);
+        }
+
+        public void Receive(OverlayColorChangedMessage message)
+        {
+            try
+            {
+                // If overlay mode is active, refresh the overlay brush
+                if (_settingsService.GetBackdropType() == BackdropType.Overlay)
+                {
+                    SetSystemBackdrop(BackdropType.Overlay);
+                }
+            }
+            catch { }
         }
 
         public void SetSystemBackdrop(BackdropType type)
@@ -181,6 +196,35 @@ namespace Pivot
                         _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
                         _acrylicController.SetSystemBackdropConfiguration(_configurationSource);
                         SystemBackdrop = null;
+                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                    }
+                    break;
+                case BackdropType.Overlay:
+                    // Use an in-app Acrylic brush created from settings for a lightweight overlay effect
+                    SystemBackdrop = null;
+                    try
+                    {
+                        var hex = _settingsService?.GetOverlayTintColor() ?? "#0000FF";
+                        var opacity = _settingsService?.GetOverlayTintOpacity() ?? 0.5;
+                        if (!hex.StartsWith("#")) hex = "#" + hex;
+                        byte r = 0, g = 0, b = 0;
+                        if (hex.Length == 7)
+                        {
+                            r = Convert.ToByte(hex.Substring(1, 2), 16);
+                            g = Convert.ToByte(hex.Substring(3, 2), 16);
+                            b = Convert.ToByte(hex.Substring(5, 2), 16);
+                        }
+                        var brush = new Microsoft.UI.Xaml.Media.AcrylicBrush
+                        {
+                            TintOpacity = (float)opacity,
+                            TintColor = ColorHelper.FromArgb(255, r, g, b),
+                            FallbackColor = Colors.Transparent
+                        };
+                        if (Root != null) Root.Background = brush;
+                        if (AppTitleBar != null) AppTitleBar.Background = brush;
+                    }
+                    catch
+                    {
                         if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
                     }
                     break;
@@ -306,13 +350,28 @@ namespace Pivot
 
         private Brush? GetResourceBrush(string key)
         {
-            if (this.Content is FrameworkElement fe)
+            // Prefer application-level resources, then page/root resources
+            try
             {
-                if (fe.Resources != null && fe.Resources.ContainsKey(key))
+                if (Application.Current != null && Application.Current.Resources != null && Application.Current.Resources.ContainsKey(key))
                 {
-                    return fe.Resources[key] as Brush;
+                    return Application.Current.Resources[key] as Brush;
                 }
             }
+            catch { }
+
+            if (this.Content is FrameworkElement fe)
+            {
+                try
+                {
+                    if (fe.Resources != null && fe.Resources.ContainsKey(key))
+                    {
+                        return fe.Resources[key] as Brush;
+                    }
+                }
+                catch { }
+            }
+
             return null;
         }
     }

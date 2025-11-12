@@ -5,6 +5,7 @@ namespace Pivot.Models
         None,
         Mica,
         MicaAlt,
+        Overlay,
         Acrylic,
         AcrylicThin
     }

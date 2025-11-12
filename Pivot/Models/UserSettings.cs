@@ -53,5 +53,9 @@ namespace Pivot.Models
         // (カスタムAcrylic/Luminosity設定は削除)
         // Color preferences
         public string ScratchpadEditorColor { get; set; } = "#FFFFFF";
+        // Overlay tint color for in-app acrylic (stored as RRGGBB)
+        public string OverlayTintColor { get; set; } = "#0000FF";
+        // Overlay tint opacity (0.0 - 1.0)
+        public double OverlayTintOpacity { get; set; } = 0.5;
     }
 }

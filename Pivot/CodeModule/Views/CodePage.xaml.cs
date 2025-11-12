@@ -983,24 +983,6 @@ namespace Pivot.CodeModule.Views
                         if (scratchEditor != null)
                         {
                             scratchEditor.Text = vm.SelectedSnippet.Content ?? string.Empty;
-                            try
-                            {
-                                var settings = App.Current.Services.GetService(typeof(Pivot.Services.SettingsService)) as Pivot.Services.SettingsService;
-                                var color = settings?.GetScratchpadEditorColor();
-                                if (!string.IsNullOrWhiteSpace(color))
-                                {
-                                    try
-                                    {
-                                        var c = ColorHelper.FromArgb(255,
-                                            Convert.ToByte(color.Substring(1, 2), 16),
-                                            Convert.ToByte(color.Substring(3, 2), 16),
-                                            Convert.ToByte(color.Substring(5, 2), 16));
-                                        scratchEditor.Background = new SolidColorBrush(c);
-                                    }
-                                    catch { }
-                                }
-                            }
-                            catch { }
                         }
 
                         // refresh tags
@@ -2015,24 +1997,6 @@ namespace Pivot.CodeModule.Views
                             if (scratchEditor != null)
                             {
                                 scratchEditor.Text = content;
-                                try
-                                {
-                                    var settings = App.Current.Services.GetService(typeof(Pivot.Services.SettingsService)) as Pivot.Services.SettingsService;
-                                    var color = settings?.GetScratchpadEditorColor();
-                                    if (!string.IsNullOrWhiteSpace(color))
-                                    {
-                                        try
-                                        {
-                                            var c = ColorHelper.FromArgb(255,
-                                                Convert.ToByte(color.Substring(1, 2), 16),
-                                                Convert.ToByte(color.Substring(3, 2), 16),
-                                                Convert.ToByte(color.Substring(5, 2), 16));
-                                            scratchEditor.Background = new SolidColorBrush(c);
-                                        }
-                                        catch { }
-                                    }
-                                }
-                                catch { }
                             }
                         if (titleBox != null) titleBox.Text = vm.SelectedSnippet.Title ?? string.Empty;
                     }
