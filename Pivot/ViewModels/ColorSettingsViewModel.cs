@@ -34,6 +34,12 @@ namespace Pivot.ViewModels
                 }
             }
             catch { }
+            // Initialize overlay tint opacity from settings
+            try
+            {
+                OverlayTintOpacity = _settings?.GetOverlayTintOpacity() ?? 0.5;
+            }
+            catch { OverlayTintOpacity = 0.5; }
         }
 
         [ObservableProperty]
@@ -47,6 +53,26 @@ namespace Pivot.ViewModels
 
         [ObservableProperty]
         private Color _overlayColor = Color.FromArgb(255, 0, 0, 255);
+
+        [ObservableProperty]
+        private double _overlayTintOpacity = 0.5;
+
+        partial void OnOverlayTintOpacityChanged(double value)
+        {
+            // Persist the new opacity and notify other parts of the app to refresh the overlay brush.
+            _ = SaveOverlayTintOpacityAsync(value);
+        }
+
+        private async Task SaveOverlayTintOpacityAsync(double value)
+        {
+            try
+            {
+                if (_settings != null) await _settings.SetOverlayTintOpacityAsync(value);
+                // send a message to refresh overlay (MainWindow listens to this message)
+                try { WeakReferenceMessenger.Default.Send(new OverlayColorChangedMessage(string.Empty)); } catch { }
+            }
+            catch { }
+        }
 
         partial void OnOverlayColorChanged(Color value)
         {
