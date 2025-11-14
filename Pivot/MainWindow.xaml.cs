@@ -24,6 +24,7 @@ using WinRT; // WinRT.As<T>()を使用するために追加
 using Microsoft.UI.Composition; // ICompositionSupportsSystemBackdropを使用するために追加
 using Microsoft.UI.Dispatching; // DispatcherQueueを使用するために追加
 using Microsoft.UI; // Colors
+using System.Diagnostics; // Debug logging
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -214,6 +215,7 @@ namespace Pivot
                             g = Convert.ToByte(hex.Substring(3, 2), 16);
                             b = Convert.ToByte(hex.Substring(5, 2), 16);
                         }
+                        Debug.WriteLine($"Applying overlay tint: opacity={opacity}, color=#{r:X2}{g:X2}{b:X2}");
                         var brush = new Microsoft.UI.Xaml.Media.AcrylicBrush
                         {
                             TintOpacity = (float)opacity,

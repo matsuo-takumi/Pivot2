@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Messages;
 using Windows.UI;
+using System.Diagnostics;
 
 namespace Pivot.ViewModels
 {
@@ -56,11 +57,32 @@ namespace Pivot.ViewModels
 
         [ObservableProperty]
         private double _overlayTintOpacity = 0.5;
+        
+        // Read-only formatted percent string for UI binding (e.g. "50%")
+        public string OverlayTintOpacityPercent => $"{OverlayTintOpacity:P0}";
 
         partial void OnOverlayTintOpacityChanged(double value)
         {
             // Persist the new opacity and notify other parts of the app to refresh the overlay brush.
             _ = SaveOverlayTintOpacityAsync(value);
+            // Notify UI that the formatted percent string changed.
+            OnPropertyChanged(nameof(OverlayTintOpacityPercent));
+            Debug.WriteLine($"OnOverlayTintOpacityChanged: {value}");
+        }
+
+        // Float wrapper for Slider binding to ensure smooth 0.0-1.0 interactions
+        public float OverlayTintOpacityFloat
+        {
+            get => (float)OverlayTintOpacity;
+            set
+            {
+                var newDouble = (double)value;
+                if (Math.Abs(OverlayTintOpacity - newDouble) > 0.000001)
+                {
+                    OverlayTintOpacity = newDouble; // triggers save and percent update
+                    OnPropertyChanged(nameof(OverlayTintOpacityFloat));
+                }
+            }
         }
 
         private async Task SaveOverlayTintOpacityAsync(double value)

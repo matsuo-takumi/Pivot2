@@ -6,6 +6,8 @@ using System;
 using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
 using System.Collections.Generic; // Listを使用するために追加
 using Microsoft.Extensions.Logging; // Loggerを使用するために追加
+using System.Globalization; // For invariant culture parsing/formatting
+using System.Diagnostics; // Debug logging
 using System.Linq; // ToListを使用するために追加
 using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
 using Pivot.Messages; // DirectoryChangedMessageを使用するために追加
@@ -158,7 +160,7 @@ namespace Pivot.Services
             try
             {
                 var overlayOpacity = await _settingsStore.GetAsync("Color.OverlayTintOpacity");
-                if (!string.IsNullOrWhiteSpace(overlayOpacity) && double.TryParse(overlayOpacity, out var op))
+                if (!string.IsNullOrWhiteSpace(overlayOpacity) && double.TryParse(overlayOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var op))
                 {
                     _cache.OverlayTintOpacity = Math.Clamp(op, 0.0, 1.0);
                 }
@@ -964,7 +966,9 @@ namespace Pivot.Services
             _cache.OverlayTintOpacity = Math.Clamp(opacity, 0.0, 1.0);
             try
             {
-                await _settingsStore.UpsertAsync("Color.OverlayTintOpacity", _cache.OverlayTintOpacity.ToString());
+                Debug.WriteLine($"SettingsService.SetOverlayTintOpacityAsync saving: {_cache.OverlayTintOpacity}");
+                _logger.LogInformation("SettingsService: Persisting OverlayTintOpacity={Opacity}", _cache.OverlayTintOpacity);
+                await _settingsStore.UpsertAsync("Color.OverlayTintOpacity", _cache.OverlayTintOpacity.ToString(CultureInfo.InvariantCulture));
             }
             catch (Exception ex)
             {

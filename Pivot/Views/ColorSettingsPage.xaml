@@ -44,9 +44,9 @@
                     <TextBlock Text="Tint Opacity" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,0"/>
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <Slider Minimum="0" Maximum="1" SmallChange="0.01" LargeChange="0.1" Width="240"
-                                Value="{x:Bind ViewModel.OverlayTintOpacity, Mode=TwoWay}" />
+                                Value="{Binding ViewModel.OverlayTintOpacity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock VerticalAlignment="Center" Foreground="Gray"
-                                   Text="{x:Bind ViewModel.OverlayTintOpacity, Mode=OneWay, StringFormat='{}{0:P0}'}" />
+                                   Text="{x:Bind ViewModel.OverlayTintOpacityPercent, Mode=OneWay}" />
                     </StackPanel>
                     <Button Content="Save" Command="{x:Bind ViewModel.SaveOverlayCommand}" HorizontalAlignment="Left"/>
                     <TextBlock Text="{x:Bind ViewModel.StatusText}" Foreground="Gray" Margin="0,8,0,0"/>
