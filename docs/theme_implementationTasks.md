@@ -12,7 +12,7 @@ PreferencePage内のTheme設定画面において、アプリケーションの�
 2.  **AcrylicThin Styleの実装**
     *   AcrylicBrushを適切に適用し、背景の半透明効果を実装する。
     *   設定画面でAcrylicThinスタイルを選択・適用できる機能を提供する。
-    *   **AcrylicBrushのプロパティ（Tint Opacity, Tint Color, Fallback Color）をアプリ内で制御できるようにする。**
+    *   **AcrylicBrushのプロパティ（Tint Color, Fallback Color）をアプリ内で制御できるようにする。**
 
 3.  **Mica Alt Styleの実装**
     *   MicaBackdropのAltバージョンを適用する。
@@ -26,13 +26,13 @@ PreferencePage内のTheme設定画面において、アプリケーションの�
 5.  **(オプション) 完全任意のウィンドウカラーの変更機能**
     *   カラーピッカーなどのUI要素を導入し、ユーザーが自由にアプリケーションの基調色を選択できる機能を提供する。
     *   選択された色をアプリケーション全体に反映させるロジックを実装する。
-    *   **Luminosityに関するプロパティ（Tint Opacity, Tint Luminosity Opacity, Tint Color, Fallback Color）をアプリ内で制御できるようにする。**
+    *   **Luminosityに関するプロパティ（Tint Color, Fallback Color）をアプリ内で制御できるようにする。**
 
 ## 実装詳細
 
 *   `ThemePage.xaml`と`ThemePage.xaml.cs`を更新し、上記機能のUI要素（ラジオボタン、スイッチ、カラーピッカーなど）を配置する。
 *   テーマ設定を保存・読み込みするためのロジックを`SettingsService.cs`または新しいサービスとして実装する。
-    *   **新しい設定プロパティ（Acrylic/Mica Alt/Luminosity関連のOpacity, Colorなど）を`UserSettings.cs`に追加する。**
+*   **新しい設定プロパティ（Acrylic/Mica Alt/Luminosity関連のColorなど）を`UserSettings.cs`に追加する。**
     *   **`SettingsService.cs`にこれらの新しい設定プロパティを保存・読み込みするメソッドを追加する。**
 *   `MainViewModel`または`ThemeViewModel`（必要であれば新規作成）を更新し、UIとロジック間のデータバインディングを確立する。
     *   **`ThemeViewModel`に新しい設定プロパティと、それらを変更するためのコマンド/プロパティを追加する。**

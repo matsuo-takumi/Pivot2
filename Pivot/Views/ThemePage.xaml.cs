@@ -16,6 +16,8 @@ namespace Pivot.Views
             this.DataContext = App.Current.Services.GetRequiredService<ThemeViewModel>();
         }
 
+        public ThemeViewModel ViewModel => (ThemeViewModel)this.DataContext;
+
         private void BackdropButton_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button button && this.DataContext is ThemeViewModel vm)

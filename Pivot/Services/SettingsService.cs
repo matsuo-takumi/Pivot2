@@ -160,9 +160,11 @@ namespace Pivot.Services
             try
             {
                 var overlayOpacity = await _settingsStore.GetAsync("Color.OverlayTintOpacity");
-                if (!string.IsNullOrWhiteSpace(overlayOpacity) && double.TryParse(overlayOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var op))
+                if (!string.IsNullOrWhiteSpace(overlayOpacity) &&
+                    double.TryParse(overlayOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var opacity) &&
+                    opacity >= 0 && opacity <= 1)
                 {
-                    _cache.OverlayTintOpacity = Math.Clamp(op, 0.0, 1.0);
+                    _cache.OverlayTintOpacity = opacity;
                 }
                 _logger.LogInformation("SettingsService: Loaded Color.OverlayTintOpacity: {Opacity}", _cache.OverlayTintOpacity);
             }
@@ -170,6 +172,39 @@ namespace Pivot.Services
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintOpacity. Using default.");
             }
+
+            try
+            {
+                var overlayLuminosity = await _settingsStore.GetAsync("Color.OverlayTintLuminosityOpacity");
+                if (!string.IsNullOrWhiteSpace(overlayLuminosity) &&
+                    double.TryParse(overlayLuminosity, NumberStyles.Float, CultureInfo.InvariantCulture, out var luminosity) &&
+                    luminosity >= 0 && luminosity <= 1)
+                {
+                    _cache.OverlayTintLuminosityOpacity = luminosity;
+                }
+                _logger.LogInformation("SettingsService: Loaded Color.OverlayTintLuminosityOpacity: {Luminosity}", _cache.OverlayTintLuminosityOpacity);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintLuminosityOpacity. Using default.");
+            }
+
+            try
+            {
+                var transitionMs = await _settingsStore.GetAsync("Color.OverlayTintTransitionMs");
+                if (!string.IsNullOrWhiteSpace(transitionMs) &&
+                    int.TryParse(transitionMs, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedMs) &&
+                    parsedMs >= 0)
+                {
+                    _cache.OverlayTintTransitionDurationMs = parsedMs;
+                }
+                _logger.LogInformation("SettingsService: Loaded Color.OverlayTintTransitionMs: {Ms}", _cache.OverlayTintTransitionDurationMs);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintTransitionMs. Using default.");
+            }
+
             // Last selected snippet id
             try
             {
@@ -958,22 +993,53 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintColor.");
             }
         }
-
         public double GetOverlayTintOpacity() => _cache.OverlayTintOpacity;
 
-        public async Task SetOverlayTintOpacityAsync(double opacity)
+        public async Task SetOverlayTintOpacityAsync(double value)
         {
-            _cache.OverlayTintOpacity = Math.Clamp(opacity, 0.0, 1.0);
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.OverlayTintOpacity = clamped;
             try
             {
-                Debug.WriteLine($"SettingsService.SetOverlayTintOpacityAsync saving: {_cache.OverlayTintOpacity}");
-                _logger.LogInformation("SettingsService: Persisting OverlayTintOpacity={Opacity}", _cache.OverlayTintOpacity);
-                await _settingsStore.UpsertAsync("Color.OverlayTintOpacity", _cache.OverlayTintOpacity.ToString(CultureInfo.InvariantCulture));
+                await _settingsStore.UpsertAsync("Color.OverlayTintOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintOpacity.");
             }
         }
+
+        public double GetOverlayTintLuminosityOpacity() => _cache.OverlayTintLuminosityOpacity;
+
+        public async Task SetOverlayTintLuminosityOpacityAsync(double value)
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.OverlayTintLuminosityOpacity = clamped;
+            try
+            {
+                await _settingsStore.UpsertAsync("Color.OverlayTintLuminosityOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintLuminosityOpacity.");
+            }
+        }
+
+        public int GetOverlayTintTransitionDurationMs() => _cache.OverlayTintTransitionDurationMs;
+
+        public async Task SetOverlayTintTransitionDurationMsAsync(int milliseconds)
+        {
+            var clamped = Math.Max(0, milliseconds);
+            _cache.OverlayTintTransitionDurationMs = clamped;
+            try
+            {
+                await _settingsStore.UpsertAsync("Color.OverlayTintTransitionMs", clamped.ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintTransitionMs.");
+            }
+        }
+
     }
 }

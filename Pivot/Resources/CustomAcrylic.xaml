@@ -7,7 +7,6 @@
     <!-- In-app Acrylic brush for lightweight overlay theming.
          Use via: Fill="{ThemeResource CustomAcrylicInAppBrush}" -->
     <media:AcrylicBrush x:Key="CustomAcrylicInAppBrush"
-                        TintOpacity="0.5"
                         TintColor="#FF0000FF"
                         FallbackColor="#FF008000" />
 

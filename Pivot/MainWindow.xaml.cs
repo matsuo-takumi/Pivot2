@@ -164,7 +164,7 @@ namespace Pivot
                         _micaController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
                         _micaController.SetSystemBackdropConfiguration(_configurationSource);
                         SystemBackdrop = null;
-                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                        SetTransparentRootAndTitleBar();
                     }
                     break;
                 case BackdropType.MicaAlt:
@@ -175,7 +175,7 @@ namespace Pivot
                         _micaController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
                         _micaController.SetSystemBackdropConfiguration(_configurationSource);
                         SystemBackdrop = null;
-                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                        SetTransparentRootAndTitleBar();
                     }
                     break;
                 case BackdropType.AcrylicThin:
@@ -186,7 +186,7 @@ namespace Pivot
                         _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
                         _acrylicController.SetSystemBackdropConfiguration(_configurationSource);
                         SystemBackdrop = null;
-                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                        SetTransparentRootAndTitleBar();
                     }
                     break;
                 case BackdropType.Acrylic:
@@ -197,7 +197,7 @@ namespace Pivot
                         _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
                         _acrylicController.SetSystemBackdropConfiguration(_configurationSource);
                         SystemBackdrop = null;
-                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                        SetTransparentRootAndTitleBar();
                     }
                     break;
                 case BackdropType.Overlay:
@@ -205,8 +205,7 @@ namespace Pivot
                     SystemBackdrop = null;
                     try
                     {
-                        var hex = _settingsService?.GetOverlayTintColor() ?? "#0000FF";
-                        var opacity = _settingsService?.GetOverlayTintOpacity() ?? 0.5;
+                        var hex = _settingsService.GetOverlayTintColor();
                         if (!hex.StartsWith("#")) hex = "#" + hex;
                         byte r = 0, g = 0, b = 0;
                         if (hex.Length == 7)
@@ -215,13 +214,14 @@ namespace Pivot
                             g = Convert.ToByte(hex.Substring(3, 2), 16);
                             b = Convert.ToByte(hex.Substring(5, 2), 16);
                         }
-                        Debug.WriteLine($"Applying overlay tint: opacity={opacity}, color=#{r:X2}{g:X2}{b:X2}");
-                        var brush = new Microsoft.UI.Xaml.Media.AcrylicBrush
-                        {
-                            TintOpacity = (float)opacity,
-                            TintColor = ColorHelper.FromArgb(255, r, g, b),
-                            FallbackColor = Colors.Transparent
-                        };
+                    var brush = new Microsoft.UI.Xaml.Media.AcrylicBrush
+                    {
+                        TintColor = ColorHelper.FromArgb(255, r, g, b),
+                        TintOpacity = _settingsService.GetOverlayTintOpacity(),
+                        TintLuminosityOpacity = _settingsService.GetOverlayTintLuminosityOpacity(),
+                        TintTransitionDuration = TimeSpan.FromMilliseconds(_settingsService.GetOverlayTintTransitionDurationMs()),
+                        FallbackColor = Colors.Transparent
+                    };
                         if (Root != null) Root.Background = brush;
                         if (AppTitleBar != null) AppTitleBar.Background = brush;
                     }
@@ -233,9 +233,16 @@ namespace Pivot
                 // custom types removed
                 default:
                     SystemBackdrop = null;
-                    if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
+                    SetTransparentRootAndTitleBar();
                     break;
             }
+        }
+
+        private void SetTransparentRootAndTitleBar()
+        {
+            var transparentBrush = new SolidColorBrush(Colors.Transparent);
+            if (Root != null) Root.Background = transparentBrush;
+            if (AppTitleBar != null) AppTitleBar.Background = transparentBrush;
         }
 
         private void Window_Activated(object sender, WindowActivatedEventArgs args)

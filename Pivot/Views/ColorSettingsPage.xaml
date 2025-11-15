@@ -1,8 +1,7 @@
 <Page
     x:Class="Pivot.Views.ColorSettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="using:Microsoft.UI.Xaml.Controls">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Grid Padding="20">
         <Pivot>
@@ -27,30 +26,6 @@
                         <TextBlock Text="Enter a hex color code (e.g. #F0F0F0) to tint the Scratchpad editor background." TextWrapping="Wrap" Foreground="Gray"/>
                     </StackPanel>
                 </Grid>
-            </PivotItem>
-            <PivotItem Header="Overlay">
-                <StackPanel Padding="12" Spacing="12">
-                    <TextBlock Text="Overlay Tint Color" FontSize="18" FontWeight="SemiBold"/>
-                    <controls:ColorPicker
-                        ColorSpectrumShape="Box"
-                        IsMoreButtonVisible="False"
-                        IsColorSliderVisible="True"
-                        IsColorChannelTextInputVisible="True"
-                        IsHexInputVisible="True"
-                        IsAlphaEnabled="False"
-                        IsAlphaSliderVisible="True"
-                        IsAlphaTextInputVisible="True"
-                        Color="{x:Bind ViewModel.OverlayColor, Mode=TwoWay}" />
-                    <TextBlock Text="Tint Opacity" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,0"/>
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Slider Minimum="0" Maximum="1" SmallChange="0.01" LargeChange="0.1" Width="240"
-                                Value="{Binding ViewModel.OverlayTintOpacity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock VerticalAlignment="Center" Foreground="Gray"
-                                   Text="{x:Bind ViewModel.OverlayTintOpacityPercent, Mode=OneWay}" />
-                    </StackPanel>
-                    <Button Content="Save" Command="{x:Bind ViewModel.SaveOverlayCommand}" HorizontalAlignment="Left"/>
-                    <TextBlock Text="{x:Bind ViewModel.StatusText}" Foreground="Gray" Margin="0,8,0,0"/>
-                </StackPanel>
             </PivotItem>
         </Pivot>
     </Grid>
