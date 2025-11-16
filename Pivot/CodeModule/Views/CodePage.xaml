@@ -13,6 +13,26 @@
     <Page.Resources>
         <conv:CardPanelSizeConverter x:Key="CardPanelSizeConverter" />
         <conv:TagStringToListConverter x:Key="TagStringToListConverter" />
+        <Style x:Key="TagBadgeBorderStyle" TargetType="Border">
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <DataTemplate x:Key="TagBadgeTemplate" x:DataType="models:TagItem">
+            <Border Style="{StaticResource TagBadgeBorderStyle}"
+                    DoubleTapped="TagBadge_DoubleTapped"
+                    IsDoubleTapEnabled="True"
+                    ToolTipService.ToolTip="Double-click to remove tag">
+                <TextBlock Text="{x:Bind Name}"
+                           FontSize="12"
+                           Foreground="{ThemeResource TextControlForeground}" />
+            </Border>
+        </DataTemplate>
     </Page.Resources>
 
     <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" PointerPressed="Root_PointerPressed">
@@ -99,21 +119,14 @@
                                                 <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="#444" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
 
                                                 <!-- Tag display for snippet card -->
-                                                <ItemsControl Grid.Row="2" Margin="0,8,0,4" ItemsSource="{x:Bind Tags, Converter={StaticResource TagStringToListConverter}}">
+                                                <ItemsControl Grid.Row="2" Margin="0,8,0,4" ItemsSource="{x:Bind Tags, Converter={StaticResource TagStringToListConverter}, Mode=OneWay}">
                                                     <ItemsControl.ItemsPanel>
                                                         <ItemsPanelTemplate>
                                                             <WrapGrid Orientation="Horizontal" />
                                                         </ItemsPanelTemplate>
                                                     </ItemsControl.ItemsPanel>
                                                     <ItemsControl.ItemTemplate>
-                                                        <DataTemplate x:DataType="models:TagItem">
-                                                        <StackPanel Orientation="Horizontal" Margin="2">
-                                                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Margin="4" Padding="6,2">
-                                                                    <TextBlock Text="{x:Bind Name}" />
-                                                                </Border>
-                                                                <Button Content="✕" Click="CardTagRemove_Click" Tag="{x:Bind Name}" Margin="4,0,0,0" MinWidth="28" MinHeight="28" />
-                                                            </StackPanel>
-                                                        </DataTemplate>
+                                                        <StaticResource ResourceKey="TagBadgeTemplate" />
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
 
@@ -146,20 +159,12 @@
                                                             <WrapGrid Orientation="Horizontal" HorizontalChildrenAlignment="Left" />
                                                         </ItemsPanelTemplate>
                                                     </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="models:TagItem">
-                                        <StackPanel Orientation="Horizontal" Margin="2">
-                                            <ToggleButton Content="{x:Bind Name}" Margin="4" Padding="8,4" Checked="ScratchpadTag_Toggled" Unchecked="ScratchpadTag_Toggled" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                                            <Button Content="✕" Click="ScratchpadTagRemove_Click" Tag="{x:Bind Name}" Margin="4,0,0,0" MinWidth="28" MinHeight="28" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <StaticResource ResourceKey="TagBadgeTemplate" />
+                                                    </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
 
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                    <ComboBox x:Name="ScratchpadNewTagBox" Width="160" IsEditable="True" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" SelectionChanged="ScratchpadNewTagBox_SelectionChanged" />
-                                    <Button x:Name="ScratchpadAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
-                                </StackPanel>
+                                                <AutoSuggestBox x:Name="ScratchpadTagInput" Width="160" PlaceholderText="Add tag" KeyDown="TagInput_KeyDown" QuerySubmitted="TagAutoSuggest_QuerySubmitted" ItemsSource="{x:Bind ViewModel.TagSuggestions, Mode=OneWay}" Margin="12,0,0,0" />
                                             </StackPanel>
 
                                             <!-- Editor area (scrollable) -->
@@ -201,26 +206,18 @@
 
                             <!-- Tag picker moved into main editor area so tags appear in the main section instead of the overlay -->
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
-                                <ItemsControl x:Name="EditorTagList" Margin="0,8,0,0">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapGrid Orientation="Horizontal" HorizontalChildrenAlignment="Left" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
+                            <ItemsControl x:Name="EditorTagList" Margin="0,8,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapGrid Orientation="Horizontal" HorizontalChildrenAlignment="Left" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="models:TagItem">
-                                        <StackPanel Orientation="Horizontal" Margin="2">
-                                            <ToggleButton Content="{x:Bind Name}" Margin="4" Padding="8,4" Checked="ScratchpadTag_Toggled" Unchecked="ScratchpadTag_Toggled" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                                            <Button Content="✕" Click="ScratchpadTagRemove_Click" Tag="{x:Bind Name}" Margin="4,0,0,0" MinWidth="28" MinHeight="28" />
-                                        </StackPanel>
-                                    </DataTemplate>
+                                    <StaticResource ResourceKey="TagBadgeTemplate" />
                                 </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                            </ItemsControl>
 
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                    <ComboBox x:Name="EditorNewTagBox" Width="160" IsEditable="True" PlaceholderText="Add tag" TabIndex="21" IsTabStop="True" SelectionChanged="EditorNewTagBox_SelectionChanged" />
-                                    <Button x:Name="EditorAddTagButton" Content="Add" Margin="8,0,0,0" TabIndex="22" IsTabStop="True" />
-                                </StackPanel>
+                            <AutoSuggestBox x:Name="EditorTagInput" Width="160" PlaceholderText="Add tag" KeyDown="TagInput_KeyDown" QuerySubmitted="TagAutoSuggest_QuerySubmitted" ItemsSource="{x:Bind ViewModel.TagSuggestions, Mode=OneWay}" Margin="12,0,0,0" />
                             </StackPanel>
 
                             <TextBox x:Name="CodeEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" TabIndex="10" IsTabStop="True" KeyDown="CodeEditor_KeyDown" GotFocus="CodeEditor_GotFocus" LostFocus="CodeEditor_LostFocus" />

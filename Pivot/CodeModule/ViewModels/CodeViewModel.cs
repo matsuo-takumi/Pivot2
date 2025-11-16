@@ -20,6 +20,7 @@ namespace Pivot.CodeModule.ViewModels
         // track snippets that were created in-memory and not yet persisted
         private HashSet<Guid> _transientSnippetIds = new HashSet<Guid>();
         private HashSet<string> _selectedCodeTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly ObservableCollection<string> _tagSuggestions = new ObservableCollection<string>();
 
         [ObservableProperty]
         private ObservableCollection<CodeFile> _snippets;
@@ -36,6 +37,8 @@ namespace Pivot.CodeModule.ViewModels
         [ObservableProperty]
         private ObservableCollection<Guid> _activeFilters = new ObservableCollection<Guid>();
 
+        public ObservableCollection<string> TagSuggestions => _tagSuggestions;
+
         partial void OnSelectedSnippetChanging(CodeFile? oldValue, CodeFile? newValue)
         {
             // Do not auto-save while typing or on selection change.
@@ -48,6 +51,7 @@ namespace Pivot.CodeModule.ViewModels
             var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
             _allSnippets = all;
             _snippets = new ObservableCollection<CodeFile>(_allSnippets);
+            RefreshTagSuggestions();
 
             // Register for tag selection messages
             try
@@ -72,6 +76,7 @@ namespace Pivot.CodeModule.ViewModels
             System.Diagnostics.Debug.WriteLine("CodeViewModel: constructed WITHOUT repository (fallback). Saving will be disabled.");
 
             // No test seeding in fallback; start with an empty collection
+            RefreshTagSuggestions();
         }
 
         // Previously ensured a placeholder "New" item at index 0.
@@ -89,6 +94,7 @@ namespace Pivot.CodeModule.ViewModels
             {
                 _allSnippets = all;
                 ApplyCodeTagFilters();
+                RefreshTagSuggestions();
             }
         }
 
@@ -351,11 +357,20 @@ namespace Pivot.CodeModule.ViewModels
         private void DeleteSnippet()
         {
             if (SelectedSnippet is null) return;
+            var snippet = SelectedSnippet;
             if (_repo != null)
             {
-                _repo.Delete(SelectedSnippet.Id);
+                _repo.Delete(snippet.Id);
+                SelectedSnippet = null;
+                Refresh();
+                return;
             }
-            Snippets.Remove(SelectedSnippet);
+
+            try
+            {
+                Snippets.Remove(snippet);
+            }
+            catch { }
             SelectedSnippet = null;
         }
 
@@ -396,19 +411,100 @@ namespace Pivot.CodeModule.ViewModels
         }
 
         // Helper: attach a tag to a snippet and persist
-        public async Task AddTagToSnippetAsync(CodeFile? snippet, string tagName)
+        public Task AddTagToSnippetAsync(CodeFile? snippet, string tagName)
         {
-            if (snippet == null || string.IsNullOrWhiteSpace(tagName)) return;
-            var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
-            if (!current.Contains(tagName, StringComparer.OrdinalIgnoreCase))
+            if (snippet == null || string.IsNullOrWhiteSpace(tagName)) return Task.CompletedTask;
+            var trimmed = tagName.Trim();
+            var current = (snippet.Tags ?? string.Empty)
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim())
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .ToList();
+
+            if (current.Any(t => string.Equals(t, trimmed, StringComparison.OrdinalIgnoreCase))) return Task.CompletedTask;
+
+            current.Add(trimmed);
+            snippet.Tags = string.Join(",", current);
+            UpdateSnippetCache(snippet);
+            if (_repo != null)
             {
-                current.Add(tagName.Trim());
-                snippet.Tags = string.Join(",", current);
-                if (_repo != null)
+                _repo.Save(snippet);
+            }
+            ApplyCodeTagFilters();
+            RefreshTagSuggestions();
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveTagFromSnippetAsync(CodeFile? snippet, string tagName)
+        {
+            if (snippet == null || string.IsNullOrWhiteSpace(tagName)) return Task.CompletedTask;
+            var trimmed = tagName.Trim();
+            var current = (snippet.Tags ?? string.Empty)
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim())
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .ToList();
+
+            var removed = current.RemoveAll(t => string.Equals(t, trimmed, StringComparison.OrdinalIgnoreCase));
+            if (removed == 0) return Task.CompletedTask;
+
+            snippet.Tags = string.Join(",", current);
+            UpdateSnippetCache(snippet);
+            if (_repo != null)
+            {
+                _repo.Save(snippet);
+            }
+            ApplyCodeTagFilters();
+            RefreshTagSuggestions();
+            return Task.CompletedTask;
+        }
+
+        private void UpdateSnippetCache(CodeFile snippet)
+        {
+            if (snippet == null) return;
+            try
+            {
+                var existing = _allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
+                if (existing != null)
                 {
-                    _repo.Save(snippet);
+                    existing.Title = snippet.Title;
+                    existing.Content = snippet.Content;
+                    existing.Tags = snippet.Tags;
+                    existing.Language = snippet.Language;
+                    existing.Tool = snippet.Tool;
+                    existing.Updated = snippet.Updated;
+                }
+                else
+                {
+                    _allSnippets.Add(snippet);
                 }
             }
+            catch { }
+        }
+
+        private void RefreshTagSuggestions()
+        {
+            try
+            {
+                var names = GetAllTags()
+                    .Select(t => t.Name ?? string.Empty)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        _tagSuggestions.Clear();
+                        foreach (var name in names)
+                        {
+                            _tagSuggestions.Add(name);
+                        }
+                    }
+                    catch { }
+                });
+            }
+            catch { }
         }
     }
 }

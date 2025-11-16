@@ -388,6 +388,12 @@ namespace Pivot.CodeModule.Services
                 }
                 catch { }
             }
+
+            try
+            {
+                PermanentlyRemoveFilesForId(id);
+            }
+            catch { }
         }
 
         // Return deleted items that are still within the 30-day restore window.

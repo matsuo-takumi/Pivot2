@@ -84,8 +84,6 @@ namespace Pivot.CodeModule.Views
 
             // build left navigation (Snippets/Categories)
             try { BuildNavigationMenu(); } catch { }
-            // populate tag ComboBoxes with existing tags on load
-            try { PopulateTagCombos(); } catch { }
             // Restore previously selected snippet (persisted) if available
             try
             {
@@ -113,138 +111,6 @@ namespace Pivot.CodeModule.Views
             {
                 pc.PropertyChanged += OnViewModelPropertyChanged;
             }
-
-            // wire scratchpad buttons
-            try
-            {
-                // Close button handler is wired later to a named handler to ensure removal/consistency
-                var tmpCloseBtn = this.FindName("ScratchpadCloseButton") as Button;
-                // no-op here
-                var addTagBtn = this.FindName("ScratchpadAddTagButton") as Button;
-                var newTagBox = this.FindName("ScratchpadNewTagBox") as ComboBox;
-                if (addTagBtn != null && newTagBox != null)
-                {
-                    addTagBtn.Click += (_, __) =>
-                    {
-                        try
-                        {
-                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                            var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                            var name = newTagBox.Text?.Trim() ?? string.Empty;
-                            if (!string.IsNullOrWhiteSpace(name))
-                            {
-                                // Add tag to repository and ensure it's registered in Preferences > Code Filters
-                                AddTagAndRegister(name);
-                                newTagBox.Text = string.Empty;
-
-                                // Attach tag to currently selected snippet (if any) and persist
-                                try
-                                {
-                                    if (ViewModel?.SelectedSnippet != null)
-                                    {
-                                        var snippet = ViewModel.SelectedSnippet;
-                                        var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
-                                        if (!current.Contains(name, StringComparer.OrdinalIgnoreCase)) current.Add(name);
-                                        snippet.Tags = string.Join(",", current);
-                                        _ = ViewModel.SaveSnippetFileAsync(snippet);
-                                    }
-                                }
-                                catch { }
-                            }
-                        }
-                        catch { }
-                    };
-                }
-                // selection from combobox should add tag immediately
-                try
-                {
-                    if (newTagBox != null)
-                    {
-                        newTagBox.SelectionChanged += (s, ev) =>
-                        {
-                            try
-                            {
-                                var cb = s as ComboBox;
-                                if (cb == null) return;
-                                var name = (cb.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? cb.Text?.Trim() ?? string.Empty;
-                                if (string.IsNullOrWhiteSpace(name)) return;
-                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                                if (repo != null)
-                                {
-                                    AddTagAndRegister(name);
-                                    cb.Text = string.Empty;
-                                }
-                            }
-                            catch { }
-                        };
-                    }
-                }
-                catch { }
-
-                // Also wire the editor-level add tag controls (moved into main section)
-                try
-                {
-                    var editorAddBtn = this.FindName("EditorAddTagButton") as Button;
-                    var editorNewTagBox = this.FindName("EditorNewTagBox") as ComboBox;
-                    if (editorAddBtn != null && editorNewTagBox != null)
-                    {
-                        editorAddBtn.Click += (_, __) =>
-                        {
-                            try
-                            {
-                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                                var name = editorNewTagBox.Text?.Trim() ?? string.Empty;
-                                if (!string.IsNullOrWhiteSpace(name))
-                                {
-                                    AddTagAndRegister(name);
-                                    editorNewTagBox.Text = string.Empty;
-
-                                    // Attach tag to currently selected snippet (if any) and persist
-                                    try
-                                    {
-                                        if (ViewModel?.SelectedSnippet != null)
-                                        {
-                                            var snippet = ViewModel.SelectedSnippet;
-                                            var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
-                                            if (!current.Contains(name, StringComparer.OrdinalIgnoreCase)) current.Add(name);
-                                            snippet.Tags = string.Join(",", current);
-                                            _ = ViewModel.SaveSnippetFileAsync(snippet);
-                                        }
-                                    }
-                                    catch { }
-                                }
-                            }
-                            catch { }
-                        };
-                    }
-                try
-                {
-                    if (editorNewTagBox != null)
-                    {
-                        editorNewTagBox.SelectionChanged += (s, ev) =>
-                        {
-                            try
-                            {
-                                var cb = s as ComboBox;
-                                if (cb == null) return;
-                                var name = (cb.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? cb.Text?.Trim() ?? string.Empty;
-                                if (string.IsNullOrWhiteSpace(name)) return;
-                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                                if (repo != null)
-                                {
-                                    AddTagAndRegister(name);
-                                    cb.Text = string.Empty;
-                                }
-                            }
-                            catch { }
-                        };
-                    }
-                }
-                catch { }
-                }
-                catch { }
-            }
-            catch { }
 
             // wire editors (TextBox) change handlers
             try
@@ -381,19 +247,6 @@ namespace Pivot.CodeModule.Views
                     filters.Add(new Pivot.Models.CustomFilter { Name = name });
                     _ = settings.SetCodeFiltersAsync(filters);
                 }
-            }
-            catch { }
-        }
-
-        private void AddTagAndRegister(string name)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(name)) return;
-                // Persist tag into Preferences (JSON-backed) only — unified source of truth.
-                RegisterCodeFilterIfMissing(name);
-                try { RefreshScratchpadTags(); } catch { }
-                try { BuildNavigationMenu(); PopulateTagCombos(); } catch { }
             }
             catch { }
         }
@@ -1858,46 +1711,6 @@ namespace Pivot.CodeModule.Views
                     {
                         if (scratchList != null) scratchList.ItemsSource = items;
                         if (editorList != null) editorList.ItemsSource = items;
-
-                        // Also populate editable ComboBoxes with tag names for quick selection
-                        try
-                        {
-                            var scratchCombo = this.FindName("ScratchpadNewTagBox") as ComboBox;
-                            var editorCombo = this.FindName("EditorNewTagBox") as ComboBox;
-                            // Use Preferences CodeFilters as the authoritative list of tag candidates
-                            var tagNames = settings.GetCodeFilters()?.Select(f => f.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
-                                ?? new System.Collections.Generic.List<string>();
-                            if (scratchCombo != null) scratchCombo.ItemsSource = tagNames;
-                            if (editorCombo != null) editorCombo.ItemsSource = tagNames;
-                        }
-                        catch { }
-                    }
-                    catch { }
-
-                    // ensure toggle states reflect IsSelected after containers are realized
-                    try
-                    {
-                        if (scratchList != null)
-                        {
-                            for (int i = 0; i < items.Count; i++)
-                            {
-                                var container = scratchList.ItemContainerGenerator.ContainerFromIndex(i) as ContentPresenter;
-                                if (container == null) continue;
-                                var toggle = FindDescendantOfType<ToggleButton>(container);
-                                if (toggle != null) toggle.IsChecked = items[i].IsSelected;
-                            }
-                        }
-
-                        if (editorList != null)
-                        {
-                            for (int i = 0; i < items.Count; i++)
-                            {
-                                var container = editorList.ItemContainerGenerator.ContainerFromIndex(i) as ContentPresenter;
-                                if (container == null) continue;
-                                var toggle = FindDescendantOfType<ToggleButton>(container);
-                                if (toggle != null) toggle.IsChecked = items[i].IsSelected;
-                            }
-                        }
                     }
                     catch { }
                 });
@@ -2007,102 +1820,6 @@ namespace Pivot.CodeModule.Views
             return Task.CompletedTask;
         }
 
-        private void ScratchpadTag_Toggled(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (!(sender is ToggleButton tb) || tb.DataContext == null) return;
-                // Using TagItem directly
-                if (!(tb.DataContext is TagItem tagItem)) return;
-
-                var tagName = tagItem.Name ?? string.Empty;
-                if (ViewModel?.SelectedSnippet == null) return;
-                var snippet = ViewModel.SelectedSnippet;
-                var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
-                if (tb.IsChecked == true)
-                {
-                    if (!current.Contains(tagName, StringComparer.OrdinalIgnoreCase)) current.Add(tagName);
-                }
-                else
-                {
-                    current.RemoveAll(x => string.Equals(x, tagName, StringComparison.OrdinalIgnoreCase));
-                }
-                snippet.Tags = string.Join(",", current);
-                // persist
-                try
-                {
-                    var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                    repo?.Save(snippet);
-                }
-                catch { }
-                // Ensure UI list reflects changes immediately
-                try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => ViewModel?.Refresh()); } catch { }
-            }
-            catch { }
-        }
-
-        private void ScratchpadTagRemove_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (!(sender is FrameworkElement fe)) return;
-                var tagName = fe.Tag?.ToString() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(tagName)) return;
-                if (ViewModel?.SelectedSnippet == null) return;
-                var snippet = ViewModel.SelectedSnippet;
-                var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
-                current.RemoveAll(x => string.Equals(x, tagName, StringComparison.OrdinalIgnoreCase));
-                snippet.Tags = string.Join(",", current);
-                try { var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository; repo?.Save(snippet); } catch { }
-                try { RefreshScratchpadTags(); } catch { }
-                // Ensure the main snippet list reflects the tag removal
-                try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => ViewModel?.Refresh()); } catch { }
-            }
-            catch { }
-        }
-
-        private void ScratchpadNewTagBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            try
-            {
-                var cb = sender as ComboBox;
-                if (cb == null) return;
-                var name = (cb.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? cb.Text?.Trim() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(name)) return;
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                if (repo != null)
-                {
-                    repo.AddTag(name);
-                    cb.Text = string.Empty;
-                    RefreshScratchpadTags();
-                    BuildNavigationMenu();
-                    PopulateTagCombos();
-                }
-            }
-            catch { }
-        }
-
-        private void EditorNewTagBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            try
-            {
-                var cb = sender as ComboBox;
-                if (cb == null) return;
-                var name = (cb.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? cb.Text?.Trim() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(name)) return;
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                if (repo != null)
-                {
-                    repo.AddTag(name);
-                    cb.Text = string.Empty;
-                    RefreshScratchpadTags();
-                    BuildNavigationMenu();
-                    PopulateTagCombos();
-                }
-            }
-            catch { }
-        }
-
         private void CodeEditor_TextChanged(object? sender, TextChangedEventArgs e)
         {
             try
@@ -2144,6 +1861,66 @@ namespace Pivot.CodeModule.Views
                     ViewModel.SelectedSnippet.Title = tb.Text ?? string.Empty;
                     ViewModel.IsDirty = true;
                 }
+            }
+            catch { }
+        }
+
+        private async Task AddTagFromAutoSuggestBoxAsync(AutoSuggestBox? box)
+        {
+            if (box == null) return;
+            var text = box.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(text)) return;
+            try
+            {
+                RegisterCodeFilterIfMissing(text);
+                var snippet = ViewModel?.SelectedSnippet;
+                if (snippet != null)
+                {
+                    await ViewModel.AddTagToSnippetAsync(snippet, text);
+                    RefreshScratchpadTags();
+                    BuildNavigationMenu();
+                }
+            }
+            catch { }
+            finally
+            {
+                try
+                {
+                    box.Text = string.Empty;
+                    box.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+                }
+                catch { }
+            }
+        }
+
+        private async void TagInput_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter && sender is AutoSuggestBox box)
+            {
+                await AddTagFromAutoSuggestBoxAsync(box);
+                e.Handled = true;
+            }
+        }
+
+        private async void TagAutoSuggest_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+        {
+            await AddTagFromAutoSuggestBoxAsync(sender);
+        }
+
+        private async void TagBadge_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is FrameworkElement fe)) return;
+                if (!(fe.DataContext is TagItem tagItem)) return;
+                var tagName = tagItem.Name ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(tagName)) return;
+                var snippet = FindContainingSnippet(fe) ?? ViewModel?.SelectedSnippet;
+                if (snippet == null) return;
+                await ViewModel.RemoveTagFromSnippetAsync(snippet, tagName);
+                RefreshScratchpadTags();
+                BuildNavigationMenu();
+                e.Handled = true;
             }
             catch { }
         }
@@ -2522,28 +2299,6 @@ namespace Pivot.CodeModule.Views
                 catch { }
             }
             return null;
-        }
-
-        // Populate editable tag ComboBoxes with existing tag names from repository
-        private void PopulateTagCombos()
-        {
-            try
-            {
-                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                var tagNames = settings?.GetCodeFilters()?.Select(f => f.Name).ToList() ?? new List<string>();
-                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
-                {
-                    try
-                    {
-                        var scratchCombo = this.FindName("ScratchpadNewTagBox") as ComboBox;
-                        var editorCombo = this.FindName("EditorNewTagBox") as ComboBox;
-                        if (scratchCombo != null) scratchCombo.ItemsSource = tagNames;
-                        if (editorCombo != null) editorCombo.ItemsSource = tagNames;
-                    }
-                    catch { }
-                });
-            }
-            catch { }
         }
 
         private void RootGrid_SizeChanged(object? sender, SizeChangedEventArgs e)
