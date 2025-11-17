@@ -24,7 +24,10 @@ using Microsoft.UI;
 using Windows.Foundation;
 using System.Collections.Generic;
 using Pivot.CodeModule.Services;
+using Pivot.CodeModule.Converters;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Data;
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.CodeModule.Models;
 using Pivot.Services;
@@ -39,6 +42,7 @@ namespace Pivot.CodeModule.Views
     {
         public CodeViewModel? ViewModel => DataContext as CodeViewModel;
         private Pivot.CodeModule.Models.CodeFile? _previousSelectedSnippet;
+        private static readonly Pivot.CodeModule.Converters.TagStringToListConverter _tagConverter = new Pivot.CodeModule.Converters.TagStringToListConverter();
         // Dragging state for movable scratchpad
         private bool _isScratchpadDragging = false;
         private Windows.Foundation.Point _scratchpadDragStart;
@@ -84,6 +88,12 @@ namespace Pivot.CodeModule.Views
 
             // build left navigation (Snippets/Categories)
             try { BuildNavigationMenu(); } catch { }
+            try
+            {
+                var messenger = App.Current.Services.GetService(typeof(IMessenger)) as IMessenger;
+                messenger?.Register<CodePage, CodeFiltersUpdatedMessage>(this, (r, m) => r.OnCodeFiltersUpdated(m.Value));
+            }
+            catch { }
             // Restore previously selected snippet (persisted) if available
             try
             {
@@ -310,6 +320,7 @@ namespace Pivot.CodeModule.Views
                 {
                     _ = CloseSnippetWithAnimationAsync();
                 }
+                try { RefreshTagBindings(); } catch { }
                 // Persist last selected snippet id for restoration across page instances
                 try
                 {
@@ -609,13 +620,14 @@ namespace Pivot.CodeModule.Views
 
             if (_isAnimationActive) { return; }
             _isAnimationActive = true;
+            ListView? list = null;
             try
             {
-            var root = this.Content as FrameworkElement;
-            var list = root?.FindName("SnippetListView") as ListView;
-            var editorPanel = root?.FindName("EditorPanel") as Grid;
-            var cardPanel = root?.FindName("CardPanel") as Grid;
-            var placeholder = root?.FindName("PlaceholderBorder") as Border;
+                var root = this.Content as FrameworkElement;
+                list = root?.FindName("SnippetListView") as ListView;
+                var editorPanel = root?.FindName("EditorPanel") as Grid;
+                var cardPanel = root?.FindName("CardPanel") as Grid;
+                var placeholder = root?.FindName("PlaceholderBorder") as Border;
             // Capture DataContext/ViewModel once on UI thread to avoid COM RPC issues
             Pivot.CodeModule.ViewModels.CodeViewModel? viewModel = null;
             try
@@ -732,7 +744,6 @@ namespace Pivot.CodeModule.Views
                         if (scratchEditor != null) scratchEditor.Text = viewModel.SelectedSnippet.Content ?? string.Empty;
                         if (titleBox != null) titleBox.Text = viewModel.SelectedSnippet.Title ?? string.Empty;
                     }
-                    RefreshScratchpadTags();
                     // adjust size to fit current page/window
                     try { AdjustScratchpadSize(); } catch { }
                     if (scratchEditor != null) scratchEditor.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
@@ -789,19 +800,12 @@ namespace Pivot.CodeModule.Views
             _previousSelectedSnippet = viewModel?.SelectedSnippet;
             _isAnimationActive = false;
 
-            // Re-enable list interaction after open animation
-            if (list != null)
-            {
-                list.IsHitTestVisible = true;
-            }
-
-            // refresh tags for scratchpad UI
-            try { RefreshScratchpadTags(); } catch { }
             await Task.CompletedTask;
             return;
             }
             finally
             {
+                try { if (list != null) list.IsHitTestVisible = true; } catch { }
                 try { _isAnimationActive = false; } catch { }
             }
         }
@@ -838,8 +842,6 @@ namespace Pivot.CodeModule.Views
                             scratchEditor.Text = vm.SelectedSnippet.Content ?? string.Empty;
                         }
 
-                        // refresh tags
-                        try { RefreshScratchpadTags(); } catch { }
 
                         // ensure scratch editor focused
                         try { scratchEditor?.Focus(Microsoft.UI.Xaml.FocusState.Programmatic); } catch { }
@@ -1217,6 +1219,7 @@ namespace Pivot.CodeModule.Views
                 {
                     list.IsItemClickEnabled = true;
                     list.SelectionMode = ListViewSelectionMode.Single;
+                    list.IsHitTestVisible = true;
                 }
                 // Ensure CardPanel is visible and hit testable after closing the snippet
                 if (cardPanel != null)
@@ -1270,15 +1273,6 @@ namespace Pivot.CodeModule.Views
             _previousSelectedSnippet = null;
             _isAnimationActive = false;
 
-            // clear scratchpad/editor tag lists
-            try
-            {
-                var tagsControl = this.FindName("ScratchpadTagList") as ItemsControl;
-                var editorTags = this.FindName("EditorTagList") as ItemsControl;
-                if (tagsControl != null) App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => tagsControl.ItemsSource = null);
-                if (editorTags != null) App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => editorTags.ItemsSource = null);
-            }
-            catch { }
         }
 
         private async void SnippetListView_ItemClick(object sender, ItemClickEventArgs e)
@@ -1673,47 +1667,71 @@ namespace Pivot.CodeModule.Views
                     list.SelectionMode = ListViewSelectionMode.Single;
                 }
 
-                // Clear scratchpad tag state
-                RefreshScratchpadTags();
             }
             catch { }
         }
 
         // Backdrop handlers removed — root-level handlers handle outside clicks now
 
-        private void RefreshScratchpadTags()
+        private void OnCodeFiltersUpdated(List<Pivot.Models.CustomFilter> filters)
         {
             try
             {
-                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                var scratchList = this.FindName("ScratchpadTagList") as ItemsControl;
-                var editorList = this.FindName("EditorTagList") as ItemsControl;
-                if (settings == null || (scratchList == null && editorList == null)) return;
-                // Show only tags assigned to the selected snippet (ScratchpadTagList)
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                var selected = ViewModel?.SelectedSnippet;
-                var selectedTags = selected != null
-                    ? (selected.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
-                    : new System.Collections.Generic.List<string>();
-
-                // Filter out tags that are not defined in CodeFilters (Preferences)
-                var allowedFilterNames = settings.GetCodeFilters()?.Select(f => f.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase)
-                    ?? new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                var filteredTags = selectedTags.Where(t => allowedFilterNames.Contains(t)).ToList();
-
-                // Build TagItem list only from assigned & allowed tags (IsSelected = true)
-                var items = filteredTags.Select((t, idx) => new TagItem { Id = idx, Name = t, IsSelected = true }).ToList();
-
                 App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
                 {
-                    try
-                    {
-                        if (scratchList != null) scratchList.ItemsSource = items;
-                        if (editorList != null) editorList.ItemsSource = items;
-                    }
-                    catch { }
+                    try { BuildNavigationMenu(); } catch { }
+                    try { RefreshSnippetCollectionView(); } catch { }
                 });
+            }
+            catch { }
+        }
+
+        private void RefreshSnippetCollectionView()
+        {
+            try
+            {
+                var vm = ViewModel;
+                if (vm?.Snippets == null) return;
+                var snapshot = vm.Snippets.ToList();
+                var selectedId = vm.SelectedSnippet?.Id ?? Guid.Empty;
+                vm.Snippets = new ObservableCollection<Pivot.CodeModule.Models.CodeFile>(snapshot);
+                if (selectedId != Guid.Empty)
+                {
+                    var selected = vm.Snippets.FirstOrDefault(s => s.Id == selectedId);
+                    if (selected != null)
+                    {
+                        vm.SelectedSnippet = selected;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private IEnumerable<TagItem> GetTagItems(string? tags)
+        {
+            try
+            {
+                var result = _tagConverter.Convert(tags ?? string.Empty, typeof(IEnumerable<TagItem>), null, string.Empty);
+                if (result is IEnumerable<TagItem> list) return list;
+            }
+            catch { }
+            return Enumerable.Empty<TagItem>();
+        }
+
+        private void RefreshTagBindings()
+        {
+            try
+            {
+                var root = this.Content as FrameworkElement;
+                if (root == null) return;
+
+                var tagItems = GetTagItems(ViewModel?.SelectedSnippet?.Tags).ToList();
+
+                var scratchList = root.FindName("ScratchpadTagList") as ItemsControl;
+                if (scratchList != null) scratchList.ItemsSource = tagItems.ToList();
+
+                var editorList = root.FindName("EditorTagList") as ItemsControl;
+                if (editorList != null) editorList.ItemsSource = tagItems.ToList();
             }
             catch { }
         }
@@ -1785,7 +1803,7 @@ namespace Pivot.CodeModule.Views
             current.RemoveAll(x => string.Equals(x, tagName, StringComparison.OrdinalIgnoreCase));
             snippet.Tags = string.Join(",", current);
             try { var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository; repo?.Save(snippet); } catch { }
-            try { RefreshScratchpadTags(); } catch { }
+            try { RefreshTagBindings(); } catch { }
             try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => ViewModel?.Refresh()); } catch { }
         }
         catch { }
@@ -1876,9 +1894,9 @@ namespace Pivot.CodeModule.Views
                 var snippet = ViewModel?.SelectedSnippet;
                 if (snippet != null)
                 {
-                    await ViewModel.AddTagToSnippetAsync(snippet, text);
-                    RefreshScratchpadTags();
-                    BuildNavigationMenu();
+                    var addTask = ViewModel.AddTagToSnippetAsync(snippet, text);
+                    await addTask;
+                    RefreshTagBindings();
                 }
             }
             catch { }
@@ -1887,11 +1905,13 @@ namespace Pivot.CodeModule.Views
                 try
                 {
                     box.Text = string.Empty;
+                    box.IsSuggestionListOpen = false;
                     box.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
                 }
                 catch { }
             }
         }
+
 
         private async void TagInput_KeyDown(object sender, KeyRoutedEventArgs e)
         {
@@ -1918,7 +1938,7 @@ namespace Pivot.CodeModule.Views
                 var snippet = FindContainingSnippet(fe) ?? ViewModel?.SelectedSnippet;
                 if (snippet == null) return;
                 await ViewModel.RemoveTagFromSnippetAsync(snippet, tagName);
-                RefreshScratchpadTags();
+                RefreshTagBindings();
                 BuildNavigationMenu();
                 e.Handled = true;
             }

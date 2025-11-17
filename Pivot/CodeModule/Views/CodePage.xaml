@@ -119,7 +119,7 @@
                                                 <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="#444" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
 
                                                 <!-- Tag display for snippet card -->
-                                                <ItemsControl Grid.Row="2" Margin="0,8,0,4" ItemsSource="{x:Bind Tags, Converter={StaticResource TagStringToListConverter}, Mode=OneWay}">
+                                                <ItemsControl x:Name="SnippetTagList" Grid.Row="2" Margin="0,8,0,4" ItemsSource="{Binding Tags, Converter={StaticResource TagStringToListConverter}, Mode=OneWay}">
                                                     <ItemsControl.ItemsPanel>
                                                         <ItemsPanelTemplate>
                                                             <WrapGrid Orientation="Horizontal" />

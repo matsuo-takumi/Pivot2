@@ -882,6 +882,7 @@ namespace Pivot.Services
             try
             {
                 await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
+                _messenger?.Send(new Messages.CodeFiltersUpdatedMessage(_cache.CodeFilters));
             }
             catch (Exception ex)
             {
