@@ -261,6 +261,21 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
+        private void RegisterTagsFromText(string? tagsCsv)
+        {
+            if (string.IsNullOrWhiteSpace(tagsCsv)) return;
+
+            var separators = new[] { ',', ';' };
+            var tags = tagsCsv.Split(separators, StringSplitOptions.RemoveEmptyEntries)
+                              .Select(t => t.Trim())
+                              .Where(t => !string.IsNullOrWhiteSpace(t));
+
+            foreach (var tag in tags)
+            {
+                try { RegisterCodeFilterIfMissing(tag); } catch { }
+            }
+        }
+
         // Text-based editors (TextBox) are used instead of WebView2. Text change events update the ViewModel.
 
         private void OnSearchClicked(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -1026,6 +1041,7 @@ namespace Pivot.CodeModule.Views
                                         if (snippet != null)
                                         {
                                             snippet.Content = contentBox.Text ?? string.Empty;
+                                            RegisterTagsFromText(tagsBox.Text);
                                             snippet.Tags = tagsBox.Text ?? string.Empty;
                                             if (vm != null) _ = vm.SaveSnippetFileAsync(snippet);
                                         }
@@ -1065,6 +1081,7 @@ namespace Pivot.CodeModule.Views
                                 if (snippet != null)
                                 {
                                     snippet.Content = contentBox.Text ?? string.Empty;
+                                    RegisterTagsFromText(tagsBox.Text);
                                     snippet.Tags = tagsBox.Text ?? string.Empty;
                                     if (vm != null) _ = vm.SaveSnippetFileAsync(snippet);
                                 }
@@ -1897,6 +1914,8 @@ namespace Pivot.CodeModule.Views
                     var addTask = ViewModel.AddTagToSnippetAsync(snippet, text);
                     await addTask;
                     RefreshTagBindings();
+                    try { RefreshSnippetCollectionView(); } catch { }
+                    try { BuildNavigationMenu(); } catch { }
                 }
             }
             catch { }
