@@ -70,6 +70,7 @@ namespace Pivot
 
 			// Core stores/services
 			sc.AddSingleton<ISettingsStore, JsonSettingsStore>();
+			sc.AddSingleton<SnippetCacheService>();
 			sc.AddSingleton<SettingsService>();
 			sc.AddSingleton<MetadataService>();
 			sc.AddSingleton<ICatalogService, JsonCatalogService>();

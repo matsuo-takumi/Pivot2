@@ -42,7 +42,6 @@ namespace Pivot.CodeModule.Views
     {
         public CodeViewModel? ViewModel => DataContext as CodeViewModel;
         private Pivot.CodeModule.Models.CodeFile? _previousSelectedSnippet;
-        private static readonly Pivot.CodeModule.Converters.TagStringToListConverter _tagConverter = new Pivot.CodeModule.Converters.TagStringToListConverter();
         // Dragging state for movable scratchpad
         private bool _isScratchpadDragging = false;
         private Windows.Foundation.Point _scratchpadDragStart;
@@ -1724,31 +1723,11 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private IEnumerable<TagItem> GetTagItems(string? tags)
-        {
-            try
-            {
-                var result = _tagConverter.Convert(tags ?? string.Empty, typeof(IEnumerable<TagItem>), null, string.Empty);
-                if (result is IEnumerable<TagItem> list) return list;
-            }
-            catch { }
-            return Enumerable.Empty<TagItem>();
-        }
-
         private void RefreshTagBindings()
         {
             try
             {
-                var root = this.Content as FrameworkElement;
-                if (root == null) return;
-
-                var tagItems = GetTagItems(ViewModel?.SelectedSnippet?.Tags).ToList();
-
-                var scratchList = root.FindName("ScratchpadTagList") as ItemsControl;
-                if (scratchList != null) scratchList.ItemsSource = tagItems.ToList();
-
-                var editorList = root.FindName("EditorTagList") as ItemsControl;
-                if (editorList != null) editorList.ItemsSource = tagItems.ToList();
+                ViewModel?.RefreshCurrentSnippetTagItems(ViewModel?.SelectedSnippet?.Tags);
             }
             catch { }
         }
@@ -1846,7 +1825,7 @@ namespace Pivot.CodeModule.Views
                             {
                                 scratchEditor.Text = content;
                             }
-                        if (titleBox != null) titleBox.Text = vm.SelectedSnippet.Title ?? string.Empty;
+                        if (titleBox != null) titleBox.Text = vm.SelectedSnippet?.Title ?? string.Empty;
                     }
                     catch { }
                 });

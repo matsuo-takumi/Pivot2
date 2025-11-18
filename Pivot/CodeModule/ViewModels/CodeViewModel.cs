@@ -9,6 +9,8 @@ using Pivot.CodeModule.Services;
 using Pivot.Services;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.Messaging;
+using Pivot.CodeModule.Converters;
+using Pivot.CodeModule.Models;
 using Pivot.Messages;
 
 namespace Pivot.CodeModule.ViewModels
@@ -16,11 +18,14 @@ namespace Pivot.CodeModule.ViewModels
     public partial class CodeViewModel : ObservableObject
     {
         private readonly ICodeRepository? _repo;
+        private readonly SnippetCacheService? _snippetCache;
         private List<CodeFile> _allSnippets = new List<CodeFile>();
         // track snippets that were created in-memory and not yet persisted
         private HashSet<Guid> _transientSnippetIds = new HashSet<Guid>();
         private HashSet<string> _selectedCodeTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly ObservableCollection<string> _tagSuggestions = new ObservableCollection<string>();
+        private readonly ObservableCollection<TagItem> _currentSnippetTagItems = new ObservableCollection<TagItem>();
+        private readonly TagStringToListConverter _tagListConverter = new TagStringToListConverter();
 
         [ObservableProperty]
         private ObservableCollection<CodeFile> _snippets;
@@ -38,6 +43,11 @@ namespace Pivot.CodeModule.ViewModels
         private ObservableCollection<Guid> _activeFilters = new ObservableCollection<Guid>();
 
         public ObservableCollection<string> TagSuggestions => _tagSuggestions;
+        /// <summary>
+        /// Provides the current snippet's tags transformed into TagItem badges for immediate UI binding.
+        /// Add/Remove flows update this collection before repository saves, keeping cards/scratchpad in sync.
+        /// </summary>
+        public ObservableCollection<TagItem> CurrentSnippetTagItems => _currentSnippetTagItems;
 
         partial void OnSelectedSnippetChanging(CodeFile? oldValue, CodeFile? newValue)
         {
@@ -45,9 +55,10 @@ namespace Pivot.CodeModule.ViewModels
             // Saving occurs explicitly on editor close or when the user triggers Save.
         }
 
-        public CodeViewModel(ICodeRepository repo)
+        public CodeViewModel(ICodeRepository repo, SnippetCacheService? snippetCache = null)
         {
             _repo = repo;
+            _snippetCache = snippetCache;
             var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
             _allSnippets = all;
             _snippets = new ObservableCollection<CodeFile>(_allSnippets);
@@ -64,6 +75,10 @@ namespace Pivot.CodeModule.ViewModels
             System.Diagnostics.Debug.WriteLine("CodeViewModel: constructed with repository.");
 
             // No test seeding in production — snippets come from repository (may be empty)
+            if (_snippetCache != null)
+            {
+                try { _ = _snippetCache.RefreshAsync(_allSnippets); } catch { }
+            }
         }
 
         // Parameterless constructor used as a fallback when DI is unavailable (seeds test items)
@@ -109,6 +124,10 @@ namespace Pivot.CodeModule.ViewModels
                 ApplyCodeTagFilters();
             }
             catch { }
+            if (_snippetCache != null)
+            {
+                try { await _snippetCache.SaveIfDirtyAsync(); } catch { }
+            }
         }
 
         public void FilterSnippets()
@@ -219,6 +238,7 @@ namespace Pivot.CodeModule.ViewModels
                 catch { }
             }
 
+            await ApplyCachedValuesAsync(SelectedSnippet);
             if (_repo != null)
             {
                 // Save synchronously to avoid DbContext concurrent use across threads
@@ -233,6 +253,10 @@ namespace Pivot.CodeModule.ViewModels
                 // No repository available: mark as not dirty but do not persist
                 IsDirty = false;
                 System.Diagnostics.Debug.WriteLine("CodeViewModel.SaveSnippetAsync: repository is null; Save not performed.");
+            }
+            if (_snippetCache != null)
+            {
+                try { await _snippetCache.SaveIfDirtyAsync(); } catch { }
             }
         }
 
@@ -261,6 +285,7 @@ namespace Pivot.CodeModule.ViewModels
                     return;
                 }
 
+                await ApplyCachedValuesAsync(file);
                 if (_repo != null)
                 {
                     // Save synchronously on calling thread to avoid concurrent DbContext access
@@ -411,9 +436,9 @@ namespace Pivot.CodeModule.ViewModels
         }
 
         // Helper: attach a tag to a snippet and persist
-        public Task AddTagToSnippetAsync(CodeFile? snippet, string tagName)
+        public async Task AddTagToSnippetAsync(CodeFile? snippet, string tagName)
         {
-            if (snippet == null || string.IsNullOrWhiteSpace(tagName)) return Task.CompletedTask;
+            if (snippet == null || string.IsNullOrWhiteSpace(tagName)) return;
             var trimmed = tagName.Trim();
             var current = (snippet.Tags ?? string.Empty)
                 .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
@@ -421,23 +446,27 @@ namespace Pivot.CodeModule.ViewModels
                 .Where(t => !string.IsNullOrWhiteSpace(t))
                 .ToList();
 
-            if (current.Any(t => string.Equals(t, trimmed, StringComparison.OrdinalIgnoreCase))) return Task.CompletedTask;
+            if (current.Any(t => string.Equals(t, trimmed, StringComparison.OrdinalIgnoreCase))) return;
 
             current.Add(trimmed);
             snippet.Tags = string.Join(",", current);
             UpdateSnippetCache(snippet);
             if (_repo != null)
             {
-                _repo.Save(snippet);
+                await Task.Run(() => _repo.Save(snippet));
             }
             ApplyCodeTagFilters();
             RefreshTagSuggestions();
-            return Task.CompletedTask;
+            if (_snippetCache != null)
+            {
+                try { await _snippetCache.UpsertAsync(snippet); } catch { }
+            }
+            RefreshCurrentSnippetTagItems(snippet.Tags);
         }
 
-        public Task RemoveTagFromSnippetAsync(CodeFile? snippet, string tagName)
+        public async Task RemoveTagFromSnippetAsync(CodeFile? snippet, string tagName)
         {
-            if (snippet == null || string.IsNullOrWhiteSpace(tagName)) return Task.CompletedTask;
+            if (snippet == null || string.IsNullOrWhiteSpace(tagName)) return;
             var trimmed = tagName.Trim();
             var current = (snippet.Tags ?? string.Empty)
                 .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
@@ -446,17 +475,21 @@ namespace Pivot.CodeModule.ViewModels
                 .ToList();
 
             var removed = current.RemoveAll(t => string.Equals(t, trimmed, StringComparison.OrdinalIgnoreCase));
-            if (removed == 0) return Task.CompletedTask;
+            if (removed == 0) return;
 
             snippet.Tags = string.Join(",", current);
             UpdateSnippetCache(snippet);
             if (_repo != null)
             {
-                _repo.Save(snippet);
+                await Task.Run(() => _repo.Save(snippet));
             }
             ApplyCodeTagFilters();
             RefreshTagSuggestions();
-            return Task.CompletedTask;
+            if (_snippetCache != null)
+            {
+                try { await _snippetCache.UpsertAsync(snippet); } catch { }
+            }
+            RefreshCurrentSnippetTagItems(snippet.Tags);
         }
 
         private void UpdateSnippetCache(CodeFile snippet)
@@ -486,11 +519,23 @@ namespace Pivot.CodeModule.ViewModels
         {
             try
             {
-                var names = GetAllTags()
-                    .Select(t => t.Name ?? string.Empty)
-                    .Where(n => !string.IsNullOrWhiteSpace(n))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                var names = new List<string>();
+                if (_snippetCache != null)
+                {
+                    try
+                    {
+                        names.AddRange(_snippetCache.GetAllTagsAsync().GetAwaiter().GetResult());
+                    }
+                    catch { }
+                }
+                if (!names.Any())
+                {
+                    names.AddRange(
+                        GetAllTags()
+                            .Select(t => t.Name ?? string.Empty)
+                            .Where(n => !string.IsNullOrWhiteSpace(n)));
+                }
+                names = names.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
                 {
                     try
@@ -505,6 +550,69 @@ namespace Pivot.CodeModule.ViewModels
                 });
             }
             catch { }
+        }
+
+        public void RefreshCurrentSnippetTagItems(string? tags)
+        {
+            try
+            {
+                var list = ConvertTags(tags);
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        _currentSnippetTagItems.Clear();
+                        foreach (var item in list)
+                        {
+                            _currentSnippetTagItems.Add(item);
+                        }
+                    }
+                    catch { }
+                });
+            }
+            catch { }
+        }
+
+        private IEnumerable<TagItem> ConvertTags(string? tags)
+        {
+            try
+            {
+                var result = _tagListConverter.Convert(tags ?? string.Empty, typeof(IEnumerable<TagItem>), null, string.Empty);
+                if (result is IEnumerable<TagItem> list) return list;
+            }
+            catch { }
+            return Enumerable.Empty<TagItem>();
+        }
+
+        partial void OnSelectedSnippetChanged(CodeFile? oldValue, CodeFile? newValue)
+        {
+            RefreshCurrentSnippetTagItems(newValue?.Tags);
+        }
+
+        private async Task ApplyCachedValuesAsync(CodeFile target)
+        {
+            if (_snippetCache == null) return;
+            try
+            {
+                var cached = await _snippetCache.GetAsync(target.Id);
+                if (cached != null)
+                {
+                    CopySnippetValues(cached, target);
+                }
+            }
+            catch { }
+        }
+
+        private static void CopySnippetValues(CodeFile source, CodeFile target)
+        {
+            target.Title = source.Title;
+            target.Language = source.Language;
+            target.Tool = source.Tool;
+            target.Tags = source.Tags;
+            target.Content = source.Content;
+            target.Updated = source.Updated;
+            target.IsDeleted = source.IsDeleted;
+            target.DeletedAt = source.DeletedAt;
         }
     }
 }
