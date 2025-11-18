@@ -24,7 +24,6 @@ using Microsoft.UI;
 using Windows.Foundation;
 using System.Collections.Generic;
 using Pivot.CodeModule.Services;
-using Pivot.CodeModule.Converters;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using System.Collections.ObjectModel;
@@ -243,38 +242,6 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private void RegisterCodeFilterIfMissing(string name)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(name)) return;
-                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                if (settings == null) return;
-                var filters = settings.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
-                if (!filters.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
-                {
-                    filters.Add(new Pivot.Models.CustomFilter { Name = name });
-                    _ = settings.SetCodeFiltersAsync(filters);
-                }
-            }
-            catch { }
-        }
-
-        private void RegisterTagsFromText(string? tagsCsv)
-        {
-            if (string.IsNullOrWhiteSpace(tagsCsv)) return;
-
-            var separators = new[] { ',', ';' };
-            var tags = tagsCsv.Split(separators, StringSplitOptions.RemoveEmptyEntries)
-                              .Select(t => t.Trim())
-                              .Where(t => !string.IsNullOrWhiteSpace(t));
-
-            foreach (var tag in tags)
-            {
-                try { RegisterCodeFilterIfMissing(tag); } catch { }
-            }
-        }
-
         // Text-based editors (TextBox) are used instead of WebView2. Text change events update the ViewModel.
 
         private void OnSearchClicked(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -334,7 +301,6 @@ namespace Pivot.CodeModule.Views
                 {
                     _ = CloseSnippetWithAnimationAsync();
                 }
-                try { RefreshTagBindings(); } catch { }
                 // Persist last selected snippet id for restoration across page instances
                 try
                 {
@@ -562,7 +528,8 @@ namespace Pivot.CodeModule.Views
                     try
                     {
                         if (ViewModel == null) return;
-                        var snippet = ViewModel.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
+                        var vm = ViewModel;
+                        var snippet = vm.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
                         if (snippet == null)
                         {
                             // Fallback: try to resolve from repository or all known snippets
@@ -574,8 +541,8 @@ namespace Pivot.CodeModule.Views
                                 // If still null, try ViewModel.Refresh then lookup again
                                 if (snippet == null)
                                 {
-                                    try { ViewModel?.Refresh(); } catch { }
-                                    snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
+                                    try { vm.Refresh(); } catch { }
+                                    snippet = vm.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
                                 }
                             }
                             catch { snippet = null; }
@@ -583,7 +550,7 @@ namespace Pivot.CodeModule.Views
 
                         if (snippet != null)
                         {
-                            ViewModel.SelectedSnippet = snippet;
+                            vm.SelectedSnippet = snippet;
                             _ = SendSelectedSnippetToEditorAsync();
                             _ = OpenSnippetWithAnimationAsync();
                         }
@@ -886,7 +853,6 @@ namespace Pivot.CodeModule.Views
 
                         // Build window content with reasonable initial size and matching scratchpad width
                         var titleText = new TextBlock { Text = snippet?.Title ?? "Snippet", FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0,0,0,8) };
-                        var tagsBox = new TextBox { PlaceholderText = "Tags (comma separated)", Text = snippet?.Tags ?? string.Empty, Margin = new Thickness(0,0,0,8) };
 
                         // Panel width (controls overall window size) - reduced default
                         double panelWidth = 560;
@@ -929,7 +895,6 @@ namespace Pivot.CodeModule.Views
 
                         var panel = new StackPanel { Spacing = 8, Padding = new Thickness(12), Width = panelWidth };
                         panel.Children.Add(titleText);
-                        panel.Children.Add(tagsBox);
                         panel.Children.Add(contentBox);
 
                         // Apply theme/style from the current page to the panel so the new window respects theme
@@ -1040,8 +1005,6 @@ namespace Pivot.CodeModule.Views
                                         if (snippet != null)
                                         {
                                             snippet.Content = contentBox.Text ?? string.Empty;
-                                            RegisterTagsFromText(tagsBox.Text);
-                                            snippet.Tags = tagsBox.Text ?? string.Empty;
                                             if (vm != null) _ = vm.SaveSnippetFileAsync(snippet);
                                         }
                                     }
@@ -1080,8 +1043,6 @@ namespace Pivot.CodeModule.Views
                                 if (snippet != null)
                                 {
                                     snippet.Content = contentBox.Text ?? string.Empty;
-                                    RegisterTagsFromText(tagsBox.Text);
-                                    snippet.Tags = tagsBox.Text ?? string.Empty;
                                     if (vm != null) _ = vm.SaveSnippetFileAsync(snippet);
                                 }
                             }
@@ -1111,7 +1072,7 @@ namespace Pivot.CodeModule.Views
 #endif
                 var vm = ViewModel;
                 var toSave = vm?.SelectedSnippet ?? _previousSelectedSnippet;
-                if (toSave != null)
+                if (vm != null && toSave != null)
                 {
                     try
                     {
@@ -1723,15 +1684,6 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private void RefreshTagBindings()
-        {
-            try
-            {
-                ViewModel?.RefreshCurrentSnippetTagItems(ViewModel?.SelectedSnippet?.Tags);
-            }
-            catch { }
-        }
-
         private void EditorCollapseButton_Click(object? sender, RoutedEventArgs e)
         {
             try
@@ -1784,25 +1736,6 @@ namespace Pivot.CodeModule.Views
             current = VisualTreeHelper.GetParent(current);
         }
         return null;
-    }
-
-    private void CardTagRemove_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            if (!(sender is FrameworkElement fe)) return;
-            var tagName = fe.Tag?.ToString() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(tagName)) return;
-            var snippet = FindContainingSnippet(fe);
-            if (snippet == null) return;
-            var current = (snippet.Tags ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
-            current.RemoveAll(x => string.Equals(x, tagName, StringComparison.OrdinalIgnoreCase));
-            snippet.Tags = string.Join(",", current);
-            try { var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository; repo?.Save(snippet); } catch { }
-            try { RefreshTagBindings(); } catch { }
-            try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => ViewModel?.Refresh()); } catch { }
-        }
-        catch { }
     }
 
         private Task SendSelectedSnippetToEditorAsync()
@@ -1875,70 +1808,6 @@ namespace Pivot.CodeModule.Views
                     ViewModel.SelectedSnippet.Title = tb.Text ?? string.Empty;
                     ViewModel.IsDirty = true;
                 }
-            }
-            catch { }
-        }
-
-        private async Task AddTagFromAutoSuggestBoxAsync(AutoSuggestBox? box)
-        {
-            if (box == null) return;
-            var text = box.Text?.Trim();
-            if (string.IsNullOrWhiteSpace(text)) return;
-            try
-            {
-                RegisterCodeFilterIfMissing(text);
-                var snippet = ViewModel?.SelectedSnippet;
-                if (snippet != null)
-                {
-                    var addTask = ViewModel.AddTagToSnippetAsync(snippet, text);
-                    await addTask;
-                    RefreshTagBindings();
-                    try { RefreshSnippetCollectionView(); } catch { }
-                    try { BuildNavigationMenu(); } catch { }
-                }
-            }
-            catch { }
-            finally
-            {
-                try
-                {
-                    box.Text = string.Empty;
-                    box.IsSuggestionListOpen = false;
-                    box.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
-                }
-                catch { }
-            }
-        }
-
-
-        private async void TagInput_KeyDown(object sender, KeyRoutedEventArgs e)
-        {
-            if (e.Key == Windows.System.VirtualKey.Enter && sender is AutoSuggestBox box)
-            {
-                await AddTagFromAutoSuggestBoxAsync(box);
-                e.Handled = true;
-            }
-        }
-
-        private async void TagAutoSuggest_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
-        {
-            await AddTagFromAutoSuggestBoxAsync(sender);
-        }
-
-        private async void TagBadge_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
-        {
-            try
-            {
-                if (!(sender is FrameworkElement fe)) return;
-                if (!(fe.DataContext is TagItem tagItem)) return;
-                var tagName = tagItem.Name ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(tagName)) return;
-                var snippet = FindContainingSnippet(fe) ?? ViewModel?.SelectedSnippet;
-                if (snippet == null) return;
-                await ViewModel.RemoveTagFromSnippetAsync(snippet, tagName);
-                RefreshTagBindings();
-                BuildNavigationMenu();
-                e.Handled = true;
             }
             catch { }
         }
