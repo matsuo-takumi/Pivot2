@@ -278,6 +278,15 @@ namespace Pivot.CodeModule.Views
             }
         }
 
+        private void TagFilterBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+        {
+            try
+            {
+                ViewModel?.FilterTags(sender.Text);
+            }
+            catch { }
+        }
+
         private volatile bool _isAnimationActive = false;
         private ConnectedAnimation? _pendingOpenAnimation;
         private ConnectedAnimation? _pendingCloseAnimation;
@@ -1597,8 +1606,27 @@ namespace Pivot.CodeModule.Views
 
         private void ScratchpadCloseButton_Click(object? sender, RoutedEventArgs e)
         {
-            
             CloseScratchpadSimple();
+        }
+
+        private void ScratchpadTagMenu_Click(object? sender, RoutedEventArgs e)
+        {
+            // TODO: implement tag management UI
+        }
+
+        private void ScratchpadDeleteMenu_Click(object? sender, RoutedEventArgs e)
+        {
+            // TODO: implement scratchpad delete handling
+        }
+
+        private void ScratchpadCopyMenu_Click(object? sender, RoutedEventArgs e)
+        {
+            // TODO: implement duplicate creation
+        }
+
+        private void ScratchpadHistoryMenu_Click(object? sender, RoutedEventArgs e)
+        {
+            // TODO: implement history display
         }
 
         private async void CloseScratchpadSimple()
@@ -2043,19 +2071,6 @@ namespace Pivot.CodeModule.Views
             }
             catch { }
             return Guid.NewGuid();
-        }
-
-        // Copy snippet content to clipboard from scratchpad editor
-        private void ScratchpadCopyButton_Click(object? sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var content = ViewModel?.SelectedSnippet?.Content ?? string.Empty;
-                var dp = new DataPackage();
-                dp.SetText(content);
-                Clipboard.SetContent(dp);
-            }
-            catch { }
         }
 
         // Copy content from main editor textbox

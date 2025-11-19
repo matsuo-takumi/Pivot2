@@ -8,10 +8,12 @@
     xmlns:models="using:Pivot.CodeModule.Models"
     xmlns:ctrls="using:Pivot.Controls"
     xmlns:conv="using:Pivot.CodeModule.Converters"
+    xmlns:common="using:Pivot.Converters"
     mc:Ignorable="d">
 
     <Page.Resources>
         <conv:CardPanelSizeConverter x:Key="CardPanelSizeConverter" />
+        <common:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </Page.Resources>
 
     <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" PointerPressed="Root_PointerPressed">
@@ -121,20 +123,109 @@
 
 
                                             <!-- Editor area (scrollable) -->
-                                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                                                <TextBox x:Name="ScratchpadEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" TabIndex="20" IsTabStop="True" KeyDown="ScratchpadEditor_KeyDown" />
-                                            </ScrollViewer>
+                                            <Grid Grid.Row="2">
+                                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                                    <TextBox x:Name="ScratchpadEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" TabIndex="20" IsTabStop="True" KeyDown="ScratchpadEditor_KeyDown" />
+                                                </ScrollViewer>
+                                                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Copy" Command="{x:Bind ViewModel.CopyScratchpadContentCommand}">
+                                                    <Button.Content>
+                                                        <SymbolIcon Symbol="Copy" />
+                                                    </Button.Content>
+                                                </Button>
+                                            </Grid>
 
                                             <!-- Footer: action buttons (separated from editor) -->
-                                            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
-                                                <Button x:Name="ScratchpadCopyButton" Content="Copy" Click="ScratchpadCopyButton_Click" />
-                                                <Button x:Name="ScratchpadCloseButton" Content="Close" Margin="8,0,0,0" TabIndex="30" IsTabStop="True" Click="ScratchpadCloseButton_Click" />
-                                            </StackPanel>
+                                            <Grid Grid.Row="3" Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="12">
+                                                    <Button x:Name="TagMenuButton" ToolTipService.ToolTip="タグ" Background="Transparent" BorderThickness="0">
+                                                        <Button.Content>
+                                                            <SymbolIcon Symbol="Tag" />
+                                                        </Button.Content>
+                                                        <Button.Flyout>
+                                                            <Flyout Placement="Bottom">
+                                                                <Border Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" CornerRadius="10" Padding="12" MaxWidth="320">
+                                                                    <StackPanel Width="280" Spacing="8">
+                                                                        <AutoSuggestBox x:Name="TagFilterBox" PlaceholderText="タグを検索" TextChanged="TagFilterBox_TextChanged" />
+                                                                        <ListView ItemsSource="{x:Bind ViewModel.FilteredTags}" SelectionMode="None" MaxHeight="260">
+                                                                            <ListView.ItemsPanel>
+                                                                                <ItemsPanelTemplate>
+                                                                                    <VirtualizingStackPanel />
+                                                                                </ItemsPanelTemplate>
+                                                                            </ListView.ItemsPanel>
+                                                                            <ListView.ItemTemplate>
+                                                                                <DataTemplate x:DataType="models:TagItem">
+                                                                                    <CheckBox
+                                                                                        Content="{x:Bind Name}"
+                                                                                        IsChecked="{x:Bind IsSelected, Mode=OneWay}"
+                                                                                        Command="{x:Bind ViewModel.ToggleTagCommand}"
+                                                                                        CommandParameter="{x:Bind}" />
+                                                                                </DataTemplate>
+                                                                            </ListView.ItemTemplate>
+                                                                        </ListView>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </Flyout>
+                                                        </Button.Flyout>
+                                                    </Button>
+                                                    <Button Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <SymbolIcon Symbol="Favorite" />
+                                                    </Button>
+                                                    <Button x:Name="ScratchpadMenuButton" ToolTipService.ToolTip="その他の操作" Background="Transparent" BorderThickness="0">
+                                                        <Button.Content>
+                                                            <SymbolIcon Symbol="More" />
+                                                        </Button.Content>
+                                                        <Button.Flyout>
+                                                            <MenuFlyout>
+                                                                <MenuFlyoutItem Click="ScratchpadTagMenu_Click" Text="タグ">
+                                                                    <MenuFlyoutItem.Icon>
+                                                                        <SymbolIcon Symbol="Tag" />
+                                                                    </MenuFlyoutItem.Icon>
+                                                                    <AutomationProperties.Name>タグ</AutomationProperties.Name>
+                                                                </MenuFlyoutItem>
+                                                                <MenuFlyoutItem Click="ScratchpadDeleteMenu_Click" Text="メモを削除">
+                                                                    <MenuFlyoutItem.Icon>
+                                                                        <SymbolIcon Symbol="Delete" />
+                                                                    </MenuFlyoutItem.Icon>
+                                                                    <AutomationProperties.Name>メモを削除</AutomationProperties.Name>
+                                                                </MenuFlyoutItem>
+                                                                <MenuFlyoutItem Command="{x:Bind ViewModel.CopyScratchpadContentCommand}" Text="コピーを作成">
+                                                                    <MenuFlyoutItem.Icon>
+                                                                        <SymbolIcon Symbol="Copy" />
+                                                                    </MenuFlyoutItem.Icon>
+                                                                    <AutomationProperties.Name>コピーを作成</AutomationProperties.Name>
+                                                                </MenuFlyoutItem>
+                                                                <MenuFlyoutSeparator />
+                                                                <MenuFlyoutItem Click="ScratchpadHistoryMenu_Click" Text="変更履歴">
+                                                                    <MenuFlyoutItem.Icon>
+                                                                        <FontIcon Glyph="" FontFamily="Segoe MDL2 Assets" />
+                                                                    </MenuFlyoutItem.Icon>
+                                                                    <AutomationProperties.Name>変更履歴</AutomationProperties.Name>
+                                                                </MenuFlyoutItem>
+                                                            </MenuFlyout>
+                                                        </Button.Flyout>
+                                                    </Button>
+                                                </StackPanel>
+                                                <Border Grid.Column="1" />
+                                                <Button x:Name="ScratchpadCloseButton" Margin="8,0,0,0" TabIndex="30" IsTabStop="True" Click="ScratchpadCloseButton_Click" Grid.Column="2" HorizontalAlignment="Right" Background="Transparent" BorderThickness="0">
+                                                    <Button.Content>
+                                                        <SymbolIcon Symbol="Cancel" />
+                                                    </Button.Content>
+                                                </Button>
+                                            </Grid>
                                         </Grid>
                                     </Border>
                                 </Grid>
                             </Grid>
 
+                            <!-- Scratchpad copy toast -->
+                            <Border x:Name="ScratchpadCopyToast" Background="#CC000000" CornerRadius="6" Padding="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" IsHitTestVisible="False" Visibility="{x:Bind ViewModel.IsCopyToastVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="コピーしました" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+                            </Border>
                             <!-- Small transient saved toast positioned at CardPanel bottom-right -->
                             <Border x:Name="CardSavedOverlay" Visibility="Collapsed" Background="#CC000000" CornerRadius="6" Padding="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" IsHitTestVisible="False">
                                 <TextBlock Text="Saved" Foreground="White" FontSize="12" FontWeight="SemiBold" />

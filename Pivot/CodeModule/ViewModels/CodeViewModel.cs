@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.CodeModule.Models;
 using Pivot.Messages;
+using System.ComponentModel;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace Pivot.CodeModule.ViewModels
 {
@@ -34,7 +36,24 @@ namespace Pivot.CodeModule.ViewModels
         private bool _isDirty = false;
 
         [ObservableProperty]
+        private bool _isCopyToastVisible = false;
+
+        [ObservableProperty]
         private ObservableCollection<Guid> _activeFilters = new ObservableCollection<Guid>();
+
+        public ObservableCollection<TagItem> AvailableTags { get; } = new();
+        public ObservableCollection<TagItem> FilteredTags { get; } = new();
+        private string _tagFilterKeyword = string.Empty;
+        private volatile bool _isTagSelectionUpdating = false;
+        public RelayCommand<TagItem> ToggleTagCommand { get; private set; }
+        private static readonly string[] DefaultTagNames = new[]
+        {
+            "component",
+            "detail",
+            "point",
+            "line",
+            "primitive"
+        };
 
         partial void OnSelectedSnippetChanging(CodeFile? oldValue, CodeFile? newValue)
         {
@@ -49,6 +68,7 @@ namespace Pivot.CodeModule.ViewModels
             var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
             _allSnippets = all;
             _snippets = new ObservableCollection<CodeFile>(_allSnippets);
+            InitializeTagInfrastructure();
 
             // Register for tag selection messages
             try
@@ -73,6 +93,7 @@ namespace Pivot.CodeModule.ViewModels
             _repo = null;
             _snippets = new ObservableCollection<CodeFile>();
             _allSnippets = _snippets.ToList();
+            InitializeTagInfrastructure();
 
             System.Diagnostics.Debug.WriteLine("CodeViewModel: constructed WITHOUT repository (fallback). Saving will be disabled.");
         }
@@ -82,6 +103,184 @@ namespace Pivot.CodeModule.ViewModels
         partial void OnSnippetsChanged(ObservableCollection<CodeFile> value)
         {
             // intentionally left blank to avoid inserting placeholder items
+        }
+
+        partial void OnSelectedSnippetChanged(CodeFile? oldValue, CodeFile? newValue)
+        {
+            RefreshTagSelection();
+        }
+
+        private void InitializeTagInfrastructure()
+        {
+            ToggleTagCommand = new RelayCommand<TagItem>(ToggleTag);
+            InitializeTags();
+        }
+
+        private void InitializeTags()
+        {
+            var names = CollectTagNames();
+            AvailableTags.Clear();
+            foreach (var name in names)
+            {
+                var tag = new TagItem(name);
+                AttachTagHandler(tag);
+                AvailableTags.Add(tag);
+            }
+            UpdateFilteredTags();
+            RefreshTagSelection();
+        }
+
+        private IEnumerable<string> CollectTagNames()
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in DefaultTagNames)
+            {
+                names.Add(name);
+            }
+            foreach (var snippet in _allSnippets)
+            {
+                foreach (var tag in ParseTagList(snippet.Tags))
+                {
+                    names.Add(tag);
+                }
+            }
+            return names.OrderBy(name => name);
+        }
+
+        private void AttachTagHandler(TagItem tag)
+        {
+            tag.PropertyChanged -= OnTagItemChanged;
+            tag.PropertyChanged += OnTagItemChanged;
+        }
+
+        public void FilterTags(string keyword)
+        {
+            _tagFilterKeyword = (keyword ?? string.Empty).Trim().ToLowerInvariant();
+            UpdateFilteredTags();
+        }
+
+        private void UpdateFilteredTags()
+        {
+            FilteredTags.Clear();
+            foreach (var tag in AvailableTags)
+            {
+                if (string.IsNullOrWhiteSpace(_tagFilterKeyword) ||
+                    tag.Name.Contains(_tagFilterKeyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    FilteredTags.Add(tag);
+                }
+            }
+        }
+
+        private void RefreshTagSelection()
+        {
+            try
+            {
+                _isTagSelectionUpdating = true;
+                if (AvailableTags.Count == 0)
+                {
+                    return;
+                }
+
+                var tags = ParseTagList(SelectedSnippet?.Tags);
+                foreach (var tag in AvailableTags)
+                {
+                    var matches = tags.Any(existing => string.Equals(existing, tag.Name, StringComparison.OrdinalIgnoreCase));
+                    tag.IsSelected = matches;
+                }
+
+                foreach (var tagName in tags)
+                {
+                    if (!AvailableTags.Any(tag => string.Equals(tag.Name, tagName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var newTag = new TagItem(tagName) { IsSelected = true };
+                        AttachTagHandler(newTag);
+                        AvailableTags.Add(newTag);
+                    }
+                }
+            }
+            finally
+            {
+                _isTagSelectionUpdating = false;
+                UpdateFilteredTags();
+            }
+        }
+
+        private void ToggleTag(TagItem? tag)
+        {
+            if (tag == null) return;
+            tag.IsSelected = !tag.IsSelected;
+        }
+
+        private void OnTagItemChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_isTagSelectionUpdating) return;
+            if (e.PropertyName != nameof(TagItem.IsSelected)) return;
+            if (sender is TagItem tag)
+            {
+                _ = SyncTagWithSnippetAsync(tag);
+            }
+        }
+
+        private async Task SyncTagWithSnippetAsync(TagItem tag)
+        {
+            var snippet = SelectedSnippet;
+            if (snippet == null || string.IsNullOrWhiteSpace(tag.Name)) return;
+            var tagName = NormalizeTagName(tag.Name);
+            if (string.IsNullOrEmpty(tagName)) return;
+
+            var tags = ParseTagList(snippet.Tags);
+            var contains = tags.Any(t => string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase));
+            if (tag.IsSelected)
+            {
+                if (!contains)
+                {
+                    tags.Add(tagName);
+                }
+            }
+            else
+            {
+                tags.RemoveAll(t => string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            snippet.Tags = string.Join(", ", tags);
+            snippet.Updated = DateTime.Now;
+            await PersistSnippetAsync(snippet);
+        }
+
+        private async Task PersistSnippetAsync(CodeFile snippet)
+        {
+            if (snippet == null || _repo == null) return;
+            try
+            {
+                await Task.Run(() => _repo.Save(snippet));
+            }
+            catch { }
+            try
+            {
+                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh());
+            }
+            catch { }
+        }
+
+        private List<string> ParseTagList(string? raw)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrWhiteSpace(raw)) return result;
+            var parts = raw.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var item in parts)
+            {
+                var trimmed = item.Trim();
+                if (string.IsNullOrEmpty(trimmed)) continue;
+                if (result.Any(existing => string.Equals(existing, trimmed, StringComparison.OrdinalIgnoreCase))) continue;
+                result.Add(trimmed);
+            }
+            return result;
+        }
+
+        private string NormalizeTagName(string? input)
+        {
+            return (input ?? string.Empty).Trim();
         }
 
         public void Refresh()
@@ -245,6 +444,33 @@ namespace Pivot.CodeModule.ViewModels
             if (_snippetCache != null)
             {
                 try { await _snippetCache.SaveIfDirtyAsync(); } catch { }
+            }
+        }
+
+        [RelayCommand]
+        private async Task CopyScratchpadContentAsync()
+        {
+            var showToast = false;
+            try
+            {
+                var snippet = SelectedSnippet;
+                var content = snippet?.Content ?? string.Empty;
+                var dp = new DataPackage();
+                dp.SetText(content);
+                Clipboard.SetContent(dp);
+                showToast = true;
+                IsCopyToastVisible = true;
+                await Task.Delay(1500);
+            }
+            catch
+            {
+            }
+            finally
+            {
+                if (showToast)
+                {
+                    IsCopyToastVisible = false;
+                }
             }
         }
 
