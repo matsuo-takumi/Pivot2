@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.Mvvm.Input;
 using Pivot.CodeModule.Services;
 using Pivot.Services;
@@ -10,6 +11,7 @@ using System.Collections.Generic;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.CodeModule.Models;
 using Pivot.Messages;
+using Pivot.Models;
 using System.ComponentModel;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -39,22 +41,17 @@ namespace Pivot.CodeModule.ViewModels
         private bool _isCopyToastVisible = false;
 
         [ObservableProperty]
+        private string _newTagName = string.Empty;
+
+        [ObservableProperty]
         private ObservableCollection<Guid> _activeFilters = new ObservableCollection<Guid>();
 
         public ObservableCollection<TagItem> AvailableTags { get; } = new();
         public ObservableCollection<TagItem> FilteredTags { get; } = new();
         private string _tagFilterKeyword = string.Empty;
         private volatile bool _isTagSelectionUpdating = false;
-        public RelayCommand<TagItem> ToggleTagCommand { get; private set; }
-        private static readonly string[] DefaultTagNames = new[]
-        {
-            "component",
-            "detail",
-            "point",
-            "line",
-            "primitive"
-        };
-
+        public RelayCommand<TagItem> ToggleTagCommand { get; private set; } = null!;
+        public RelayCommand AddTagCommand { get; private set; } = null!;
         partial void OnSelectedSnippetChanging(CodeFile? oldValue, CodeFile? newValue)
         {
             // Do not auto-save while typing or on selection change.
@@ -110,9 +107,11 @@ namespace Pivot.CodeModule.ViewModels
             RefreshTagSelection();
         }
 
+        [MemberNotNull(nameof(ToggleTagCommand), nameof(AddTagCommand))]
         private void InitializeTagInfrastructure()
         {
             ToggleTagCommand = new RelayCommand<TagItem>(ToggleTag);
+            AddTagCommand = new RelayCommand(AddTag);
             InitializeTags();
         }
 
@@ -133,7 +132,11 @@ namespace Pivot.CodeModule.ViewModels
         private IEnumerable<string> CollectTagNames()
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var name in DefaultTagNames)
+            foreach (var name in CollectPreferenceTagNames())
+            {
+                names.Add(name);
+            }
+            foreach (var name in CollectPreferenceTagNames())
             {
                 names.Add(name);
             }
@@ -145,6 +148,47 @@ namespace Pivot.CodeModule.ViewModels
                 }
             }
             return names.OrderBy(name => name);
+        }
+
+        private IEnumerable<string> CollectPreferenceTagNames()
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var repoTags = _repo?.GetAllTags();
+                if (repoTags != null)
+                {
+                    foreach (var tag in repoTags)
+                    {
+                        var name = (tag?.Name ?? string.Empty).Trim();
+                        if (!string.IsNullOrEmpty(name))
+                        {
+                            names.Add(name);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            if (names.Count == 0)
+            {
+                try
+                {
+                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                    var filters = settings?.GetCodeFilters() ?? new List<CustomFilter>();
+                    foreach (var filter in filters)
+                    {
+                        var name = (filter?.Name ?? string.Empty).Trim();
+                        if (!string.IsNullOrEmpty(name))
+                        {
+                            names.Add(name);
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            return names;
         }
 
         private void AttachTagHandler(TagItem tag)
@@ -210,6 +254,50 @@ namespace Pivot.CodeModule.ViewModels
         {
             if (tag == null) return;
             tag.IsSelected = !tag.IsSelected;
+        }
+
+        private void AddTag()
+        {
+            var tagName = NormalizeTagName(NewTagName);
+            if (string.IsNullOrEmpty(tagName))
+            {
+                return;
+            }
+
+            var existing = AvailableTags.FirstOrDefault(tag =>
+                string.Equals(tag.Name, tagName, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                existing.IsSelected = true;
+            }
+            else
+            {
+                var newTag = new TagItem(tagName)
+                {
+                    IsSelected = SelectedSnippet != null
+                };
+                AttachTagHandler(newTag);
+
+                var insertIndex = AvailableTags.TakeWhile(tag =>
+                    string.Compare(tag.Name, tagName, StringComparison.OrdinalIgnoreCase) < 0).Count();
+                if (insertIndex < 0 || insertIndex > AvailableTags.Count)
+                {
+                    AvailableTags.Add(newTag);
+                }
+                else
+                {
+                    AvailableTags.Insert(insertIndex, newTag);
+                }
+                try
+                {
+                    _repo?.AddTag(tagName);
+                }
+                catch { }
+            }
+
+            NewTagName = string.Empty;
+            _tagFilterKeyword = string.Empty;
+            UpdateFilteredTags();
         }
 
         private void OnTagItemChanged(object? sender, PropertyChangedEventArgs e)

@@ -828,17 +828,8 @@ namespace Pivot.Services
 
         private List<Pivot.Models.CustomFilter> GetDefaultCodeFilters()
         {
-            return new List<Pivot.Models.CustomFilter>
-            {
-                new Pivot.Models.CustomFilter { Name = "C#", IsBuiltIn=true },
-                new Pivot.Models.CustomFilter { Name = "Python", IsBuiltIn=true },
-                new Pivot.Models.CustomFilter { Name = "JavaScript", IsBuiltIn=true },
-                new Pivot.Models.CustomFilter { Name = "HTML", IsBuiltIn=true },
-                new Pivot.Models.CustomFilter { Name = "CSS", IsBuiltIn=true },
-                new Pivot.Models.CustomFilter { Name = "SQL", IsBuiltIn=true },
-                new Pivot.Models.CustomFilter { Name = "Markdown", IsBuiltIn=true },
-                new Pivot.Models.CustomFilter { Name = "Other", IsBuiltIn=true }
-            };
+            // Default filters intentionally empty so only user-configured entries appear.
+            return new List<Pivot.Models.CustomFilter>();
         }
 
         private void InitializeDefaultCodeCategories()

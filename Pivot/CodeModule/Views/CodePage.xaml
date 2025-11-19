@@ -151,19 +151,51 @@
                                                                 <Border Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" CornerRadius="10" Padding="12" MaxWidth="320">
                                                                     <StackPanel Width="280" Spacing="8">
                                                                         <AutoSuggestBox x:Name="TagFilterBox" PlaceholderText="タグを検索" TextChanged="TagFilterBox_TextChanged" />
-                                                                        <ListView ItemsSource="{x:Bind ViewModel.FilteredTags}" SelectionMode="None" MaxHeight="260">
+                                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                                                            <TextBox
+                                                                                x:Name="NewTagBox"
+                                                                                PlaceholderText="新しいタグを入力"
+                                                                                Text="{x:Bind ViewModel.NewTagName, Mode=TwoWay}"
+                                                                                KeyDown="NewTagBox_KeyDown" />
+                                                                            <Button
+                                                                                Grid.Column="1"
+                                                                                Content="追加"
+                                                                                Padding="12,0"
+                                                                                VerticalAlignment="Center"
+                                                                                Command="{x:Bind ViewModel.AddTagCommand}" />
+                                                                        </Grid>
+                                                                        <ListView
+                                                                            ItemsSource="{x:Bind ViewModel.FilteredTags}"
+                                                                            SelectionMode="None"
+                                                                            MaxHeight="260"
+                                                                            HorizontalAlignment="Stretch"
+                                                                            ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                                            ScrollViewer.VerticalScrollMode="Auto"
+                                                                            ScrollViewer.HorizontalScrollMode="Disabled"
+                                                                            IsItemClickEnabled="False">
                                                                             <ListView.ItemsPanel>
                                                                                 <ItemsPanelTemplate>
-                                                                                    <VirtualizingStackPanel />
+                                                                                    <ItemsStackPanel Orientation="Vertical" />
                                                                                 </ItemsPanelTemplate>
                                                                             </ListView.ItemsPanel>
                                                                             <ListView.ItemTemplate>
                                                                                 <DataTemplate x:DataType="models:TagItem">
-                                                                                    <CheckBox
-                                                                                        Content="{x:Bind Name}"
-                                                                                        IsChecked="{x:Bind IsSelected, Mode=OneWay}"
-                                                                                        Command="{x:Bind ViewModel.ToggleTagCommand}"
-                                                                                        CommandParameter="{x:Bind}" />
+                                                                                    <ToggleButton
+                                                                                        HorizontalAlignment="Stretch"
+                                                                                        HorizontalContentAlignment="Left"
+                                                                                        Padding="8,6"
+                                                                                        Margin="0,2,0,0"
+                                                                                        IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                                                                                        Command="{Binding DataContext.ToggleTagCommand, ElementName=CodePageRoot}"
+                                                                                        CommandParameter="{Binding}">
+                                                                                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                                                                            <FontIcon
+                                                                                                Glyph=""
+                                                                                                FontFamily="Segoe MDL2 Assets"
+                                                                                                Visibility="{Binding IsChecked, RelativeSource={RelativeSource Mode=TemplatedParent}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                                            <TextBlock Text="{x:Bind Name}" HorizontalAlignment="Left" />
+                                                                                        </StackPanel>
+                                                                                    </ToggleButton>
                                                                                 </DataTemplate>
                                                                             </ListView.ItemTemplate>
                                                                         </ListView>
@@ -174,40 +206,6 @@
                                                     </Button>
                                                     <Button Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                         <SymbolIcon Symbol="Favorite" />
-                                                    </Button>
-                                                    <Button x:Name="ScratchpadMenuButton" ToolTipService.ToolTip="その他の操作" Background="Transparent" BorderThickness="0">
-                                                        <Button.Content>
-                                                            <SymbolIcon Symbol="More" />
-                                                        </Button.Content>
-                                                        <Button.Flyout>
-                                                            <MenuFlyout>
-                                                                <MenuFlyoutItem Click="ScratchpadTagMenu_Click" Text="タグ">
-                                                                    <MenuFlyoutItem.Icon>
-                                                                        <SymbolIcon Symbol="Tag" />
-                                                                    </MenuFlyoutItem.Icon>
-                                                                    <AutomationProperties.Name>タグ</AutomationProperties.Name>
-                                                                </MenuFlyoutItem>
-                                                                <MenuFlyoutItem Click="ScratchpadDeleteMenu_Click" Text="メモを削除">
-                                                                    <MenuFlyoutItem.Icon>
-                                                                        <SymbolIcon Symbol="Delete" />
-                                                                    </MenuFlyoutItem.Icon>
-                                                                    <AutomationProperties.Name>メモを削除</AutomationProperties.Name>
-                                                                </MenuFlyoutItem>
-                                                                <MenuFlyoutItem Command="{x:Bind ViewModel.CopyScratchpadContentCommand}" Text="コピーを作成">
-                                                                    <MenuFlyoutItem.Icon>
-                                                                        <SymbolIcon Symbol="Copy" />
-                                                                    </MenuFlyoutItem.Icon>
-                                                                    <AutomationProperties.Name>コピーを作成</AutomationProperties.Name>
-                                                                </MenuFlyoutItem>
-                                                                <MenuFlyoutSeparator />
-                                                                <MenuFlyoutItem Click="ScratchpadHistoryMenu_Click" Text="変更履歴">
-                                                                    <MenuFlyoutItem.Icon>
-                                                                        <FontIcon Glyph="" FontFamily="Segoe MDL2 Assets" />
-                                                                    </MenuFlyoutItem.Icon>
-                                                                    <AutomationProperties.Name>変更履歴</AutomationProperties.Name>
-                                                                </MenuFlyoutItem>
-                                                            </MenuFlyout>
-                                                        </Button.Flyout>
                                                     </Button>
                                                 </StackPanel>
                                                 <Border Grid.Column="1" />

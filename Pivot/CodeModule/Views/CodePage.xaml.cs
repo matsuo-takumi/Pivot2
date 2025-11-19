@@ -22,6 +22,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Input;
 using Microsoft.UI;
 using Windows.Foundation;
+using Windows.System;
 using System.Collections.Generic;
 using Pivot.CodeModule.Services;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -285,6 +286,16 @@ namespace Pivot.CodeModule.Views
                 ViewModel?.FilterTags(sender.Text);
             }
             catch { }
+        }
+
+        private void NewTagBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key != VirtualKey.Enter) return;
+            if (ViewModel?.AddTagCommand?.CanExecute(null) == true)
+            {
+                ViewModel.AddTagCommand.Execute(null);
+                e.Handled = true;
+            }
         }
 
         private volatile bool _isAnimationActive = false;
