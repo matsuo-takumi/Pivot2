@@ -155,7 +155,7 @@
                                                                             <TextBox
                                                                                 x:Name="NewTagBox"
                                                                                 PlaceholderText="新しいタグを入力"
-                                                                                Text="{x:Bind ViewModel.NewTagName, Mode=TwoWay}"
+                                                                                Text="{x:Bind ViewModel.NewTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                                 KeyDown="NewTagBox_KeyDown" />
                                                                             <Button
                                                                                 Grid.Column="1"

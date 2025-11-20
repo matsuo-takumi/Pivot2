@@ -605,7 +605,7 @@ namespace Pivot.CodeModule.ViewModels
         }
 
         // Save arbitrary snippet (used by host when snippet is closed)
-        public async Task SaveSnippetFileAsync(CodeFile file)
+        public async Task SaveSnippetFileAsync(CodeFile file, bool refreshAfterSave = true)
         {
             // Debuggable save flow (debug logs only in DEBUG builds)
             try
@@ -636,7 +636,10 @@ namespace Pivot.CodeModule.ViewModels
 #if DEBUG
                     System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: saved via repository id={file.Id}");
 #endif
-                    try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh()); } catch { }
+                    if (refreshAfterSave)
+                    {
+                        try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh()); } catch { }
+                    }
                     // if it was transient, it's now persisted
                     try { _transientSnippetIds.Remove(file.Id); } catch { }
                 }
@@ -671,7 +674,10 @@ namespace Pivot.CodeModule.ViewModels
 #if DEBUG
                         System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: fallback exported json to '{outPath}'");
 #endif
-                        try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh()); } catch { }
+                        if (refreshAfterSave)
+                        {
+                            try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh()); } catch { }
+                        }
                     }
                     catch
                     {

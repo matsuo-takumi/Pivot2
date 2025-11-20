@@ -445,7 +445,7 @@ namespace Pivot.CodeModule.Views
                 {
                     ViewModel.ActiveFilters.Clear();
                     ViewModel.FilterSnippets();
-                    if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                    if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                     return;
                 }
 
@@ -460,7 +460,7 @@ namespace Pivot.CodeModule.Views
                     ViewModel.ActiveFilters.Clear();
                     ViewModel.ActiveFilters.Add(filterId);
                     ViewModel.FilterSnippets();
-                    if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                    if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                 }
                 else
                 {
@@ -484,7 +484,7 @@ namespace Pivot.CodeModule.Views
                                 ViewModel.ActiveFilters.Clear();
                                 foreach (var fid in cat.FilterIds) ViewModel.ActiveFilters.Add(fid);
                                 ViewModel.FilterSnippets();
-                                if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                                if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                             }
                         }
                     }
@@ -509,7 +509,7 @@ namespace Pivot.CodeModule.Views
                     {
                         ViewModel.ActiveFilters.Clear();
                         ViewModel.FilterSnippets();
-                        if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                        if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                     }
                     return;
                 }
@@ -519,25 +519,16 @@ namespace Pivot.CodeModule.Views
                 {
                     if (ViewModel != null)
                     {
-                        try
+                        ViewModel.ActiveFilters.Clear();
+                        if (fi.Id != Guid.Empty)
                         {
-                            // Treat tree tag selection as filter selection: clear other filters and apply this one.
-                            ViewModel.ActiveFilters.Clear();
-                            if (fi.Id != Guid.Empty) ViewModel.ActiveFilters.Add(fi.Id);
-                            // Perform a direct, case-insensitive match on tag name to ensure only tagged snippets are shown.
-                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                            var source = (repo?.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>()).ToList();
-                            var matches = source.Where(s =>
-                            {
-                                var snipTags = (s.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                                                   .Select(t => t.Trim()).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
-                                return snipTags.Any(t => string.Equals(t, fi.Name, StringComparison.OrdinalIgnoreCase));
-                            }).ToList();
-                            ViewModel.Snippets = new System.Collections.ObjectModel.ObservableCollection<Pivot.CodeModule.Models.CodeFile>(matches);
+                            ViewModel.ActiveFilters.Add(fi.Id);
                         }
-                        catch { }
-                        // Close any open editor so the filtered list is visible
-                        if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync();
+                        ViewModel.FilterSnippets();
+                        if (ViewModel?.SelectedSnippet != null)
+                        {
+                            _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
+                        }
                     }
                     return;
                 }
@@ -1080,7 +1071,7 @@ namespace Pivot.CodeModule.Views
             return Task.CompletedTask;
         }
 
-        private async Task CloseSnippetWithAnimationAsync()
+        private async Task CloseSnippetWithAnimationAsync(bool skipRefreshAfterSave = false)
         {
             if (_isAnimationActive) return;
             _isAnimationActive = true;
@@ -1260,7 +1251,7 @@ namespace Pivot.CodeModule.Views
                     try
                     {
                         var vm = ViewModel;
-                        if (vm != null) await vm.SaveSnippetFileAsync(prev);
+                        if (vm != null) await vm.SaveSnippetFileAsync(prev, refreshAfterSave: !skipRefreshAfterSave);
                     }
                     catch { }
                 }
@@ -1330,8 +1321,8 @@ namespace Pivot.CodeModule.Views
                     catch { }
                 }
 
-                var ctrlDown2 = IsControlDown();
-                if (e.Key == Windows.System.VirtualKey.Enter && ctrlDown2)
+                var isShiftDown = IsShiftDown();
+                if (e.Key == Windows.System.VirtualKey.Enter && !isShiftDown)
                 {
                     e.Handled = true;
                     CommitQuickAdd();
@@ -2283,6 +2274,24 @@ namespace Pivot.CodeModule.Views
             try
             {
                 if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return true;
+            }
+            catch { }
+
+            return false;
+        }
+
+        private bool IsShiftDown()
+        {
+            try
+            {
+                var core = Window.Current?.CoreWindow;
+                if (core != null && core.GetKeyState(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return true;
+            }
+            catch { }
+
+            try
+            {
+                if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return true;
             }
             catch { }
 
