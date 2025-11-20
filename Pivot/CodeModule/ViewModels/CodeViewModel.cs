@@ -221,12 +221,12 @@ namespace Pivot.CodeModule.ViewModels
             try
             {
                 _isTagSelectionUpdating = true;
+                var tags = FilterSnippetTagsByPreferences(SelectedSnippet);
                 if (AvailableTags.Count == 0)
                 {
                     return;
                 }
 
-                var tags = ParseTagList(SelectedSnippet?.Tags);
                 foreach (var tag in AvailableTags)
                 {
                     var matches = tags.Any(existing => string.Equals(existing, tag.Name, StringComparison.OrdinalIgnoreCase));
@@ -250,10 +250,49 @@ namespace Pivot.CodeModule.ViewModels
             }
         }
 
+        private List<string> FilterSnippetTagsByPreferences(CodeFile? snippet)
+        {
+            var tags = ParseTagList(snippet?.Tags);
+            var allowed = GetAllowedPreferenceTagNames();
+            if (allowed.Count == 0) return tags;
+
+            var filtered = tags.Where(tag => allowed.Contains(tag)).ToList();
+            if (snippet != null && filtered.Count != tags.Count)
+            {
+                snippet.Tags = string.Join(", ", filtered);
+                snippet.Updated = DateTime.Now;
+                _ = PersistSnippetAsync(snippet, refreshAfterSave: false);
+            }
+            return filtered;
+        }
+
+        private HashSet<string> GetAllowedPreferenceTagNames()
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                var filters = settings?.GetCodeFilters();
+                if (filters != null)
+                {
+                    foreach (var filter in filters)
+                    {
+                        var name = (filter?.Name ?? string.Empty).Trim();
+                        if (!string.IsNullOrEmpty(name))
+                        {
+                            result.Add(name);
+                        }
+                    }
+                }
+            }
+            catch { }
+            return result;
+        }
+
         private void ToggleTag(TagItem? tag)
         {
-            if (tag == null) return;
-            tag.IsSelected = !tag.IsSelected;
+            // No-op: ToggleButton already updates IsSelected via binding,
+            // so we avoid flipping it again here to prevent immediate reset.
         }
 
         private void AddTag()
@@ -333,10 +372,10 @@ namespace Pivot.CodeModule.ViewModels
 
             snippet.Tags = string.Join(", ", tags);
             snippet.Updated = DateTime.Now;
-            await PersistSnippetAsync(snippet);
+            await PersistSnippetAsync(snippet, refreshAfterSave: false);
         }
 
-        private async Task PersistSnippetAsync(CodeFile snippet)
+        private async Task PersistSnippetAsync(CodeFile snippet, bool refreshAfterSave = true)
         {
             if (snippet == null || _repo == null) return;
             try
@@ -344,11 +383,14 @@ namespace Pivot.CodeModule.ViewModels
                 await Task.Run(() => _repo.Save(snippet));
             }
             catch { }
-            try
+            if (refreshAfterSave)
             {
-                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh());
+                try
+                {
+                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh());
+                }
+                catch { }
             }
-            catch { }
         }
 
         private List<string> ParseTagList(string? raw)

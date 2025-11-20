@@ -51,6 +51,9 @@ namespace Pivot.ViewModels
             FallbackColor = Microsoft.UI.Colors.Transparent
         };
 
+        [ObservableProperty]
+        private SolidColorBrush _textBrush = new SolidColorBrush(Microsoft.UI.Colors.Black);
+
         public Color TintColor
         {
             get => _tintColor;
@@ -144,9 +147,13 @@ namespace Pivot.ViewModels
             set
             {
                 var clamped = Clamp01(value);
-                if (SetProperty(ref _lightness, clamped) && !_isUpdatingFromColor)
+                if (SetProperty(ref _lightness, clamped))
                 {
-                    UpdateColorFromHsl();
+                    UpdateTextBrushFromLightness(clamped);
+                    if (!_isUpdatingFromColor)
+                    {
+                        UpdateColorFromHsl();
+                    }
                 }
             }
         }
@@ -157,6 +164,12 @@ namespace Pivot.ViewModels
             AcrylicBrush.TintOpacity = Math.Clamp(TintOpacity, 0.0, 1.0);
             AcrylicBrush.TintLuminosityOpacity = Math.Clamp(TintLuminosityOpacity, 0.0, 1.0);
             AcrylicBrush.TintTransitionDuration = TimeSpan.FromMilliseconds(Math.Max(0, TintTransitionDurationMs));
+        }
+
+        private void UpdateTextBrushFromLightness(double lightness)
+        {
+            var brushColor = lightness >= 0.5 ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
+            TextBrush = new SolidColorBrush(brushColor);
         }
 
         private async Task PersistSettingsAsync()

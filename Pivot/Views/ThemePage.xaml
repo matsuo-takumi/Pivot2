@@ -87,7 +87,9 @@
                         Padding="12">
                     <StackPanel Spacing="8">
                         <TextBlock Text="Preview" FontWeight="SemiBold"/>
-                        <Border Height="100" CornerRadius="10" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind ViewModel.OverlayTint.AcrylicBrush}" />
+                <Border Height="100" CornerRadius="10" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind ViewModel.OverlayTint.AcrylicBrush}">
+                        <TextBlock Text="Overlay Text" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{x:Bind ViewModel.OverlayTint.TextBrush}" />
+                    </Border>
                         <TextBlock Text="{x:Bind ViewModel.OverlayTint.StatusText}" Foreground="Gray" FontSize="12" />
                     </StackPanel>
                 </Border>

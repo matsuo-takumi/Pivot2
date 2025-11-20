@@ -192,7 +192,7 @@
                                                                                             <FontIcon
                                                                                                 Glyph=""
                                                                                                 FontFamily="Segoe MDL2 Assets"
-                                                                                                Visibility="{Binding IsChecked, RelativeSource={RelativeSource Mode=TemplatedParent}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                                                Visibility="{Binding IsSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                                                                             <TextBlock Text="{x:Bind Name}" HorizontalAlignment="Left" />
                                                                                         </StackPanel>
                                                                                     </ToggleButton>

@@ -1,10 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Pivot.Messages;
 using Pivot.Services;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI;
 using System;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Messaging;
+using Windows.UI;
 
 namespace Pivot.ViewModels
 {
@@ -17,6 +20,8 @@ namespace Pivot.ViewModels
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             ScratchpadColor = _settings.GetScratchpadEditorColor();
             UpdateBrushFromColor(ScratchpadColor);
+            UpdateOverlayTextBrushFromHex(_settings.GetOverlayTintColor());
+            WeakReferenceMessenger.Default.Register<ColorSettingsViewModel, OverlayColorChangedMessage>(this, (r, m) => r.UpdateOverlayTextBrushFromHex(m.Value));
         }
 
         [ObservableProperty]
@@ -27,6 +32,9 @@ namespace Pivot.ViewModels
 
         [ObservableProperty]
         private string _statusText = string.Empty;
+
+        [ObservableProperty]
+        private SolidColorBrush _overlayTextBrush = new SolidColorBrush(Colors.Black);
 
         partial void OnScratchpadColorChanged(string value)
         {
@@ -47,6 +55,42 @@ namespace Pivot.ViewModels
                 ScratchpadPreview = new SolidColorBrush(c);
             }
             catch { }
+        }
+
+        private void UpdateOverlayTextBrushFromHex(string? hex)
+        {
+            var color = ParseColorSafely(hex);
+            var lightness = GetLightness(color);
+            var brushColor = lightness >= 0.5 ? Colors.Black : Colors.White;
+            OverlayTextBrush = new SolidColorBrush(brushColor);
+        }
+
+        private static Color ParseColorSafely(string? hex)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(hex)) return Colors.Black;
+                var value = hex.StartsWith("#") ? hex : "#" + hex;
+                if (value.Length != 7) return Colors.Black;
+                return ColorHelper.FromArgb(255,
+                    Convert.ToByte(value.Substring(1, 2), 16),
+                    Convert.ToByte(value.Substring(3, 2), 16),
+                    Convert.ToByte(value.Substring(5, 2), 16));
+            }
+            catch
+            {
+                return Colors.Black;
+            }
+        }
+
+        private static double GetLightness(Color color)
+        {
+            var r = color.R / 255.0;
+            var g = color.G / 255.0;
+            var b = color.B / 255.0;
+            var max = Math.Max(Math.Max(r, g), b);
+            var min = Math.Min(Math.Min(r, g), b);
+            return (max + min) / 2.0;
         }
 
         [RelayCommand]
