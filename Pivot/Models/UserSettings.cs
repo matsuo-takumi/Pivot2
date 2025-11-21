@@ -58,5 +58,6 @@ namespace Pivot.Models
         public double OverlayTintOpacity { get; set; } = 0.7;
         public double OverlayTintLuminosityOpacity { get; set; } = 0.0;
         public int OverlayTintTransitionDurationMs { get; set; } = 250;
+        public Dictionary<string, string> TextColorOverrides { get; set; } = new Dictionary<string, string>();
     }
 }

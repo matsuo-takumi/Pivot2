@@ -205,6 +205,34 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintTransitionMs. Using default.");
             }
 
+            // Text color overrides (light/dark roles that can be customized in Preferences > Color > Text)
+            try
+            {
+                var textOverridesJson = await _settingsStore.GetAsync("Color.TextOverrides");
+                if (!string.IsNullOrWhiteSpace(textOverridesJson) && LooksLikeJsonObject(textOverridesJson))
+                {
+                    var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(textOverridesJson);
+                    if (parsed != null)
+                    {
+                        _cache.TextColorOverrides = parsed;
+                    }
+                    else
+                    {
+                        _cache.TextColorOverrides = new Dictionary<string, string>();
+                    }
+                }
+                else
+                {
+                    _cache.TextColorOverrides = new Dictionary<string, string>();
+                }
+                _logger.LogInformation("SettingsService: Loaded Color.TextOverrides entries: {Count}", _cache.TextColorOverrides.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Color.TextOverrides. Using defaults.");
+                _cache.TextColorOverrides = new Dictionary<string, string>();
+            }
+
             // Last selected snippet id
             try
             {
@@ -516,6 +544,13 @@ namespace Pivot.Services
             if (string.IsNullOrWhiteSpace(value)) return false;
             var v = value.TrimStart();
             return v.Length > 0 && v[0] == '[';
+        }
+
+        private static bool LooksLikeJsonObject(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var v = value.TrimStart();
+            return v.Length > 0 && v[0] == '{';
         }
 
         private List<string> ParseDirectoriesValue(string? storedValue)
@@ -1030,6 +1065,36 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintTransitionMs.");
+            }
+        }
+
+        public string GetTextColorOverride(string key, string defaultValue)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return defaultValue;
+            if (_cache.TextColorOverrides != null &&
+                _cache.TextColorOverrides.TryGetValue(key, out var stored) &&
+                !string.IsNullOrWhiteSpace(stored))
+            {
+                return stored;
+            }
+            return defaultValue;
+        }
+
+        public async Task SetTextColorOverrideAsync(string key, string hex)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return;
+            if (_cache.TextColorOverrides == null)
+            {
+                _cache.TextColorOverrides = new Dictionary<string, string>();
+            }
+            _cache.TextColorOverrides[key] = hex ?? string.Empty;
+            try
+            {
+                await _settingsStore.UpsertAsync("Color.TextOverrides", JsonSerializer.Serialize(_cache.TextColorOverrides));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.TextOverrides.");
             }
         }
 

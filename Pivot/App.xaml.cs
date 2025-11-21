@@ -72,6 +72,7 @@ namespace Pivot
 			sc.AddSingleton<ISettingsStore, JsonSettingsStore>();
 			sc.AddSingleton<SnippetCacheService>();
 			sc.AddSingleton<SettingsService>();
+            sc.AddSingleton<ITextColorResourceManager, TextColorResourceManager>();
 			sc.AddSingleton<MetadataService>();
 			sc.AddSingleton<ICatalogService, JsonCatalogService>();
 			sc.AddSingleton<FileScannerService>();

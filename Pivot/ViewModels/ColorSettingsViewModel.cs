@@ -15,9 +15,12 @@ namespace Pivot.ViewModels
     {
         private readonly SettingsService _settings;
 
-        public ColorSettingsViewModel(SettingsService settings)
+        public TextColorSettingsViewModel TextColorSettings { get; }
+
+        public ColorSettingsViewModel(SettingsService settings, ITextColorResourceManager resourceManager)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            TextColorSettings = new TextColorSettingsViewModel(settings, resourceManager);
             ScratchpadColor = _settings.GetScratchpadEditorColor();
             UpdateBrushFromColor(ScratchpadColor);
             UpdateOverlayTextBrushFromHex(_settings.GetOverlayTintColor());
