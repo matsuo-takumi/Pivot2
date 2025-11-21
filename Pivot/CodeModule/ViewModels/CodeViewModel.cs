@@ -450,7 +450,7 @@ namespace Pivot.CodeModule.ViewModels
         {
             if (_repo == null) return;
             // This method keeps compatibility with the existing _activeFilters (GUID-based) for other filter types.
-            var allSnippets = _repo.GetAll() ?? Enumerable.Empty<CodeFile>();
+            var allSnippets = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
             if (_activeFilters.Any())
             {
                 var filtered = allSnippets.Where(s =>
@@ -459,12 +459,12 @@ namespace Pivot.CodeModule.ViewModels
                                         .Select(t => t.Trim().ToLowerInvariant())
                                         .ToList() ?? new List<string>();
                     return _activeFilters.Any(af => snippetTags.Contains(_repo.GetFilterNameById(af).ToLowerInvariant()));
-                });
-                Snippets = new ObservableCollection<CodeFile>(filtered);
+                }).ToList();
+                UpdateSnippetsOnUi(filtered);
             }
             else
             {
-                Snippets = new ObservableCollection<CodeFile>(allSnippets);
+                UpdateSnippetsOnUi(allSnippets);
             }
         }
 
@@ -487,7 +487,7 @@ namespace Pivot.CodeModule.ViewModels
             {
                 if (_selectedCodeTags == null || !_selectedCodeTags.Any())
                 {
-                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Snippets = new ObservableCollection<CodeFile>(_allSnippets));
+                    UpdateSnippetsOnUi(_allSnippets);
                     return;
                 }
 
@@ -499,9 +499,68 @@ namespace Pivot.CodeModule.ViewModels
                     return _selectedCodeTags.Any(sel => snippetTags.Any(st => string.Equals(st, sel, StringComparison.OrdinalIgnoreCase)));
                 }).ToList();
 
-                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Snippets = new ObservableCollection<CodeFile>(filtered));
+                UpdateSnippetsOnUi(filtered);
             }
             catch { }
+        }
+
+        private void UpdateSnippetsOnUi(IEnumerable<CodeFile> snippetSource)
+        {
+            var payload = (snippetSource ?? Enumerable.Empty<CodeFile>()).ToList();
+            var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+            if (dispatcher != null)
+            {
+                dispatcher.TryEnqueue(() => UpdateVisibleSnippets(payload));
+            }
+            else
+            {
+                UpdateVisibleSnippets(payload);
+            }
+        }
+
+        private void UpdateVisibleSnippets(IReadOnlyList<CodeFile> desiredSnippets)
+        {
+            if (desiredSnippets == null)
+            {
+                return;
+            }
+
+            if (Snippets == null)
+            {
+                Snippets = new ObservableCollection<CodeFile>(desiredSnippets);
+                return;
+            }
+
+            var desiredIds = new HashSet<Guid>(desiredSnippets.Select(sn => sn.Id));
+            for (int i = Snippets.Count - 1; i >= 0; i--)
+            {
+                if (!desiredIds.Contains(Snippets[i].Id))
+                {
+                    Snippets.RemoveAt(i);
+                }
+            }
+
+            for (int targetIndex = 0; targetIndex < desiredSnippets.Count; targetIndex++)
+            {
+                var desired = desiredSnippets[targetIndex];
+                var existing = Snippets.FirstOrDefault(item => item.Id == desired.Id);
+                if (existing == null)
+                {
+                    Snippets.Insert(targetIndex, desired);
+                    continue;
+                }
+
+                var currentIndex = Snippets.IndexOf(existing);
+                if (currentIndex != targetIndex)
+                {
+                    Snippets.Move(currentIndex, targetIndex);
+                }
+
+                if (!ReferenceEquals(existing, desired))
+                {
+                    CopySnippetValues(desired, existing);
+                }
+            }
         }
 
         [RelayCommand]
@@ -753,14 +812,14 @@ namespace Pivot.CodeModule.ViewModels
         {
             if (_repo != null)
             {
-                var results = _repo.Search(SearchQuery);
-                Snippets = new ObservableCollection<CodeFile>(results);
+                var results = (_repo.Search(SearchQuery) ?? Enumerable.Empty<CodeFile>()).ToList();
+                UpdateSnippetsOnUi(results);
             }
             else
             {
                 var q = (SearchQuery ?? string.Empty).ToLowerInvariant();
-                var results = _snippets.Where(s => (s.Title ?? string.Empty).ToLowerInvariant().Contains(q) || (s.Content ?? string.Empty).ToLowerInvariant().Contains(q) || (s.Tags ?? string.Empty).ToLowerInvariant().Contains(q));
-                Snippets = new ObservableCollection<CodeFile>(results);
+                var results = _snippets.Where(s => (s.Title ?? string.Empty).ToLowerInvariant().Contains(q) || (s.Content ?? string.Empty).ToLowerInvariant().Contains(q) || (s.Tags ?? string.Empty).ToLowerInvariant().Contains(q)).ToList();
+                UpdateSnippetsOnUi(results);
             }
         }
 
