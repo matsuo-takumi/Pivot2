@@ -4,6 +4,7 @@ using Pivot.ViewModels;
 using Pivot.Utilities;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Windows.UI;
 
@@ -46,14 +47,52 @@ namespace Pivot.Services
                 return new SolidColorBrush(fallback);
             }
 
-            if (app.Resources.TryGetValue(key, out var existing) && existing is SolidColorBrush brush)
+            if (TryFindExistingBrush(app.Resources, key, out var existingBrush))
             {
-                return brush;
+                return existingBrush;
             }
 
             var newBrush = new SolidColorBrush(fallback);
             app.Resources[key] = newBrush;
+            AddBrushToThemeDictionaries(app.Resources, key, newBrush);
             return newBrush;
+        }
+
+        private static bool TryFindExistingBrush(ResourceDictionary resources, string key, [NotNullWhen(true)] out SolidColorBrush? brush)
+        {
+            if (resources.TryGetValue(key, out var existing) && existing is SolidColorBrush solid)
+            {
+                brush = solid;
+                return true;
+            }
+
+            foreach (ResourceDictionary themeDictionary in resources.ThemeDictionaries.Values)
+            {
+                if (themeDictionary.TryGetValue(key, out existing) && existing is SolidColorBrush themeBrush)
+                {
+                    brush = themeBrush;
+                    return true;
+                }
+            }
+
+            foreach (var merged in resources.MergedDictionaries)
+            {
+                if (TryFindExistingBrush(merged, key, out brush))
+                {
+                    return true;
+                }
+            }
+
+            brush = null;
+            return false;
+        }
+
+        private static void AddBrushToThemeDictionaries(ResourceDictionary resources, string key, SolidColorBrush brush)
+        {
+            foreach (ResourceDictionary themeDictionary in resources.ThemeDictionaries.Values)
+            {
+                themeDictionary[key] = brush;
+            }
         }
     }
 }

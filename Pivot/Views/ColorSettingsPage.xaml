@@ -4,8 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:viewmodels="using:Pivot.ViewModels"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
-    xmlns:flyout="using:Microsoft.UI.Xaml.Controls.Primitives"
-    x:DataType="viewmodels:ColorSettingsViewModel">
+    xmlns:flyout="using:Microsoft.UI.Xaml.Controls.Primitives">
 
     <Grid Padding="20">
         <muxc:Pivot>
@@ -60,6 +59,13 @@
                             Background="Transparent"
                             ScrollViewer.VerticalScrollMode="Auto"
                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <ItemsStackPanel Orientation="Vertical" />
@@ -79,8 +85,8 @@
                                                 <TextBlock Text="{x:Bind Description}" Foreground="Gray" FontSize="12" TextWrapping="Wrap" />
                                                 <TextBlock Text="Hex value (examples: #000000, #FFFFFF)" Foreground="Gray" FontSize="10" Margin="0,2,0,0" />
                                             </StackPanel>
-                                            <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" HorizontalAlignment="Right" ColumnSpacing="8">
-                                                <Button Width="32" Height="32" Background="Transparent" BorderThickness="0" Click="ColorSwatchButton_Click">
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
+                                                <Button Width="32" Height="32" Background="Transparent" BorderThickness="0" Padding="0" Click="ColorSwatchButton_Click">
                                                     <Border Width="32" Height="32" CornerRadius="4" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind PreviewBrush}" />
                                                     <flyout:FlyoutBase.AttachedFlyout>
                                                         <Flyout Placement="Bottom">
@@ -88,7 +94,7 @@
                                                                 Color="{x:Bind SelectedColor, Mode=TwoWay}"
                                                                 ColorSpectrumShape="Ring"
                                                                 IsMoreButtonVisible="False"
-                                                                IsColorSliderVisible="False"
+                                                                IsColorSliderVisible="True"
                                                                 IsColorChannelTextInputVisible="False"
                                                                 IsHexInputVisible="False"
                                                                 IsAlphaEnabled="False"
@@ -97,8 +103,8 @@
                                                         </Flyout>
                                                     </flyout:FlyoutBase.AttachedFlyout>
                                                 </Button>
-                                                <TextBox Grid.Column="1" Width="120" Text="{x:Bind HexValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                            </Grid>
+                                                <TextBox Width="100" Height="30" MinHeight="30" TextAlignment="Left" VerticalContentAlignment="Center" Text="{x:Bind HexValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
