@@ -1,12 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using Pivot.Messages;
-using Pivot.Services;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.UI;
+using Microsoft.UI.Xaml.Media;
+using Pivot.Services;
+using Pivot.Utilities;
 using System;
-using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.Messaging;
+using System.Collections.Generic;
+using System.Linq;
 using Windows.UI;
 
 namespace Pivot.ViewModels
@@ -17,102 +16,231 @@ namespace Pivot.ViewModels
 
         public TextColorSettingsViewModel TextColorSettings { get; }
 
+        public IReadOnlyList<TextColorTemplateOption> TemplateOptions { get; }
+
         public ColorSettingsViewModel(SettingsService settings, ITextColorResourceManager resourceManager)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             TextColorSettings = new TextColorSettingsViewModel(settings, resourceManager);
-            ScratchpadColor = _settings.GetScratchpadEditorColor();
-            UpdateBrushFromColor(ScratchpadColor);
-            UpdateOverlayTextBrushFromHex(_settings.GetOverlayTintColor());
-            WeakReferenceMessenger.Default.Register<ColorSettingsViewModel, OverlayColorChangedMessage>(this, (r, m) => r.UpdateOverlayTextBrushFromHex(m.Value));
-        }
-
-        [ObservableProperty]
-        private string _scratchpadColor;
-
-        [ObservableProperty]
-        private SolidColorBrush _scratchpadPreview = new SolidColorBrush(ColorHelper.FromArgb(255, 255, 255, 255));
-
-        [ObservableProperty]
-        private string _statusText = string.Empty;
-
-        [ObservableProperty]
-        private SolidColorBrush _overlayTextBrush = new SolidColorBrush(Colors.Black);
-
-        partial void OnScratchpadColorChanged(string value)
-        {
-            UpdateBrushFromColor(value);
-        }
-
-        private void UpdateBrushFromColor(string value)
-        {
-            try
+            TemplateOptions = new List<TextColorTemplateOption>
             {
-                if (string.IsNullOrWhiteSpace(value)) return;
-                var v = value.StartsWith("#") ? value : "#" + value;
-                if (v.Length != 7) return;
-                var c = ColorHelper.FromArgb(255,
-                    Convert.ToByte(v.Substring(1, 2), 16),
-                    Convert.ToByte(v.Substring(3, 2), 16),
-                    Convert.ToByte(v.Substring(5, 2), 16));
-                ScratchpadPreview = new SolidColorBrush(c);
-            }
-            catch { }
+                new("Default", TextColorTemplate.Default),
+                new("Dominant", TextColorTemplate.Dominant),
+                new("Random", TextColorTemplate.Random),
+                new("Full Control", TextColorTemplate.FullControl),
+            };
+
+            SelectedTemplate = _settings.GetTextColorTemplate();
+            DominantColor = TextColorHelper.ParseHexOrDefault(_settings.GetDominantColor(), Colors.CornflowerBlue);
+            VariationAmount = _settings.GetDominantVariation();
+            GenerateAccentAutomatically = _settings.GetDominantGenerateAccent();
+            AccentStrength = _settings.GetDominantAccentStrength();
+
+            RandomSeed = _settings.GetRandomSeed();
+            RandomnessLevel = _settings.GetRandomnessLevel();
+            RandomSaturationMin = _settings.GetRandomSaturationMin();
+            RandomSaturationMax = _settings.GetRandomSaturationMax();
+            RandomBrightnessMin = _settings.GetRandomBrightnessMin();
+            RandomBrightnessMax = _settings.GetRandomBrightnessMax();
+            AllowExtremeRandomColors = _settings.GetRandomAllowExtreme();
         }
 
-        private void UpdateOverlayTextBrushFromHex(string? hex)
+        private Color _dominantColor = Colors.CornflowerBlue;
+        public Color DominantColor
         {
-            var color = ParseColorSafely(hex);
-            var lightness = GetLightness(color);
-            var brushColor = lightness >= 0.5 ? Colors.Black : Colors.White;
-            OverlayTextBrush = new SolidColorBrush(brushColor);
-        }
-
-        private static Color ParseColorSafely(string? hex)
-        {
-            try
+            get => _dominantColor;
+            set
             {
-                if (string.IsNullOrWhiteSpace(hex)) return Colors.Black;
-                var value = hex.StartsWith("#") ? hex : "#" + hex;
-                if (value.Length != 7) return Colors.Black;
-                return ColorHelper.FromArgb(255,
-                    Convert.ToByte(value.Substring(1, 2), 16),
-                    Convert.ToByte(value.Substring(3, 2), 16),
-                    Convert.ToByte(value.Substring(5, 2), 16));
-            }
-            catch
-            {
-                return Colors.Black;
+                if (SetProperty(ref _dominantColor, value))
+                {
+                    _ = _settings.SetDominantColorAsync(TextColorHelper.FormatHex(value));
+                }
             }
         }
 
-        private static double GetLightness(Color color)
+        private double _variationAmount = 0.25;
+        public double VariationAmount
         {
-            var r = color.R / 255.0;
-            var g = color.G / 255.0;
-            var b = color.B / 255.0;
-            var max = Math.Max(Math.Max(r, g), b);
-            var min = Math.Min(Math.Min(r, g), b);
-            return (max + min) / 2.0;
+            get => _variationAmount;
+            set
+            {
+                if (SetProperty(ref _variationAmount, value))
+                {
+                    _ = _settings.SetDominantVariationAsync(value);
+                }
+            }
         }
 
-        [RelayCommand]
-        private async Task SaveAsync()
+        private bool _generateAccentAutomatically = true;
+        public bool GenerateAccentAutomatically
         {
-            try
+            get => _generateAccentAutomatically;
+            set
             {
-                var v = ScratchpadColor?.Trim() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(v)) { StatusText = "Invalid"; return; }
-                if (!v.StartsWith("#")) v = "#" + v;
-                if (v.Length != 7) { StatusText = "Invalid"; return; }
-                if (_settings != null) await _settings.SetScratchpadEditorColorAsync(v);
-                StatusText = "Saved";
-            }
-            catch
-            {
-                StatusText = "Error";
+                if (SetProperty(ref _generateAccentAutomatically, value))
+                {
+                    _ = _settings.SetDominantGenerateAccentAsync(value);
+                }
             }
         }
+
+        private double _accentStrength = 0.5;
+        public double AccentStrength
+        {
+            get => _accentStrength;
+            set
+            {
+                if (SetProperty(ref _accentStrength, value))
+                {
+                    _ = _settings.SetDominantAccentStrengthAsync(value);
+                }
+            }
+        }
+
+        private int _randomSeed = 42;
+        public int RandomSeed
+        {
+            get => _randomSeed;
+            set
+            {
+                if (SetProperty(ref _randomSeed, value))
+                {
+                    _ = _settings.SetRandomSeedAsync(value);
+                }
+            }
+        }
+
+        private double _randomnessLevel = 0.5;
+        public double RandomnessLevel
+        {
+            get => _randomnessLevel;
+            set
+            {
+                if (SetProperty(ref _randomnessLevel, value))
+                {
+                    _ = _settings.SetRandomnessLevelAsync(value);
+                }
+            }
+        }
+
+        private double _randomSaturationMin = 0.2;
+        public double RandomSaturationMin
+        {
+            get => _randomSaturationMin;
+            set
+            {
+                if (SetProperty(ref _randomSaturationMin, value))
+                {
+                    _ = _settings.SetRandomSaturationMinAsync(value);
+                }
+            }
+        }
+
+        private double _randomSaturationMax = 0.8;
+        public double RandomSaturationMax
+        {
+            get => _randomSaturationMax;
+            set
+            {
+                if (SetProperty(ref _randomSaturationMax, value))
+                {
+                    _ = _settings.SetRandomSaturationMaxAsync(value);
+                }
+            }
+        }
+
+        private double _randomBrightnessMin = 0.2;
+        public double RandomBrightnessMin
+        {
+            get => _randomBrightnessMin;
+            set
+            {
+                if (SetProperty(ref _randomBrightnessMin, value))
+                {
+                    _ = _settings.SetRandomBrightnessMinAsync(value);
+                }
+            }
+        }
+
+        private double _randomBrightnessMax = 0.8;
+        public double RandomBrightnessMax
+        {
+            get => _randomBrightnessMax;
+            set
+            {
+                if (SetProperty(ref _randomBrightnessMax, value))
+                {
+                    _ = _settings.SetRandomBrightnessMaxAsync(value);
+                }
+            }
+        }
+
+        private bool _allowExtremeRandomColors;
+        public bool AllowExtremeRandomColors
+        {
+            get => _allowExtremeRandomColors;
+            set
+            {
+                if (SetProperty(ref _allowExtremeRandomColors, value))
+                {
+                    _ = _settings.SetRandomAllowExtremeAsync(value);
+                }
+            }
+        }
+
+        private TextColorTemplate _selectedTemplate = TextColorTemplate.FullControl;
+        public TextColorTemplate SelectedTemplate
+        {
+            get => _selectedTemplate;
+            set
+            {
+                if (SetProperty(ref _selectedTemplate, value))
+                {
+                    UpdateTemplateVisibility();
+                    _ = _settings.SetTextColorTemplateAsync(value);
+                }
+            }
+        }
+
+        private int _templateIndex;
+        public int TemplateIndex
+        {
+            get => _templateIndex;
+            set
+            {
+                if (SetProperty(ref _templateIndex, value))
+                {
+                    if (Enum.IsDefined(typeof(TextColorTemplate), value))
+                    {
+                        SelectedTemplate = (TextColorTemplate)value;
+                    }
+                }
+            }
+        }
+
+        public bool IsDefaultTemplate => SelectedTemplate == TextColorTemplate.Default;
+        public bool IsDominantTemplate => SelectedTemplate == TextColorTemplate.Dominant;
+        public bool IsRandomTemplate => SelectedTemplate == TextColorTemplate.Random;
+        public bool IsFullControlTemplate => SelectedTemplate == TextColorTemplate.FullControl;
+
+        public string SelectedTemplateDisplayName =>
+            TemplateOptions.FirstOrDefault(opt => opt.Template == SelectedTemplate)?.DisplayName ?? SelectedTemplate.ToString();
+
+        private void UpdateTemplateVisibility()
+        {
+            if ((int)SelectedTemplate != TemplateIndex)
+            {
+                _templateIndex = (int)SelectedTemplate;
+                OnPropertyChanged(nameof(TemplateIndex));
+            }
+
+            OnPropertyChanged(nameof(IsDefaultTemplate));
+            OnPropertyChanged(nameof(IsDominantTemplate));
+            OnPropertyChanged(nameof(IsRandomTemplate));
+            OnPropertyChanged(nameof(IsFullControlTemplate));
+            OnPropertyChanged(nameof(SelectedTemplateDisplayName));
+        }
+
     }
 }
 

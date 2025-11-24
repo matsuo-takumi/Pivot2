@@ -13,6 +13,8 @@ namespace Pivot.Services
     public interface ITextColorResourceManager
     {
         void ApplyColor(string settingKey, Color color);
+
+        SolidColorBrush EnsureBrush(string resourceKey, Color fallback);
     }
 
     public class TextColorResourceManager : ITextColorResourceManager
@@ -37,6 +39,11 @@ namespace Pivot.Services
             if (!_roleMap.TryGetValue(settingKey, out var role)) return;
             var brush = GetOrCreateBrush(role.ResourceKey, role.DefaultColor);
             brush.Color = color;
+        }
+
+        public SolidColorBrush EnsureBrush(string resourceKey, Color fallback)
+        {
+            return GetOrCreateBrush(resourceKey, fallback);
         }
 
         private SolidColorBrush GetOrCreateBrush(string key, Color fallback)

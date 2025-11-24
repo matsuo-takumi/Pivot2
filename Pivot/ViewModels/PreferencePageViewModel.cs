@@ -1,11 +1,15 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Pivot.Views;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 
 namespace Pivot.ViewModels
 {
     public partial class PreferencePageViewModel : ObservableObject
     {
+        private readonly ILogger<PreferencePageViewModel>? _logger;
+
         [ObservableProperty]
         private object? currentContent;
 
@@ -14,15 +18,17 @@ namespace Pivot.ViewModels
 
         public PreferencePageViewModel()
         {
+            _logger = ResolveLogger();
             SelectMenuItem("Directories");
         }
 
         public void SelectMenuItem(string tag)
         {
+            _logger?.LogInformation("Preference tab switch requested: {Tag}", tag);
             SelectedMenuTag = tag;
-            
+
             // Create appropriate content based on tag
-            CurrentContent = tag switch
+            var content = tag switch
             {
                 "Asset" => new Views.AssetSettingsPage(),
                 "Directories" => new DirectoryPage(),
@@ -34,28 +40,54 @@ namespace Pivot.ViewModels
                 "MenuItem4" => new MenuItem4ContentControl(),
                 _ => null
             };
+
+            CurrentContent = content;
+
+            if (content == null)
+            {
+                _logger?.LogWarning("Preference tab {Tag} did not produce content.", tag);
+            }
+            else
+            {
+                _logger?.LogInformation("Preference tab {Tag} loaded {ContentType}.", tag, content.GetType().FullName);
+            }
         }
 
         private object? CreateCodeSettingsPage()
         {
-            try
-            {
-                var t = Type.GetType("Pivot.Views.CodeSettingsPage");
-                if (t != null) return Activator.CreateInstance(t);
-            }
-            catch { }
-            return null;
+            return TryCreatePreferenceContent(nameof(Views.CodeSettingsPage), () => new Views.CodeSettingsPage());
         }
 
         private object? CreateColorSettingsPage()
         {
+            return TryCreatePreferenceContent(nameof(Views.ColorSettingsPage), () => new Views.ColorSettingsPage());
+        }
+
+        private object? TryCreatePreferenceContent(string name, Func<object> factory)
+        {
             try
             {
-                var t = Type.GetType("Pivot.Views.ColorSettingsPage");
-                if (t != null) return Activator.CreateInstance(t);
+                var view = factory();
+                _logger?.LogInformation("Preference view {ViewName} created successfully.", name);
+                return view;
             }
-            catch { }
-            return null;
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to create preference view {ViewName}.", name);
+                return null;
+            }
+        }
+
+        private ILogger<PreferencePageViewModel>? ResolveLogger()
+        {
+            try
+            {
+                return App.Current?.Services?.GetService<ILogger<PreferencePageViewModel>>();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // Export page removed

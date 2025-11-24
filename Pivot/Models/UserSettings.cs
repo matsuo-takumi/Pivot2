@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml; // ElementThemeを使用するために追加
+using Pivot.ViewModels;
 // using static Pivot.MainWindow; // BackdropTypeを使用するために追加
 
 namespace Pivot.Models
@@ -51,8 +52,18 @@ namespace Pivot.Models
         public Dictionary<string, List<System.Guid>> SelectedFiltersByTab { get; set; } = new Dictionary<string, List<System.Guid>>();
 
         // (カスタムAcrylic/Luminosity設定は削除)
-        // Color preferences
-        public string ScratchpadEditorColor { get; set; } = "#FFFFFF";
+        public TextColorTemplate PreferredTextColorTemplate { get; set; } = TextColorTemplate.FullControl;
+        public string DominantColor { get; set; } = "#FF0078D4";
+        public double DominantVariation { get; set; } = 0.25;
+        public bool DominantGenerateAccent { get; set; } = true;
+        public double DominantAccentStrength { get; set; } = 0.5;
+        public int RandomSeed { get; set; } = 42;
+        public double RandomnessLevel { get; set; } = 0.5;
+        public double RandomSaturationMin { get; set; } = 0.2;
+        public double RandomSaturationMax { get; set; } = 0.8;
+        public double RandomBrightnessMin { get; set; } = 0.2;
+        public double RandomBrightnessMax { get; set; } = 0.8;
+        public bool RandomAllowExtreme { get; set; }
         // Overlay tint color for in-app acrylic (stored as RRGGBB)
         public string OverlayTintColor { get; set; } = "#0000FF";
         public double OverlayTintOpacity { get; set; } = 0.7;

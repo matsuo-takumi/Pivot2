@@ -1,17 +1,23 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Pivot.ViewModels;
-using Microsoft.UI.Xaml;
+using System;
 
 namespace Pivot.Views
 {
     public sealed partial class PreferencePage : Page
     {
+        private readonly ILogger<PreferencePage> _logger;
+
         public PreferencePage()
         {
             this.InitializeComponent();
             
             // Create PreferencePageViewModel for menu management
             this.DataContext = new PreferencePageViewModel();
+            _logger = App.Current.Services.GetRequiredService<ILogger<PreferencePage>>();
             
             // Register for NavigationView events
             this.Loaded += PreferencePage_Loaded;
@@ -53,7 +59,16 @@ namespace Pivot.Views
 
             if (this.DataContext is PreferencePageViewModel vm)
             {
-                vm.SelectMenuItem(tag);
+                try
+                {
+                    _logger.LogInformation("Switching preference tab to {Tag}.", tag);
+                    vm.SelectMenuItem(tag);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error while selecting preference tab {Tag}.", tag);
+                    throw;
+                }
             }
         }
     }

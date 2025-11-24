@@ -46,7 +46,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Orientation="Vertical">
                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                                    <TextBlock Text="{Binding AllowedExtensionsString}" FontSize="12" Foreground="#666" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding AllowedExtensionsString}" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" TextWrapping="Wrap" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                     <ToggleSwitch IsOn="{Binding Visible}" Toggled="FilterVisible_Toggled" Tag="{Binding Id}"/>
@@ -65,7 +65,7 @@
 
             <PivotItem Header="General">
                 <Grid Padding="12">
-                    <TextBlock Text="General Asset settings (placeholder)" Foreground="#666" />
+                    <TextBlock Text="General Asset settings (placeholder)" Foreground="{ThemeResource AppTextCaptionBrush}" />
                 </Grid>
             </PivotItem>
         </Pivot>

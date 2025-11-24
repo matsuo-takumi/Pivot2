@@ -90,7 +90,7 @@
                 <Border Height="100" CornerRadius="10" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind ViewModel.OverlayTint.AcrylicBrush}">
                         <TextBlock Text="Overlay Text" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{x:Bind ViewModel.OverlayTint.TextBrush}" />
                     </Border>
-                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.StatusText}" Foreground="Gray" FontSize="12" />
+                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.StatusText}" Foreground="{ThemeResource AppTextCaptionBrush}" FontSize="12" />
                     </StackPanel>
                 </Border>
 
@@ -101,15 +101,15 @@
                         Padding="12">
                     <StackPanel Spacing="8">
                         <TextBlock Text="Hue" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.Hue, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Hue: {0:F0}°'}" Foreground="Gray"/>
+                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.Hue, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Hue: {0:F0}°'}" Foreground="{ThemeResource AppTextCaptionBrush}"/>
                         <Slider Minimum="0" Maximum="360" StepFrequency="1" Value="{x:Bind ViewModel.OverlayTint.Hue, Mode=TwoWay}" />
 
                         <TextBlock Text="Saturation" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.Saturation, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Saturation: {0:P0}'}" Foreground="Gray"/>
+                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.Saturation, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Saturation: {0:P0}'}" Foreground="{ThemeResource AppTextCaptionBrush}"/>
                         <Slider Minimum="0" Maximum="1" StepFrequency="0.01" Value="{x:Bind ViewModel.OverlayTint.Saturation, Mode=TwoWay}" />
 
                         <TextBlock Text="Lightness" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.Lightness, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Lightness: {0:P0}'}" Foreground="Gray"/>
+                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.Lightness, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Lightness: {0:P0}'}" Foreground="{ThemeResource AppTextCaptionBrush}"/>
                         <Slider Minimum="0" Maximum="1" StepFrequency="0.01" Value="{x:Bind ViewModel.OverlayTint.Lightness, Mode=TwoWay}" />
                     </StackPanel>
                 </Border>
@@ -121,11 +121,11 @@
                         Padding="12">
                     <StackPanel Spacing="8">
                         <TextBlock Text="Tint Opacity" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.TintOpacity, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Opacity: {0:P0}'}" Foreground="Gray"/>
+                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.TintOpacity, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Opacity: {0:P0}'}" Foreground="{ThemeResource AppTextCaptionBrush}"/>
                         <Slider Minimum="0" Maximum="1" StepFrequency="0.01" Value="{x:Bind ViewModel.OverlayTint.TintOpacity, Mode=TwoWay}" />
 
                         <TextBlock Text="Luminosity Opacity" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.TintLuminosityOpacity, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Luminosity: {0:P0}'}" Foreground="Gray"/>
+                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.TintLuminosityOpacity, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Luminosity: {0:P0}'}" Foreground="{ThemeResource AppTextCaptionBrush}"/>
                         <Slider Minimum="0" Maximum="1" StepFrequency="0.01" Value="{x:Bind ViewModel.OverlayTint.TintLuminosityOpacity, Mode=TwoWay}" />
                     </StackPanel>
                 </Border>
@@ -137,7 +137,7 @@
                         Padding="12">
                     <StackPanel Spacing="8">
                         <TextBlock Text="Transition Duration" FontWeight="SemiBold" />
-                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.TintTransitionDurationMs, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Duration: {0} ms'}" Foreground="Gray"/>
+                        <TextBlock Text="{x:Bind ViewModel.OverlayTint.TintTransitionDurationMs, Mode=OneWay, Converter={StaticResource DoubleFormatConverter}, ConverterParameter='Duration: {0} ms'}" Foreground="{ThemeResource AppTextCaptionBrush}"/>
                         <Slider Minimum="0" Maximum="2000" StepFrequency="50" Value="{x:Bind ViewModel.OverlayTint.TintTransitionDurationMs, Mode=TwoWay}" />
                     </StackPanel>
                 </Border>

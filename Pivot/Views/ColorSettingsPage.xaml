@@ -4,55 +4,108 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:viewmodels="using:Pivot.ViewModels"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
-    xmlns:flyout="using:Microsoft.UI.Xaml.Controls.Primitives">
+    xmlns:flyout="using:Microsoft.UI.Xaml.Controls.Primitives"
+    xmlns:muxcp="using:Microsoft.UI.Xaml.Controls.Primitives"
+    xmlns:converters="using:Pivot.Converters">
+
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </Page.Resources>
 
     <Grid Padding="20">
         <muxc:Pivot>
-            <muxc:PivotItem Header="Overlay">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Spacing="20">
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                CornerRadius="12"
-                                Padding="12">
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="Scratchpad Editor Color" FontSize="18" FontWeight="SemiBold" />
-                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <TextBox Width="160" PlaceholderText="#RRGGBB" Text="{x:Bind ViewModel.ScratchpadColor, Mode=TwoWay}" />
-                                    <Button Content="Save" Command="{x:Bind ViewModel.SaveCommand}" />
-                                    <Border Width="24" Height="24" CornerRadius="2" Margin="8,0,0,0" BorderBrush="Gray" BorderThickness="1" Background="{x:Bind ViewModel.ScratchpadPreview}" />
-                                    <TextBlock Text="{x:Bind ViewModel.StatusText}" Foreground="Gray" Margin="12,0,0,0" VerticalAlignment="Center" />
-                                </StackPanel>
-                                <TextBlock Text="Enter a hex color code (e.g. #F0F0F0) to tint the Scratchpad editor background." TextWrapping="Wrap" Foreground="Gray"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                CornerRadius="12"
-                                Padding="12">
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="Overlay Text Preview" FontSize="18" FontWeight="SemiBold" />
-                                <TextBlock Text="Overlay lightness determines whether text should be shown in a high- or low-contrast variant." TextWrapping="Wrap" Foreground="Gray"/>
-                                <Border Height="72" CornerRadius="10" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                    <TextBlock Text="Overlay Text Preview" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{x:Bind ViewModel.OverlayTextBrush}" FontSize="16"/>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </muxc:PivotItem>
-
             <muxc:PivotItem Header="Text">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Spacing="16">
                         <TextBlock Text="Text Color Roles" FontSize="20" FontWeight="SemiBold" />
-                        <TextBlock Text="Customize the colors used for each semantic text role that responds to overlay lightness." TextWrapping="Wrap" Foreground="Gray"/>
+                        <TextBlock Text="Customize the colors used for each semantic text role that responds to overlay lightness." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
+
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Template" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button
+                                    Content="Default"
+                                    Tag="Default"
+                                    Click="TemplateButton_Click"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    Padding="12,8" />
+                                <Button
+                                    Content="Dominant"
+                                    Tag="Dominant"
+                                    Click="TemplateButton_Click"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    Padding="12,8" />
+                                <Button
+                                    Content="Random"
+                                    Tag="Random"
+                                    Click="TemplateButton_Click"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    Padding="12,8" />
+                                <Button
+                                    Content="Full Control"
+                                    Tag="FullControl"
+                                    Click="TemplateButton_Click"
+                                    Style="{StaticResource SubtleButtonStyle}"
+                                    Padding="12,8" />
+                            </StackPanel>
+                            <TextBlock
+                                Text="{x:Bind ViewModel.SelectedTemplateDisplayName, Mode=OneWay}"
+                                Foreground="{ThemeResource AppTextCaptionBrush}"
+                                FontSize="12" />
+                        </StackPanel>
+
+                        <StackPanel
+                            Spacing="10"
+                            Visibility="{x:Bind ViewModel.IsDominantTemplate, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="Dominant Template Settings" FontWeight="SemiBold" />
+                            <TextBlock Text="Dominant Color" />
+                            <muxc:ColorPicker
+                                Color="{x:Bind ViewModel.DominantColor, Mode=TwoWay}"
+                                ColorSpectrumShape="Ring"
+                                IsColorSliderVisible="True"
+                                IsMoreButtonVisible="False"
+                                IsColorChannelTextInputVisible="False"
+                                IsHexInputVisible="False"
+                                IsAlphaEnabled="False"
+                                IsAlphaSliderVisible="False"
+                                IsAlphaTextInputVisible="False" />
+                            <TextBlock Text="Variation Amount" />
+                            <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.VariationAmount, Mode=TwoWay}" />
+                            <ToggleSwitch Header="Generate Accent Automatically" IsOn="{x:Bind ViewModel.GenerateAccentAutomatically, Mode=TwoWay}" />
+                            <TextBlock Text="Accent Strength" />
+                            <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.AccentStrength, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <StackPanel
+                            Spacing="10"
+                            Visibility="{x:Bind ViewModel.IsRandomTemplate, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="Random Template Settings" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <TextBlock Text="Seed" VerticalAlignment="Center" />
+                                <muxc:NumberBox Width="120" Value="{x:Bind ViewModel.RandomSeed, Mode=TwoWay}" />
+                            </StackPanel>
+                            <TextBlock Text="Randomness Level" />
+                            <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomnessLevel, Mode=TwoWay}" />
+                            <TextBlock Text="Saturation Range" />
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Lower bound" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" />
+                                <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomSaturationMin, Mode=TwoWay}" />
+                                <TextBlock Text="Upper bound" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" />
+                                <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomSaturationMax, Mode=TwoWay}" />
+                            </StackPanel>
+                            <TextBlock Text="Brightness Range" />
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Lower bound" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" />
+                                <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomBrightnessMin, Mode=TwoWay}" />
+                                <TextBlock Text="Upper bound" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" />
+                                <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomBrightnessMax, Mode=TwoWay}" />
+                            </StackPanel>
+                            <ToggleSwitch Header="Allow Extreme Colors" IsOn="{x:Bind ViewModel.AllowExtremeRandomColors, Mode=TwoWay}" />
+                        </StackPanel>
 
                         <ListView
                             ItemsSource="{x:Bind ViewModel.TextColorSettings.Entries}"
+                            Visibility="{x:Bind ViewModel.IsFullControlTemplate, Converter={StaticResource BoolToVisibilityConverter}}"
                             SelectionMode="None"
                             IsItemClickEnabled="False"
                             BorderThickness="0"
@@ -82,8 +135,8 @@
                                         <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center" ColumnSpacing="16">
                                             <StackPanel>
                                                 <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{x:Bind Description}" Foreground="Gray" FontSize="12" TextWrapping="Wrap" />
-                                                <TextBlock Text="Hex value (examples: #000000, #FFFFFF)" Foreground="Gray" FontSize="10" Margin="0,2,0,0" />
+                                                <TextBlock Text="{x:Bind Description}" Foreground="{ThemeResource AppTextCaptionBrush}" FontSize="12" TextWrapping="Wrap" />
+                                                <TextBlock Text="Hex value (examples: #000000, #FFFFFF)" Foreground="{ThemeResource AppTextDimBrush}" FontSize="10" Margin="0,2,0,0" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
                                                 <Button Width="32" Height="32" Background="Transparent" BorderThickness="0" Padding="0" Click="ColorSwatchButton_Click">

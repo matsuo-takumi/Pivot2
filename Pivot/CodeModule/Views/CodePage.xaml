@@ -97,12 +97,12 @@
                                                     </Button>
                                                 </Grid>
 
-                                                <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="#444" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
+                                                <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="{ThemeResource AppTextBodyBrush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
 
 
                                                 <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                                                    <TextBlock Text="·" Foreground="Gray" />
-                                                    <TextBlock Text="{x:Bind Updated}" Foreground="Gray" FontSize="12" />
+                                                    <TextBlock Text="·" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                                    <TextBlock Text="{x:Bind Updated}" Foreground="{ThemeResource AppTextSecondaryBrush}" FontSize="12" />
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -222,11 +222,11 @@
 
                             <!-- Scratchpad copy toast -->
                             <Border x:Name="ScratchpadCopyToast" Background="#CC000000" CornerRadius="6" Padding="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" IsHitTestVisible="False" Visibility="{x:Bind ViewModel.IsCopyToastVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBlock Text="コピーしました" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="コピーしました" Foreground="{ThemeResource AppTextHighlightBrush}" FontSize="12" FontWeight="SemiBold" />
                             </Border>
                             <!-- Small transient saved toast positioned at CardPanel bottom-right -->
                             <Border x:Name="CardSavedOverlay" Visibility="Collapsed" Background="#CC000000" CornerRadius="6" Padding="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" IsHitTestVisible="False">
-                                <TextBlock Text="Saved" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+                                <TextBlock Text="Saved" Foreground="{ThemeResource AppTextHighlightBrush}" FontSize="12" FontWeight="SemiBold" />
                             </Border>
 
                         </Grid>
@@ -253,7 +253,7 @@
                             <Border x:Name="PlaceholderBorder" Background="#80FFFFFF" Visibility="Collapsed">
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <TextBlock Text="Select a snippet or create a new one" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                    <TextBlock Text="左の一覧から選択するか「＋ New」を押してください" Foreground="Gray" HorizontalAlignment="Center" Margin="0,8,0,0" />
+                                    <TextBlock Text="左の一覧から選択するか「＋ New」を押してください" Foreground="{ThemeResource AppTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,0" />
                                 </StackPanel>
                             </Border>
                         </Grid>

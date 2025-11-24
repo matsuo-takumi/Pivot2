@@ -11,6 +11,7 @@ using System.Diagnostics; // Debug logging
 using System.Linq; // ToListを使用するために追加
 using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追加
 using Pivot.Messages; // DirectoryChangedMessageを使用するために追加
+using Pivot.ViewModels;
 
 namespace Pivot.Services
 {
@@ -123,25 +124,6 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load Code.Save.Format. Using default Json.");
                 _cache.CodeExportFormat = "Json";
             }
-            // Color preferences (Scratchpad Editor)
-            try
-            {
-                var scratchpadColor = await _settingsStore.GetAsync("Color.ScratchpadEditorColor");
-                if (!string.IsNullOrWhiteSpace(scratchpadColor))
-                {
-                    _cache.ScratchpadEditorColor = scratchpadColor;
-                }
-                else
-                {
-                    // keep default from model
-                }
-                _logger.LogInformation("SettingsService: Loaded Color.ScratchpadEditorColor: {Color}", _cache.ScratchpadEditorColor);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Color.ScratchpadEditorColor. Using default.");
-            }
-
             // Overlay tint preferences
             try
             {
@@ -232,6 +214,25 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load Color.TextOverrides. Using defaults.");
                 _cache.TextColorOverrides = new Dictionary<string, string>();
             }
+
+            // Text template preferences
+            try
+            {
+                var templateValue = await _settingsStore.GetAsync("Color.TextTemplate");
+                if (!string.IsNullOrWhiteSpace(templateValue) &&
+                    Enum.TryParse<TextColorTemplate>(templateValue, true, out var parsed))
+                {
+                    _cache.PreferredTextColorTemplate = parsed;
+                }
+                _logger.LogInformation("SettingsService: Loaded Color.TextTemplate: {Template}", _cache.PreferredTextColorTemplate);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Color.TextTemplate. Using default.");
+            }
+
+            await LoadDominantTemplateSettingsAsync();
+            await LoadRandomTemplateSettingsAsync();
 
             // Last selected snippet id
             try
@@ -990,21 +991,6 @@ namespace Pivot.Services
             }
         }
 
-        // Color preferences accessors
-        public string GetScratchpadEditorColor() => _cache.ScratchpadEditorColor ?? "#FFFFFF";
-
-        public async Task SetScratchpadEditorColorAsync(string color)
-        {
-            _cache.ScratchpadEditorColor = color ?? "#FFFFFF";
-            try
-            {
-                await _settingsStore.UpsertAsync("Color.ScratchpadEditorColor", _cache.ScratchpadEditorColor);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.ScratchpadEditorColor.");
-            }
-        }
         // Overlay tint accessors
         public string GetOverlayTintColor() => _cache.OverlayTintColor ?? "#0000FF";
 
@@ -1065,6 +1051,208 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintTransitionMs.");
+            }
+        }
+
+        private async Task LoadDominantTemplateSettingsAsync()
+        {
+            try
+            {
+                var color = await _settingsStore.GetAsync("Color.Dominant.Color");
+                if (!string.IsNullOrWhiteSpace(color))
+                {
+                    _cache.DominantColor = color;
+                }
+                var variation = await _settingsStore.GetAsync("Color.Dominant.Variation");
+                if (!string.IsNullOrWhiteSpace(variation) &&
+                    double.TryParse(variation, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedVariation))
+                {
+                    _cache.DominantVariation = Math.Clamp(parsedVariation, 0.0, 1.0);
+                }
+                var autoAccent = await _settingsStore.GetAsync("Color.Dominant.GenerateAccent");
+                if (bool.TryParse(autoAccent, out var parsedAccent))
+                {
+                    _cache.DominantGenerateAccent = parsedAccent;
+                }
+                var accentStrength = await _settingsStore.GetAsync("Color.Dominant.AccentStrength");
+                if (!string.IsNullOrWhiteSpace(accentStrength) &&
+                    double.TryParse(accentStrength, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedStrength))
+                {
+                    _cache.DominantAccentStrength = Math.Clamp(parsedStrength, 0.0, 1.0);
+                }
+                _logger.LogInformation("SettingsService: Loaded Dominant template settings.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Dominant template settings.");
+            }
+        }
+
+        private async Task LoadRandomTemplateSettingsAsync()
+        {
+            try
+            {
+                var seed = await _settingsStore.GetAsync("Color.Random.Seed");
+                if (!string.IsNullOrWhiteSpace(seed) && int.TryParse(seed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSeed))
+                {
+                    _cache.RandomSeed = parsedSeed;
+                }
+                var randomness = await _settingsStore.GetAsync("Color.Random.Randomness");
+                if (!string.IsNullOrWhiteSpace(randomness) &&
+                    double.TryParse(randomness, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedRandomness))
+                {
+                    _cache.RandomnessLevel = Math.Clamp(parsedRandomness, 0.0, 1.0);
+                }
+                var satMin = await _settingsStore.GetAsync("Color.Random.SaturationMin");
+                if (!string.IsNullOrWhiteSpace(satMin) &&
+                    double.TryParse(satMin, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedSatMin))
+                {
+                    _cache.RandomSaturationMin = Math.Clamp(parsedSatMin, 0.0, 1.0);
+                }
+                var satMax = await _settingsStore.GetAsync("Color.Random.SaturationMax");
+                if (!string.IsNullOrWhiteSpace(satMax) &&
+                    double.TryParse(satMax, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedSatMax))
+                {
+                    _cache.RandomSaturationMax = Math.Clamp(parsedSatMax, 0.0, 1.0);
+                }
+                var brightnessMin = await _settingsStore.GetAsync("Color.Random.BrightnessMin");
+                if (!string.IsNullOrWhiteSpace(brightnessMin) &&
+                    double.TryParse(brightnessMin, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedBrightnessMin))
+                {
+                    _cache.RandomBrightnessMin = Math.Clamp(parsedBrightnessMin, 0.0, 1.0);
+                }
+                var brightnessMax = await _settingsStore.GetAsync("Color.Random.BrightnessMax");
+                if (!string.IsNullOrWhiteSpace(brightnessMax) &&
+                    double.TryParse(brightnessMax, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedBrightnessMax))
+                {
+                    _cache.RandomBrightnessMax = Math.Clamp(parsedBrightnessMax, 0.0, 1.0);
+                }
+                var allowExtreme = await _settingsStore.GetAsync("Color.Random.AllowExtreme");
+                if (bool.TryParse(allowExtreme, out var parsedExtreme))
+                {
+                    _cache.RandomAllowExtreme = parsedExtreme;
+                }
+                _logger.LogInformation("SettingsService: Loaded Random template settings.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Random template settings.");
+            }
+        }
+
+        public TextColorTemplate GetTextColorTemplate() => _cache.PreferredTextColorTemplate;
+
+        public async Task SetTextColorTemplateAsync(TextColorTemplate template)
+        {
+            _cache.PreferredTextColorTemplate = template;
+            await PersistSettingAsync("Color.TextTemplate", template.ToString());
+        }
+
+        public string GetDominantColor() => _cache.DominantColor;
+
+        public async Task SetDominantColorAsync(string hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return;
+            _cache.DominantColor = hex;
+            await PersistSettingAsync("Color.Dominant.Color", hex);
+        }
+
+        public double GetDominantVariation() => _cache.DominantVariation;
+
+        public async Task SetDominantVariationAsync(double value)
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.DominantVariation = clamped;
+            await PersistSettingAsync("Color.Dominant.Variation", clamped.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public bool GetDominantGenerateAccent() => _cache.DominantGenerateAccent;
+
+        public async Task SetDominantGenerateAccentAsync(bool value)
+        {
+            _cache.DominantGenerateAccent = value;
+            await PersistSettingAsync("Color.Dominant.GenerateAccent", value.ToString());
+        }
+
+        public double GetDominantAccentStrength() => _cache.DominantAccentStrength;
+
+        public async Task SetDominantAccentStrengthAsync(double value)
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.DominantAccentStrength = clamped;
+            await PersistSettingAsync("Color.Dominant.AccentStrength", clamped.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public int GetRandomSeed() => _cache.RandomSeed;
+
+        public async Task SetRandomSeedAsync(int value)
+        {
+            _cache.RandomSeed = value;
+            await PersistSettingAsync("Color.Random.Seed", value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public double GetRandomnessLevel() => _cache.RandomnessLevel;
+
+        public async Task SetRandomnessLevelAsync(double value)
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.RandomnessLevel = clamped;
+            await PersistSettingAsync("Color.Random.Randomness", clamped.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public double GetRandomSaturationMin() => _cache.RandomSaturationMin;
+
+        public async Task SetRandomSaturationMinAsync(double value)
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.RandomSaturationMin = clamped;
+            await PersistSettingAsync("Color.Random.SaturationMin", clamped.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public double GetRandomSaturationMax() => _cache.RandomSaturationMax;
+
+        public async Task SetRandomSaturationMaxAsync(double value)
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.RandomSaturationMax = clamped;
+            await PersistSettingAsync("Color.Random.SaturationMax", clamped.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public double GetRandomBrightnessMin() => _cache.RandomBrightnessMin;
+
+        public async Task SetRandomBrightnessMinAsync(double value)
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.RandomBrightnessMin = clamped;
+            await PersistSettingAsync("Color.Random.BrightnessMin", clamped.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public double GetRandomBrightnessMax() => _cache.RandomBrightnessMax;
+
+        public async Task SetRandomBrightnessMaxAsync(double value)
+        {
+            var clamped = Math.Clamp(value, 0.0, 1.0);
+            _cache.RandomBrightnessMax = clamped;
+            await PersistSettingAsync("Color.Random.BrightnessMax", clamped.ToString(CultureInfo.InvariantCulture));
+        }
+
+        public bool GetRandomAllowExtreme() => _cache.RandomAllowExtreme;
+
+        public async Task SetRandomAllowExtremeAsync(bool value)
+        {
+            _cache.RandomAllowExtreme = value;
+            await PersistSettingAsync("Color.Random.AllowExtreme", value.ToString());
+        }
+
+        private async Task PersistSettingAsync(string key, string value)
+        {
+            try
+            {
+                await _settingsStore.UpsertAsync(key, value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist {Key}.", key);
             }
         }
 

@@ -24,6 +24,7 @@ namespace Pivot.ViewModels
             _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
             foreach (var definition in TextColorRoleDefinitions.Roles)
             {
+                _resourceManager.EnsureBrush(definition.ResourceKey, definition.DefaultColor);
                 var hex = _settings.GetTextColorOverride(definition.SettingKey, definition.DefaultHex);
                 var color = TextColorHelper.ParseHexOrDefault(hex, definition.DefaultColor);
                 var entry = new TextColorSettingViewModel(

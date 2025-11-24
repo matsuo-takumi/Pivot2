@@ -9,7 +9,7 @@
     <Grid Padding="20">
         <StackPanel Spacing="20">
             <TextBlock Text="Menu Item 2" FontSize="24" FontWeight="Bold"/>
-            <TextBlock Text="Content for Menu Item 2" Foreground="#666666"/>
+        <TextBlock Text="Content for Menu Item 2" Foreground="{ThemeResource AppTextCaptionBrush}"/>
         </StackPanel>
     </Grid>
 </UserControl>

@@ -65,15 +65,15 @@
                                                 <ColumnDefinition Width="150"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <FontIcon Grid.Column="0" Glyph="&#xE7B3;" FontSize="20" Foreground="#0078D4" VerticalAlignment="Center"/>
+                                            <FontIcon Grid.Column="0" Glyph="&#xE7B3;" FontSize="20" Foreground="{ThemeResource AppTextAccentBrush}" VerticalAlignment="Center"/>
                                             <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2">
                                                 <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Path}" FontSize="11" Foreground="#666666" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Path}" FontSize="11" Foreground="{ThemeResource AppTextCaptionBrush}" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                            <TextBlock Grid.Column="2" Text="{Binding Path}" FontSize="12" Foreground="#555555" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="3" Text="{Binding Size, Converter={StaticResource FileSizeConverter}}" FontSize="12" Foreground="#555555" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="4" Text="{Binding LastModified}" FontSize="12" Foreground="#555555" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="5" Text="" FontSize="12" Foreground="#777777" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Path}" FontSize="12" Foreground="{ThemeResource AppTextMutedBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding Size, Converter={StaticResource FileSizeConverter}}" FontSize="12" Foreground="{ThemeResource AppTextMutedBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding LastModified}" FontSize="12" Foreground="{ThemeResource AppTextMutedBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="5" Text="" FontSize="12" Foreground="{ThemeResource AppTextDimBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         </Grid>
 
                                         <StackPanel Visibility="{Binding DataContext.ShowThumbnails, ElementName=AssetPageRoot, Converter={StaticResource BoolToVisibility}}">
