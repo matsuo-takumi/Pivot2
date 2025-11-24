@@ -1286,5 +1286,18 @@ namespace Pivot.Services
             }
         }
 
+        public async Task ClearAllTextColorOverridesAsync()
+        {
+            _cache.TextColorOverrides = new Dictionary<string, string>();
+            try
+            {
+                await _settingsStore.UpsertAsync("Color.TextOverrides", JsonSerializer.Serialize(_cache.TextColorOverrides));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to clear Color.TextOverrides.");
+            }
+        }
+
     }
 }

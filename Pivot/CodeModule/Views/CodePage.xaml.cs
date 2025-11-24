@@ -186,6 +186,7 @@ namespace Pivot.CodeModule.Views
                 var messenger = App.Current.Services.GetService(typeof(IMessenger)) as IMessenger;
                 if (messenger != null)
                 {
+                    _registeredMessenger = messenger;
                     messenger.Register<CodePage, Pivot.Messages.NavigationRequestMessage>(this, (r, m) =>
                     {
                         try
@@ -201,15 +202,24 @@ namespace Pivot.CodeModule.Views
                                         _ = vm.SaveSnippetFileAsync(vm.SelectedSnippet);
                                     }
                                 }
-                                catch { }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"CodePage: Error saving snippet on navigation: {ex.Message}");
+                                }
                                 // Do not clear SelectedSnippet automatically; preserve state.
                             }
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"CodePage: Error handling navigation message: {ex.Message}");
+                        }
                     });
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CodePage: Error registering navigation message: {ex.Message}");
+            }
 
             // NOTE: Escape closing removed per request — closing should only occur via
             // the Close button, tab navigation, or clicking outside the snippet.
@@ -226,7 +236,8 @@ namespace Pivot.CodeModule.Views
                         placeholder.Visibility = ViewModel.Snippets.Any() ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
                     }
 
-                    ViewModel.Snippets.CollectionChanged += (_, __) =>
+                    // Store handler reference for cleanup
+                    System.Collections.Specialized.NotifyCollectionChangedEventHandler collectionChangedHandler = (_, __) =>
                     {
                         try
                         {
@@ -238,9 +249,85 @@ namespace Pivot.CodeModule.Views
                         }
                         catch { }
                     };
+                    
+                    ViewModel.Snippets.CollectionChanged += collectionChangedHandler;
+                    // Store handler for cleanup in Unloaded event
+                    _snippetsCollectionChangedHandler = collectionChangedHandler;
                 }
             }
             catch { }
+
+            // Register Unloaded event for cleanup
+            this.Unloaded += CodePage_Unloaded;
+        }
+
+        private System.Collections.Specialized.NotifyCollectionChangedEventHandler? _snippetsCollectionChangedHandler;
+        private IMessenger? _registeredMessenger;
+
+        private void CodePage_Unloaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Unregister messenger
+                if (_registeredMessenger != null)
+                {
+                    _registeredMessenger.UnregisterAll(this);
+                    _registeredMessenger = null;
+                }
+
+                // Unregister collection changed handler
+                if (_snippetsCollectionChangedHandler != null && ViewModel?.Snippets != null)
+                {
+                    ViewModel.Snippets.CollectionChanged -= _snippetsCollectionChangedHandler;
+                    _snippetsCollectionChangedHandler = null;
+                }
+
+                // Unregister property changed handler
+                if (DataContext is INotifyPropertyChanged pc)
+                {
+                    pc.PropertyChanged -= OnViewModelPropertyChanged;
+                }
+
+                // Unregister editor handlers
+                var codeEditor = this.FindName("CodeEditor") as TextBox;
+                var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
+                if (codeEditor != null)
+                {
+                    codeEditor.TextChanged -= CodeEditor_TextChanged;
+                }
+                if (scratchEditor != null)
+                {
+                    scratchEditor.TextChanged -= ScratchpadEditor_TextChanged;
+                }
+
+                // Unregister size changed handler
+                var rootGrid = this.FindName("CodePageRoot") as FrameworkElement;
+                if (rootGrid != null)
+                {
+                    rootGrid.SizeChanged -= RootGrid_SizeChanged;
+                }
+
+                // Unregister overlay pointer handler
+                var overlayRoot = this.FindName("ScratchpadOverlay") as UIElement;
+                if (overlayRoot != null)
+                {
+                    overlayRoot.PointerPressed -= ScratchpadOverlay_PointerPressed;
+                }
+
+                // Save current snippet before unloading
+                if (ViewModel != null && ViewModel.SelectedSnippet != null)
+                {
+                    try
+                    {
+                        _ = ViewModel.SaveSnippetFileAsync(ViewModel.SelectedSnippet, refreshAfterSave: false);
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CodePage_Unloaded: Error during cleanup: {ex.Message}");
+            }
         }
 
         // Text-based editors (TextBox) are used instead of WebView2. Text change events update the ViewModel.
@@ -343,7 +430,7 @@ namespace Pivot.CodeModule.Views
                 if (nav == null) return;
                 nav.MenuItems.Clear();
 
-                // Keep a single "All" menu item for compact/navigation behavior
+                // Keep a single "All" menu item for compact/navigation behavior (for NavigationView menu)
                 var allItem = new NavigationViewItem { Content = "All Snippets", Tag = "all", Icon = new SymbolIcon(Symbol.AllApps) };
                 nav.MenuItems.Add(allItem);
 
@@ -351,29 +438,7 @@ namespace Pivot.CodeModule.Views
                 // Use Preferences > Code のタグ（CodeFilters）を左ナビに追加して、All Snippets のような挙動にする
                 var filters = settings?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
 
-                try
-                {
-                    foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
-                    {
-                        try
-                        {
-                            var ni = new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Tag) };
-                            nav.MenuItems.Add(ni);
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-
-                // Add Trash nav item
-                try
-                {
-                    var trashNav = new NavigationViewItem { Content = "ごみ箱", Tag = "trash", Icon = new SymbolIcon(Symbol.Delete) };
-                    nav.MenuItems.Add(trashNav);
-                }
-                catch { }
-
-                // Also populate the TreeView for hierarchical display (kept for compatibility)
+                // Populate TreeView for hierarchical display with grouping support
                 var tree = this.FindName("CodeTagTree") as TreeView;
                 if (tree != null)
                 {
@@ -389,34 +454,105 @@ namespace Pivot.CodeModule.Views
                     var allNode = new TreeViewNode { Content = "All Snippets" };
                     tree.RootNodes.Add(allNode);
 
-                    foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
-                    {
-                        var tagNode = new TreeViewNode { Content = new FilterNodeInfo { Id = f.Id, Name = f.Name } };
-                        try
+                    // Group filters by prefix (e.g., "Language:", "Framework:", etc.) for visual organization
+                    // If no prefix, put in "Other" group
+                    var groupedFilters = filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name)
+                        .GroupBy(f =>
                         {
-                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                            var snippets = ViewModel?.Snippets ?? new System.Collections.ObjectModel.ObservableCollection<Pivot.CodeModule.Models.CodeFile>((repo?.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>()).ToList());
-                            foreach (var sn in snippets)
+                            var name = f.Name ?? string.Empty;
+                            var colonIndex = name.IndexOf(':');
+                            return colonIndex > 0 ? name.Substring(0, colonIndex) : "Other";
+                        })
+                        .OrderBy(g => g.Key == "Other" ? 999 : 0)
+                        .ThenBy(g => g.Key);
+
+                    foreach (var group in groupedFilters)
+                    {
+                        var groupName = group.Key;
+                        var groupNode = new TreeViewNode 
+                        { 
+                            Content = new CategoryNodeInfo { Name = groupName },
+                            IsExpanded = true
+                        };
+
+                        foreach (var f in group.OrderBy(f => f.Name))
+                        {
+                            var tagNode = new TreeViewNode { Content = new FilterNodeInfo { Id = f.Id, Name = f.Name } };
+                            try
                             {
-                                var snipTags = (sn.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
-                                if (snipTags.Any(t => string.Equals(t, f.Name, StringComparison.OrdinalIgnoreCase)))
+                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                                var snippets = ViewModel?.Snippets ?? new System.Collections.ObjectModel.ObservableCollection<Pivot.CodeModule.Models.CodeFile>((repo?.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>()).ToList());
+                                foreach (var sn in snippets)
                                 {
-                                    var childNode = new TreeViewNode { Content = new SnippetNodeInfo { Id = sn.Id, Title = sn.Title ?? "Snippet" } };
-                                    tagNode.Children.Add(childNode);
+                                    var snipTags = (sn.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+                                    if (snipTags.Any(t => string.Equals(t, f.Name, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        var childNode = new TreeViewNode { Content = new SnippetNodeInfo { Id = sn.Id, Title = sn.Title ?? "Snippet" } };
+                                        tagNode.Children.Add(childNode);
+                                    }
                                 }
                             }
+                            catch { }
+                            groupNode.Children.Add(tagNode);
+                        }
+
+                        tree.RootNodes.Add(groupNode);
+                    }
+                }
+
+                // Also add to NavigationView menu items for compatibility (but Trash is handled separately in XAML)
+                try
+                {
+                    foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
+                    {
+                        try
+                        {
+                            var ni = new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Tag) };
+                            nav.MenuItems.Add(ni);
                         }
                         catch { }
-                        tree.RootNodes.Add(tagNode);
                     }
-
-                    try { tree.RootNodes.Add(new TreeViewNode { Content = "ごみ箱" }); } catch { }
                 }
+                catch { }
 
                 nav.SelectedItem = allItem;
                 try { ViewModel?.Refresh(); } catch { }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"BuildNavigationMenu: Error: {ex.Message}");
+            }
+        }
+
+        private void FilterToggleSwitch_Toggled(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var toggle = sender as ToggleSwitch;
+                if (toggle == null) return;
+                var tree = this.FindName("CodeTagTree") as TreeView;
+                if (tree != null)
+                {
+                    tree.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"FilterToggleSwitch_Toggled: Error: {ex.Message}");
+            }
+        }
+
+        private void TrashButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (ViewModel == null) return;
+                try { ViewModel.GetType().GetMethod("ShowDeletedSnippets")?.Invoke(ViewModel, null); } catch { }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TrashButton_Click: Error: {ex.Message}");
+            }
         }
 
         private void CodeTagCheckBox_Toggled(object? sender, RoutedEventArgs e)
@@ -511,6 +647,13 @@ namespace Pivot.CodeModule.Views
                         ViewModel.FilterSnippets();
                         if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                     }
+                    return;
+                }
+
+                // If a category/group node was clicked, do nothing (groups are visual only)
+                if (invoked is CategoryNodeInfo)
+                {
+                    // Groups are visual organization only - clicking them just expands/collapses
                     return;
                 }
 

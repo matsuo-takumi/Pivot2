@@ -80,6 +80,13 @@ namespace Pivot
 			sc.AddSingleton<FileScannerService>();
 			sc.AddSingleton<IThumbnailService, ThumbnailService>();
 
+			// Preset services (汎用的なプリセットサービス)
+			sc.AddSingleton<IPresetService<Pivot.Models.TextColorPresetData>>(sp =>
+				new PresetService<Pivot.Models.TextColorPresetData>(
+					sp.GetRequiredService<ILogger<PresetService<Pivot.Models.TextColorPresetData>>>(),
+					sp.GetRequiredService<ISettingsStore>(),
+					"TextColorPresets"));
+
 			// ViewModels
 			sc.AddTransient<MainViewModel>();
 			sc.AddTransient<ThemeViewModel>();

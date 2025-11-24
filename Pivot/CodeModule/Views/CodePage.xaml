@@ -35,7 +35,28 @@
         <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked">
             <!-- Left pane: code tags shown as a TreeView to allow hierarchical selection/filtering -->
             <NavigationView.PaneCustomContent>
-                <TreeView x:Name="CodeTagTree" Margin="8" Visibility="Collapsed" />
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <!-- Filter toggle button -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8,8,8,4" Spacing="8">
+                        <TextBlock Text="フィルター" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        <ToggleSwitch x:Name="FilterToggleSwitch" IsOn="True" Toggled="FilterToggleSwitch_Toggled" />
+                    </StackPanel>
+                    
+                    <!-- TreeView for hierarchical filter display -->
+                    <TreeView x:Name="CodeTagTree" Grid.Row="1" Margin="8,0,8,8" Visibility="Visible" ItemInvoked="CodeTagTree_ItemInvoked" />
+                    
+                    <!-- Trash item fixed at bottom -->
+                    <Border Grid.Row="2" Margin="8,0,8,8" Padding="8" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" CornerRadius="4">
+                        <Button x:Name="TrashButton" Tag="trash" Click="TrashButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <SymbolIcon Symbol="Delete" />
+                                    <TextBlock Text="ごみ箱" />
+                                </StackPanel>
+                            </Button.Content>
+                        </Button>
+                    </Border>
+                </Grid>
             </NavigationView.PaneCustomContent>
             <!-- Items will be populated in code-behind -->
             <NavigationView.Content>

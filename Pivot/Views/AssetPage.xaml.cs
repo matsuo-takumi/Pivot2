@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
+using Pivot.Models;
 
 namespace Pivot.Views
 {

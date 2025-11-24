@@ -10,6 +10,7 @@
 
     <Page.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:DateTimeFormatConverter x:Key="DateTimeFormatConverter" />
     </Page.Resources>
 
     <Grid Padding="20">
@@ -17,152 +18,164 @@
             <muxc:PivotItem Header="Text">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Spacing="16">
-                        <TextBlock Text="Text Color Roles" FontSize="20" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <TextBlock Text="Text Color Roles" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button
+                                Content="Reset to Default"
+                                Click="ResetToDefaultButton_Click"
+                                Style="{StaticResource SubtleButtonStyle}"
+                                Padding="12,8"
+                                HorizontalAlignment="Right" />
+                        </StackPanel>
                         <TextBlock Text="Customize the colors used for each semantic text role that responds to overlay lightness." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
 
+                        <!-- Preset Section -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12">
+                            <StackPanel Spacing="12">
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <TextBlock Text="Presets" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center" />
+                                    <Button
+                                        Content="Save Current as Preset"
+                                        Click="SavePresetButton_Click"
+                                        Style="{StaticResource SubtleButtonStyle}"
+                                        Padding="12,8"
+                                        HorizontalAlignment="Right" />
+                                </StackPanel>
+                                
+                                <ListView
+                                    ItemsSource="{x:Bind ViewModel.PresetViewModel.Presets}"
+                                    SelectionMode="Single"
+                                    SelectedItem="{x:Bind ViewModel.PresetViewModel.SelectedPreset, Mode=TwoWay}"
+                                    MaxHeight="200"
+                                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                    BorderThickness="0"
+                                    Background="Transparent">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            <Setter Property="Padding" Value="8" />
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="8"
+                                                    Padding="12"
+                                                    Margin="0,0,0,8">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                        <TextBlock Foreground="{ThemeResource AppTextCaptionBrush}" 
+                                                                   FontSize="12">
+                                                            <Run Text="Updated: " />
+                                                            <Run Text="{Binding UpdatedAt, Converter={StaticResource DateTimeFormatConverter}, ConverterParameter='yyyy-MM-dd HH:mm'}" />
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                        <Button
+                                                            Content="Apply"
+                                                            Click="ApplyPresetButton_Click"
+                                                            Tag="{Binding}"
+                                                            Style="{StaticResource SubtleButtonStyle}"
+                                                            Padding="8,4" />
+                                                        <Button
+                                                            Content="Delete"
+                                                            Click="DeletePresetButton_Click"
+                                                            Tag="{Binding}"
+                                                            Style="{StaticResource SubtleButtonStyle}"
+                                                            Padding="8,4" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8" Visibility="{x:Bind ViewModel.PresetViewModel.SelectedPreset, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <Button
+                                        Content="Apply Selected"
+                                        Click="ApplySelectedPresetButton_Click"
+                                        Style="{StaticResource SubtleButtonStyle}"
+                                        Padding="12,8" />
+                                    <Button
+                                        Content="Delete Selected"
+                                        Click="DeleteSelectedPresetButton_Click"
+                                        Style="{StaticResource SubtleButtonStyle}"
+                                        Padding="12,8" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Individual Text Color Role Settings -->
                         <StackPanel Spacing="10">
-                            <TextBlock Text="Template" FontWeight="SemiBold" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button
-                                    Content="Default"
-                                    Tag="Default"
-                                    Click="TemplateButton_Click"
-                                    Style="{StaticResource SubtleButtonStyle}"
-                                    Padding="12,8" />
-                                <Button
-                                    Content="Dominant"
-                                    Tag="Dominant"
-                                    Click="TemplateButton_Click"
-                                    Style="{StaticResource SubtleButtonStyle}"
-                                    Padding="12,8" />
-                                <Button
-                                    Content="Random"
-                                    Tag="Random"
-                                    Click="TemplateButton_Click"
-                                    Style="{StaticResource SubtleButtonStyle}"
-                                    Padding="12,8" />
-                                <Button
-                                    Content="Full Control"
-                                    Tag="FullControl"
-                                    Click="TemplateButton_Click"
-                                    Style="{StaticResource SubtleButtonStyle}"
-                                    Padding="12,8" />
-                            </StackPanel>
-                            <TextBlock
-                                Text="{x:Bind ViewModel.SelectedTemplateDisplayName, Mode=OneWay}"
-                                Foreground="{ThemeResource AppTextCaptionBrush}"
-                                FontSize="12" />
+                            <TextBlock Text="Text Color Roles" FontWeight="SemiBold" FontSize="16" />
+                            <TextBlock Text="Manually configure each text color role individually." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
+                            <ListView
+                                ItemsSource="{x:Bind ViewModel.TextColorSettings.Entries}"
+                                SelectionMode="None"
+                                IsItemClickEnabled="False"
+                                BorderThickness="0"
+                                Background="Transparent"
+                                ScrollViewer.VerticalScrollMode="Auto"
+                                ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="Margin" Value="0" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsStackPanel Orientation="Vertical" />
+                                    </ItemsPanelTemplate>
+                                </ListView.ItemsPanel>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="viewmodels:TextColorSettingViewModel">
+                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="10"
+                                                Padding="12"
+                                                Margin="0,0,0,8">
+                                            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center" ColumnSpacing="16">
+                                                <StackPanel>
+                                                    <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{x:Bind Description}" Foreground="{ThemeResource AppTextCaptionBrush}" FontSize="12" TextWrapping="Wrap" />
+                                                    <TextBlock Text="Hex value (examples: #000000, #FFFFFF)" Foreground="{ThemeResource AppTextDimBrush}" FontSize="10" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
+                                                    <Button Width="32" Height="32" Background="Transparent" BorderThickness="0" Padding="0" Click="ColorSwatchButton_Click">
+                                                        <Border Width="32" Height="32" CornerRadius="4" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind PreviewBrush}" />
+                                                        <flyout:FlyoutBase.AttachedFlyout>
+                                                            <Flyout Placement="Bottom">
+                                                                <muxc:ColorPicker
+                                                                    Color="{x:Bind SelectedColor, Mode=TwoWay}"
+                                                                    ColorSpectrumShape="Ring"
+                                                                    IsMoreButtonVisible="False"
+                                                                    IsColorSliderVisible="True"
+                                                                    IsColorChannelTextInputVisible="False"
+                                                                    IsHexInputVisible="False"
+                                                                    IsAlphaEnabled="False"
+                                                                    IsAlphaSliderVisible="False"
+                                                                    IsAlphaTextInputVisible="False" />
+                                                            </Flyout>
+                                                        </flyout:FlyoutBase.AttachedFlyout>
+                                                    </Button>
+                                                    <TextBox Width="100" Height="30" MinHeight="30" TextAlignment="Left" VerticalContentAlignment="Center" Text="{x:Bind HexValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
                         </StackPanel>
-
-                        <StackPanel
-                            Spacing="10"
-                            Visibility="{x:Bind ViewModel.IsDominantTemplate, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <TextBlock Text="Dominant Template Settings" FontWeight="SemiBold" />
-                            <TextBlock Text="Dominant Color" />
-                            <muxc:ColorPicker
-                                Color="{x:Bind ViewModel.DominantColor, Mode=TwoWay}"
-                                ColorSpectrumShape="Ring"
-                                IsColorSliderVisible="True"
-                                IsMoreButtonVisible="False"
-                                IsColorChannelTextInputVisible="False"
-                                IsHexInputVisible="False"
-                                IsAlphaEnabled="False"
-                                IsAlphaSliderVisible="False"
-                                IsAlphaTextInputVisible="False" />
-                            <TextBlock Text="Variation Amount" />
-                            <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.VariationAmount, Mode=TwoWay}" />
-                            <ToggleSwitch Header="Generate Accent Automatically" IsOn="{x:Bind ViewModel.GenerateAccentAutomatically, Mode=TwoWay}" />
-                            <TextBlock Text="Accent Strength" />
-                            <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.AccentStrength, Mode=TwoWay}" />
-                        </StackPanel>
-
-                        <StackPanel
-                            Spacing="10"
-                            Visibility="{x:Bind ViewModel.IsRandomTemplate, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <TextBlock Text="Random Template Settings" FontWeight="SemiBold" />
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <TextBlock Text="Seed" VerticalAlignment="Center" />
-                                <muxc:NumberBox Width="120" Value="{x:Bind ViewModel.RandomSeed, Mode=TwoWay}" />
-                            </StackPanel>
-                            <TextBlock Text="Randomness Level" />
-                            <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomnessLevel, Mode=TwoWay}" />
-                            <TextBlock Text="Saturation Range" />
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Lower bound" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" />
-                                <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomSaturationMin, Mode=TwoWay}" />
-                                <TextBlock Text="Upper bound" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" />
-                                <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomSaturationMax, Mode=TwoWay}" />
-                            </StackPanel>
-                            <TextBlock Text="Brightness Range" />
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Lower bound" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" />
-                                <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomBrightnessMin, Mode=TwoWay}" />
-                                <TextBlock Text="Upper bound" FontSize="12" Foreground="{ThemeResource AppTextCaptionBrush}" />
-                                <Slider Minimum="0" Maximum="1" Value="{x:Bind ViewModel.RandomBrightnessMax, Mode=TwoWay}" />
-                            </StackPanel>
-                            <ToggleSwitch Header="Allow Extreme Colors" IsOn="{x:Bind ViewModel.AllowExtremeRandomColors, Mode=TwoWay}" />
-                        </StackPanel>
-
-                        <ListView
-                            ItemsSource="{x:Bind ViewModel.TextColorSettings.Entries}"
-                            Visibility="{x:Bind ViewModel.IsFullControlTemplate, Converter={StaticResource BoolToVisibilityConverter}}"
-                            SelectionMode="None"
-                            IsItemClickEnabled="False"
-                            BorderThickness="0"
-                            Background="Transparent"
-                            ScrollViewer.VerticalScrollMode="Auto"
-                            ScrollViewer.VerticalScrollBarVisibility="Auto">
-                            <ListView.ItemContainerStyle>
-                                <Style TargetType="ListViewItem">
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="Padding" Value="0" />
-                                    <Setter Property="Margin" Value="0" />
-                                </Style>
-                            </ListView.ItemContainerStyle>
-                            <ListView.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <ItemsStackPanel Orientation="Vertical" />
-                                </ItemsPanelTemplate>
-                            </ListView.ItemsPanel>
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="viewmodels:TextColorSettingViewModel">
-                                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="10"
-                                            Padding="12"
-                                            Margin="0,0,0,8">
-                                        <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center" ColumnSpacing="16">
-                                            <StackPanel>
-                                                <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{x:Bind Description}" Foreground="{ThemeResource AppTextCaptionBrush}" FontSize="12" TextWrapping="Wrap" />
-                                                <TextBlock Text="Hex value (examples: #000000, #FFFFFF)" Foreground="{ThemeResource AppTextDimBrush}" FontSize="10" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
-                                                <Button Width="32" Height="32" Background="Transparent" BorderThickness="0" Padding="0" Click="ColorSwatchButton_Click">
-                                                    <Border Width="32" Height="32" CornerRadius="4" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind PreviewBrush}" />
-                                                    <flyout:FlyoutBase.AttachedFlyout>
-                                                        <Flyout Placement="Bottom">
-                                                            <muxc:ColorPicker
-                                                                Color="{x:Bind SelectedColor, Mode=TwoWay}"
-                                                                ColorSpectrumShape="Ring"
-                                                                IsMoreButtonVisible="False"
-                                                                IsColorSliderVisible="True"
-                                                                IsColorChannelTextInputVisible="False"
-                                                                IsHexInputVisible="False"
-                                                                IsAlphaEnabled="False"
-                                                                IsAlphaSliderVisible="False"
-                                                                IsAlphaTextInputVisible="False" />
-                                                        </Flyout>
-                                                    </flyout:FlyoutBase.AttachedFlyout>
-                                                </Button>
-                                                <TextBox Width="100" Height="30" MinHeight="30" TextAlignment="Left" VerticalContentAlignment="Center" Text="{x:Bind HexValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
                     </StackPanel>
                 </ScrollViewer>
             </muxc:PivotItem>

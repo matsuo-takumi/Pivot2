@@ -87,7 +87,9 @@ namespace Pivot.Services
 					if (now - Interlocked.Read(ref _lastCleanupTicks) >= CleanupIntervalMs)
 					{
 						Interlocked.Exchange(ref _lastCleanupTicks, now);
-						Task.Run(() => TryCleanupCache());
+						// キャッシュクリーンアップをバックグラウンドで実行（結果を待たない）
+						var cleanupTask = Task.Run(() => TryCleanupCache());
+						// タスクの完了を待たない（fire-and-forget）
 					}
 					return thumbPath;
 				}
@@ -128,10 +130,34 @@ namespace Pivot.Services
 			{
 				if (CanLoadWithImageSharp(sourcePath))
 				{
+					// 大きな画像の最適化: ImageSharpはメモリ効率的に動作するが、
+					// リサイズオプションを最適化してパフォーマンスを向上
 					using var image = await ImageSharpImage.LoadAsync(sourcePath, ct).ConfigureAwait(false);
-					image.Mutate(x => x.Resize(new ResizeOptions { Mode = ResizeMode.Max, Size = new SixLabors.ImageSharp.Size(width, height) }));
+					
+					// リサイズオプションを最適化: 大きな画像の場合は効率的なリサンプラーを使用
+					var resizeOptions = new ResizeOptions
+					{
+						Mode = ResizeMode.Max,
+						Size = new SixLabors.ImageSharp.Size(width, height),
+						// 大きな画像（4K以上）の場合はLanczos3、それ以下はBicubicを使用
+						// Lanczos3は高品質だが処理が重いため、大きな画像にのみ適用
+						Sampler = (image.Width > 2000 || image.Height > 2000) 
+							? KnownResamplers.Lanczos3 
+							: KnownResamplers.Bicubic,
+						// メモリ効率を優先（ガンマ補正を無効化）
+						Compand = false
+					};
+					
+					image.Mutate(x => x.Resize(resizeOptions));
 					Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
-					await image.SaveAsPngAsync(destinationPngPath, ct).ConfigureAwait(false);
+					
+					// PNGエンコーダーオプションで圧縮率を最適化（ファイルサイズ削減）
+					var encoder = new SixLabors.ImageSharp.Formats.Png.PngEncoder
+					{
+						CompressionLevel = SixLabors.ImageSharp.Formats.Png.PngCompressionLevel.BestCompression
+					};
+					
+					await image.SaveAsPngAsync(destinationPngPath, encoder, ct).ConfigureAwait(false);
 					return;
 				}
 

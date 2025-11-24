@@ -380,16 +380,50 @@ namespace Pivot.CodeModule.ViewModels
             if (snippet == null || _repo == null) return;
             try
             {
-                await Task.Run(() => _repo.Save(snippet));
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        _repo.Save(snippet);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"CodeViewModel.PersistSnippetAsync: Failed to save snippet {snippet.Id}: {ex.Message}");
+                        throw;
+                    }
+                });
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CodeViewModel.PersistSnippetAsync: Error persisting snippet: {ex.Message}");
+                // Don't refresh if save failed
+                return;
+            }
+            
             if (refreshAfterSave)
             {
                 try
                 {
-                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh());
+                    var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+                    if (dispatcher != null)
+                    {
+                        dispatcher.TryEnqueue(() =>
+                        {
+                            try
+                            {
+                                Refresh();
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"CodeViewModel.PersistSnippetAsync: Error refreshing after save: {ex.Message}");
+                            }
+                        });
+                    }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CodeViewModel.PersistSnippetAsync: Error scheduling refresh: {ex.Message}");
+                }
             }
         }
 
@@ -416,11 +450,19 @@ namespace Pivot.CodeModule.ViewModels
         public void Refresh()
         {
             if (_repo == null) return;
-            var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
-            if (all.Any())
+            try
             {
-                _allSnippets = all;
-                ApplyCodeTagFilters();
+                var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
+                if (all.Any())
+                {
+                    _allSnippets = all;
+                    ApplyCodeTagFilters();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CodeViewModel.Refresh: Error refreshing snippets: {ex.Message}");
+                // Keep existing snippets if refresh fails
             }
         }
 
@@ -600,6 +642,7 @@ namespace Pivot.CodeModule.ViewModels
         {
             if (SelectedSnippet is null) return;
             var snippet = SelectedSnippet;
+            
             // If snippet is transient and has no content, do not persist — remove it instead
             if (string.IsNullOrWhiteSpace(snippet.Content) && _transientSnippetIds.Contains(snippet.Id))
             {
@@ -611,18 +654,37 @@ namespace Pivot.CodeModule.ViewModels
                     IsDirty = false;
                     return;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CodeViewModel.SaveSnippetAsync: Error removing transient snippet: {ex.Message}");
+                }
             }
 
-            await ApplyCachedValuesAsync(snippet);
+            try
+            {
+                await ApplyCachedValuesAsync(snippet);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CodeViewModel.SaveSnippetAsync: Error applying cached values: {ex.Message}");
+            }
+
             if (_repo != null)
             {
-                // Save synchronously to avoid DbContext concurrent use across threads
-                _repo.Save(snippet);
-                IsDirty = false;
-                Refresh();
-                // if it was transient, it's now persisted
-                try { _transientSnippetIds.Remove(snippet.Id); } catch { }
+                try
+                {
+                    // Save synchronously to avoid DbContext concurrent use across threads
+                    _repo.Save(snippet);
+                    IsDirty = false;
+                    Refresh();
+                    // if it was transient, it's now persisted
+                    _transientSnippetIds.Remove(snippet.Id);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CodeViewModel.SaveSnippetAsync: Error saving snippet: {ex.Message}");
+                    // Keep IsDirty = true so user can retry
+                }
             }
             else
             {
@@ -630,9 +692,17 @@ namespace Pivot.CodeModule.ViewModels
                 IsDirty = false;
                 System.Diagnostics.Debug.WriteLine("CodeViewModel.SaveSnippetAsync: repository is null; Save not performed.");
             }
+            
             if (_snippetCache != null)
             {
-                try { await _snippetCache.SaveIfDirtyAsync(); } catch { }
+                try 
+                { 
+                    await _snippetCache.SaveIfDirtyAsync(); 
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CodeViewModel.SaveSnippetAsync: Error saving cache: {ex.Message}");
+                }
             }
         }
 

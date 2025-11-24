@@ -106,7 +106,6 @@ namespace Pivot.Views
                 {
                     Id = f.Id,
                     Name = f.Name,
-                    AllowedExtensions = f.AllowedExtensions ?? new List<string>(),
                     Visible = visible != null && visible.Contains(f.Id)
                 }).ToList();
 
@@ -118,16 +117,14 @@ namespace Pivot.Views
 
         private async void AddFilter_Click(object sender, RoutedEventArgs e)
         {
-            var nameBox = new TextBox { Header = "Name" };
-            var extBox = new TextBox { Header = "Extensions (comma separated)" };
+            var nameBox = new TextBox { Header = "Tag Name", PlaceholderText = "Enter tag name (e.g., C#, Python, JavaScript)" };
 
             var panel = new StackPanel();
             panel.Children.Add(nameBox);
-            panel.Children.Add(extBox);
 
             var dialog = new ContentDialog()
             {
-                Title = "Add Code Filter",
+                Title = "Add Code Filter Tag",
                 PrimaryButtonText = "Add",
                 CloseButtonText = "Cancel",
                 Content = panel
@@ -143,25 +140,29 @@ namespace Pivot.Views
                 {
                     var name = nameBox.Text?.Trim() ?? string.Empty;
 
-                    var exts = (extBox.Text ?? string.Empty)
-                        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(s => s.Trim().ToLowerInvariant())
-                        .Where(s => s.Length > 0)
-                        .Select(s => s.StartsWith('.') ? s : "." + s)
-                        .Distinct()
-                        .ToList();
-
                     if (!string.IsNullOrWhiteSpace(name) && _settings != null)
                     {
                         var user = _settings.GetUserSettings();
                         var list = user.CodeFilters;
-                        var nf = new CustomFilter { Name = name, AllowedExtensions = exts };
+                        // Code filters don't use extensions - only tag names
+                        var nf = new CustomFilter { Name = name, AllowedExtensions = new List<string>() };
                         list.Add(nf);
                         await _settings.SetCodeFiltersAsync(list);
                         LoadFilters();
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // Show error to user
+                    var errorDialog = new ContentDialog()
+                    {
+                        Title = "Error",
+                        Content = $"Failed to add filter: {ex.Message}",
+                        CloseButtonText = "OK"
+                    };
+                    errorDialog.XamlRoot = this.XamlRoot;
+                    try { await errorDialog.ShowAsync(); } catch { }
+                }
             }
         }
 
@@ -173,15 +174,13 @@ namespace Pivot.Views
                 var target = user.CodeFilters.FirstOrDefault(f => f.Id == id);
                 if (target == null) return;
 
-                var nameBox = new TextBox { Header = "Name", Text = target.Name };
-                var extBox = new TextBox { Header = "Extensions (comma separated)", Text = string.Join(",", target.AllowedExtensions ?? new List<string>()) };
+                var nameBox = new TextBox { Header = "Tag Name", Text = target.Name, PlaceholderText = "Enter tag name" };
                 var panel = new StackPanel();
                 panel.Children.Add(nameBox);
-                panel.Children.Add(extBox);
 
                 var dialog = new ContentDialog()
                 {
-                    Title = "Edit Code Filter",
+                    Title = "Edit Code Filter Tag",
                     PrimaryButtonText = "Save",
                     CloseButtonText = "Cancel",
                     Content = panel
@@ -196,19 +195,27 @@ namespace Pivot.Views
                     try
                     {
                         var name = nameBox.Text?.Trim() ?? string.Empty;
-                        var exts = (extBox.Text ?? string.Empty)
-                            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                            .Select(s => s.Trim().ToLowerInvariant())
-                            .Where(s => s.Length > 0)
-                            .Select(s => s.StartsWith('.') ? s : "." + s)
-                            .Distinct()
-                            .ToList();
-                        target.Name = name;
-                        target.AllowedExtensions = exts;
-                        await _settings!.SetCodeFiltersAsync(user.CodeFilters);
-                        LoadFilters();
+                        if (!string.IsNullOrWhiteSpace(name))
+                        {
+                            target.Name = name;
+                            // Code filters don't use extensions - keep empty
+                            target.AllowedExtensions = new List<string>();
+                            await _settings!.SetCodeFiltersAsync(user.CodeFilters);
+                            LoadFilters();
+                        }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        // Show error to user
+                        var errorDialog = new ContentDialog()
+                        {
+                            Title = "Error",
+                            Content = $"Failed to edit filter: {ex.Message}",
+                            CloseButtonText = "OK"
+                        };
+                        errorDialog.XamlRoot = this.XamlRoot;
+                        try { await errorDialog.ShowAsync(); } catch { }
+                    }
                 }
             }
         }
@@ -254,14 +261,14 @@ namespace Pivot.Views
             {
                 await _settings.SetCodeFiltersAsync(new List<CustomFilter>
                 {
-                    new CustomFilter { Name = "C#", IsBuiltIn=true },
-                    new CustomFilter { Name = "Python", IsBuiltIn=true },
-                    new CustomFilter { Name = "JavaScript", IsBuiltIn=true },
-                    new CustomFilter { Name = "HTML", IsBuiltIn=true },
-                    new CustomFilter { Name = "CSS", IsBuiltIn=true },
-                    new CustomFilter { Name = "SQL", IsBuiltIn=true },
-                    new CustomFilter { Name = "Markdown", IsBuiltIn=true },
-                    new CustomFilter { Name = "Other", IsBuiltIn=true }
+                    new CustomFilter { Name = "C#", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                    new CustomFilter { Name = "Python", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                    new CustomFilter { Name = "JavaScript", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                    new CustomFilter { Name = "HTML", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                    new CustomFilter { Name = "CSS", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                    new CustomFilter { Name = "SQL", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                    new CustomFilter { Name = "Markdown", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                    new CustomFilter { Name = "Other", IsBuiltIn=true, AllowedExtensions = new List<string>() }
                 });
                 LoadFilters();
             }
@@ -272,8 +279,6 @@ namespace Pivot.Views
         {
             public Guid Id { get; set; }
             public string Name { get; set; } = string.Empty;
-            public List<string> AllowedExtensions { get; set; } = new List<string>();
-            public string AllowedExtensionsString => string.Join(", ", AllowedExtensions);
             public bool Visible { get; set; } = true;
         }
 
