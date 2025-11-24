@@ -6,11 +6,29 @@
     <RootNamespace>Pivot</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PlatformTarget>x64</PlatformTarget>
-    <Platforms>x86;x64;ARM64</Platforms>
-    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <!-- Build only for x64 in Debug mode to speed up builds -->
+    <Platforms Condition="'$(Configuration)' == 'Debug'">x64</Platforms>
+    <Platforms Condition="'$(Configuration)' != 'Debug'">x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers Condition="'$(Configuration)' == 'Debug'">win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers Condition="'$(Configuration)' != 'Debug'">win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <!-- Optimize build performance -->
+    <UseSharedCompilation Condition="'$(Configuration)' == 'Debug'">true</UseSharedCompilation>
+    <BuildInParallel>true</BuildInParallel>
+    <MaxCpuCount>0</MaxCpuCount>
+    <!-- Disable unnecessary checks in Debug builds -->
+    <SkipCopyBuildProduct Condition="'$(Configuration)' == 'Debug'">false</SkipCopyBuildProduct>
+  </PropertyGroup>
+  
+  <!-- Debug build optimizations -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <!-- Disable code analysis during build for faster builds -->
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
   </PropertyGroup>
 
   <ItemGroup>
@@ -76,6 +94,23 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+  </PropertyGroup>
+  
+  <!-- Build performance optimizations -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <!-- Build only for x64 in Debug mode to speed up builds -->
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- Disable NuGet vulnerability checks during build for faster builds -->
+    <NuGetAudit>false</NuGetAudit>
+    <!-- Enable parallel builds -->
+    <BuildInParallel>true</BuildInParallel>
+    <MaxCpuCount>0</MaxCpuCount>
+    <!-- Disable code analysis during build -->
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <!-- Use portable debug symbols (faster than full) -->
+    <DebugType>portable</DebugType>
   </PropertyGroup>
 
   <!-- <ItemGroup>

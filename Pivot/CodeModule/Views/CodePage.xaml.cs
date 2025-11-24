@@ -47,24 +47,6 @@ namespace Pivot.CodeModule.Views
         private Windows.Foundation.Point _scratchpadDragStart;
         private double _scratchpadStartX = 0;
         private double _scratchpadStartY = 0;
-        // Helper types for storing filter metadata in TreeViewNode.Content
-        private class FilterNodeInfo
-        {
-            public Guid Id { get; set; }
-            public string Name { get; set; } = string.Empty;
-            public override string ToString() => Name;
-        }
-        private class CategoryNodeInfo
-        {
-            public string Name { get; set; } = string.Empty;
-            public override string ToString() => Name;
-        }
-        private class SnippetNodeInfo
-        {
-            public Guid Id { get; set; }
-            public string Title { get; set; } = string.Empty;
-            public override string ToString() => Title;
-        }
 
         public CodePage()
         {
@@ -362,6 +344,25 @@ namespace Pivot.CodeModule.Views
                 {
                     ViewModel.Snippets = new System.Collections.ObjectModel.ObservableCollection<Models.CodeFile> { newSnippet };
                 }
+                
+                // Ensure ListView is clickable after adding new item
+                try
+                {
+                    var list = this.FindName("SnippetListView") as ListView;
+                    if (list != null)
+                    {
+                        // Force layout update to ensure new item is rendered
+                        list.UpdateLayout();
+                        list.ScrollIntoView(newSnippet);
+                        
+                        // Ensure clickability is enabled
+                        list.IsItemClickEnabled = true;
+                        list.IsHitTestVisible = true;
+                        list.SelectionMode = ListViewSelectionMode.Single;
+                    }
+                }
+                catch { }
+                
                 ViewModel.SelectedSnippet = newSnippet;
             }
         }
@@ -438,69 +439,7 @@ namespace Pivot.CodeModule.Views
                 // Use Preferences > Code のタグ（CodeFilters）を左ナビに追加して、All Snippets のような挙動にする
                 var filters = settings?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
 
-                // Populate TreeView for hierarchical display with grouping support
-                var tree = this.FindName("CodeTagTree") as TreeView;
-                if (tree != null)
-                {
-                    try
-                    {
-                        tree.ItemInvoked -= CodeTagTree_ItemInvoked;
-                        tree.ItemInvoked += CodeTagTree_ItemInvoked;
-                    }
-                    catch { }
-                    tree.RootNodes.Clear();
-
-                    // Root "All" node
-                    var allNode = new TreeViewNode { Content = "All Snippets" };
-                    tree.RootNodes.Add(allNode);
-
-                    // Group filters by prefix (e.g., "Language:", "Framework:", etc.) for visual organization
-                    // If no prefix, put in "Other" group
-                    var groupedFilters = filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name)
-                        .GroupBy(f =>
-                        {
-                            var name = f.Name ?? string.Empty;
-                            var colonIndex = name.IndexOf(':');
-                            return colonIndex > 0 ? name.Substring(0, colonIndex) : "Other";
-                        })
-                        .OrderBy(g => g.Key == "Other" ? 999 : 0)
-                        .ThenBy(g => g.Key);
-
-                    foreach (var group in groupedFilters)
-                    {
-                        var groupName = group.Key;
-                        var groupNode = new TreeViewNode 
-                        { 
-                            Content = new CategoryNodeInfo { Name = groupName },
-                            IsExpanded = true
-                        };
-
-                        foreach (var f in group.OrderBy(f => f.Name))
-                        {
-                            var tagNode = new TreeViewNode { Content = new FilterNodeInfo { Id = f.Id, Name = f.Name } };
-                            try
-                            {
-                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                                var snippets = ViewModel?.Snippets ?? new System.Collections.ObjectModel.ObservableCollection<Pivot.CodeModule.Models.CodeFile>((repo?.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>()).ToList());
-                                foreach (var sn in snippets)
-                                {
-                                    var snipTags = (sn.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
-                                    if (snipTags.Any(t => string.Equals(t, f.Name, StringComparison.OrdinalIgnoreCase)))
-                                    {
-                                        var childNode = new TreeViewNode { Content = new SnippetNodeInfo { Id = sn.Id, Title = sn.Title ?? "Snippet" } };
-                                        tagNode.Children.Add(childNode);
-                                    }
-                                }
-                            }
-                            catch { }
-                            groupNode.Children.Add(tagNode);
-                        }
-
-                        tree.RootNodes.Add(groupNode);
-                    }
-                }
-
-                // Also add to NavigationView menu items for compatibility (but Trash is handled separately in XAML)
+                // Add tags to NavigationView menu items with right-click context menu
                 try
                 {
                     foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
@@ -508,6 +447,77 @@ namespace Pivot.CodeModule.Views
                         try
                         {
                             var ni = new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Tag) };
+                            
+                            // Add right-click context menu
+                            var menuFlyout = new MenuFlyout();
+                            
+                            // Ensure ListView remains clickable when menu is shown/closed
+                            menuFlyout.Opening += (s, e) =>
+                            {
+                                try
+                                {
+                                    var list = this.FindName("SnippetListView") as ListView;
+                                    if (list != null)
+                                    {
+                                        list.IsHitTestVisible = true;
+                                        list.IsItemClickEnabled = true;
+                                    }
+                                }
+                                catch { }
+                            };
+                            
+                            menuFlyout.Closed += (s, e) =>
+                            {
+                                try
+                                {
+                                    var list = this.FindName("SnippetListView") as ListView;
+                                    if (list != null)
+                                    {
+                                        list.IsHitTestVisible = true;
+                                        list.IsItemClickEnabled = true;
+                                    }
+                                }
+                                catch { }
+                            };
+                            
+                            var editMenuItem = new MenuFlyoutItem { Text = "編集" };
+                            editMenuItem.Click += async (s, e) => 
+                            {
+                                try
+                                {
+                                    await EditTagAsync(f.Id, f.Name);
+                                    // Ensure ListView is clickable after edit
+                                    var list = this.FindName("SnippetListView") as ListView;
+                                    if (list != null)
+                                    {
+                                        list.IsHitTestVisible = true;
+                                        list.IsItemClickEnabled = true;
+                                    }
+                                }
+                                catch { }
+                            };
+                            menuFlyout.Items.Add(editMenuItem);
+                            
+                            var deleteMenuItem = new MenuFlyoutItem { Text = "削除" };
+                            deleteMenuItem.Click += async (s, e) => 
+                            {
+                                try
+                                {
+                                    await DeleteTagAsync(f.Id, f.Name);
+                                    // Ensure ListView is clickable after delete
+                                    var list = this.FindName("SnippetListView") as ListView;
+                                    if (list != null)
+                                    {
+                                        list.IsHitTestVisible = true;
+                                        list.IsItemClickEnabled = true;
+                                    }
+                                }
+                                catch { }
+                            };
+                            menuFlyout.Items.Add(deleteMenuItem);
+                            
+                            ni.ContextFlyout = menuFlyout;
+                            
                             nav.MenuItems.Add(ni);
                         }
                         catch { }
@@ -524,23 +534,6 @@ namespace Pivot.CodeModule.Views
             }
         }
 
-        private void FilterToggleSwitch_Toggled(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var toggle = sender as ToggleSwitch;
-                if (toggle == null) return;
-                var tree = this.FindName("CodeTagTree") as TreeView;
-                if (tree != null)
-                {
-                    tree.Visibility = toggle.IsOn ? Visibility.Visible : Visibility.Collapsed;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"FilterToggleSwitch_Toggled: Error: {ex.Message}");
-            }
-        }
 
         private void TrashButton_Click(object sender, RoutedEventArgs e)
         {
@@ -581,6 +574,13 @@ namespace Pivot.CodeModule.Views
                 {
                     ViewModel.ActiveFilters.Clear();
                     ViewModel.FilterSnippets();
+                    // Ensure ListView is clickable after filtering
+                    var list = this.FindName("SnippetListView") as ListView;
+                    if (list != null)
+                    {
+                        list.IsHitTestVisible = true;
+                        list.IsItemClickEnabled = true;
+                    }
                     if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                     return;
                 }
@@ -596,6 +596,13 @@ namespace Pivot.CodeModule.Views
                     ViewModel.ActiveFilters.Clear();
                     ViewModel.ActiveFilters.Add(filterId);
                     ViewModel.FilterSnippets();
+                    // Ensure ListView is clickable after filtering
+                    var list = this.FindName("SnippetListView") as ListView;
+                    if (list != null)
+                    {
+                        list.IsHitTestVisible = true;
+                        list.IsItemClickEnabled = true;
+                    }
                     if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                 }
                 else
@@ -630,103 +637,6 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        // Handle clicks in the left TreeView to apply category/filter selection
-        private void CodeTagTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
-        {
-            try
-            {
-                var invoked = args.InvokedItem;
-                if (invoked == null) return;
-
-                // If root "All Snippets" clicked (string content)
-                if (invoked is string s && string.Equals(s, "All Snippets", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (ViewModel != null)
-                    {
-                        ViewModel.ActiveFilters.Clear();
-                        ViewModel.FilterSnippets();
-                        if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
-                    }
-                    return;
-                }
-
-                // If a category/group node was clicked, do nothing (groups are visual only)
-                if (invoked is CategoryNodeInfo)
-                {
-                    // Groups are visual organization only - clicking them just expands/collapses
-                    return;
-                }
-
-                // If a filter node was clicked (we stored FilterNodeInfo in Content)
-                if (invoked is FilterNodeInfo fi)
-                {
-                    if (ViewModel != null)
-                    {
-                        ViewModel.ActiveFilters.Clear();
-                        if (fi.Id != Guid.Empty)
-                        {
-                            ViewModel.ActiveFilters.Add(fi.Id);
-                        }
-                        ViewModel.FilterSnippets();
-                        if (ViewModel?.SelectedSnippet != null)
-                        {
-                            _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
-                        }
-                    }
-                    return;
-                }
-
-                // If a snippet node was clicked, open it in the editor (we stored SnippetNodeInfo in Content)
-                if (invoked is SnippetNodeInfo sni)
-                {
-                    try
-                    {
-                        if (ViewModel == null) return;
-                        var vm = ViewModel;
-                        var snippet = vm.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
-                        if (snippet == null)
-                        {
-                            // Fallback: try to resolve from repository or all known snippets
-                            try
-                            {
-                                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                                var all = repo?.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>();
-                                snippet = all.FirstOrDefault(s => s.Id == sni.Id);
-                                // If still null, try ViewModel.Refresh then lookup again
-                                if (snippet == null)
-                                {
-                                    try { vm.Refresh(); } catch { }
-                                    snippet = vm.Snippets?.FirstOrDefault(s => s.Id == sni.Id);
-                                }
-                            }
-                            catch { snippet = null; }
-                        }
-
-                        if (snippet != null)
-                        {
-                            vm.SelectedSnippet = snippet;
-                            _ = SendSelectedSnippetToEditorAsync();
-                            _ = OpenSnippetWithAnimationAsync();
-                        }
-                    }
-                    catch { }
-                    return;
-                }
-
-                // If a category node was clicked, toggle expand/collapse
-                if (invoked is CategoryNodeInfo)
-                {
-                    try
-                    {
-                        var found = FindTreeNodeByContent(sender.RootNodes, invoked);
-                        if (found != null) found.IsExpanded = !found.IsExpanded;
-                    }
-                    catch { }
-                    return;
-                }
-            }
-            catch { }
-        }
 
         private async Task OpenSnippetWithAnimationAsync()
         {
@@ -775,6 +685,7 @@ namespace Pivot.CodeModule.Views
             if (list != null)
             {
                 list.IsHitTestVisible = false;
+                list.IsItemClickEnabled = false;
             }
 
             UIElement? source = null;
@@ -782,20 +693,52 @@ namespace Pivot.CodeModule.Views
             {
                 if (list != null && viewModel?.SelectedSnippet != null)
                 {
-                    
                     list.ScrollIntoView(viewModel.SelectedSnippet);
-                    await Task.Delay(80).ConfigureAwait(false);
-                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => { });
+                    // Wait for layout update, especially for newly created items
+                    await Task.Delay(150).ConfigureAwait(false);
+                    // Force layout update on UI thread
+                    App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => 
+                    {
+                        try
+                        {
+                            // Force layout update by invalidating measure
+                            list.InvalidateMeasure();
+                            list.UpdateLayout();
+                        }
+                        catch { }
+                    });
+                    await Task.Delay(50).ConfigureAwait(false);
+                    
                     ListViewItem? container = null;
-                    try
+                    int retryCount = 0;
+                    const int maxRetries = 5;
+                    
+                    // Retry getting container for newly created items
+                    while (container == null && retryCount < maxRetries)
                     {
-                        container = list.ContainerFromItem(viewModel.SelectedSnippet) as ListViewItem;
-                        
-                    }
-                    catch
-                    {
-                        // ContainerFromItem threw; fallback to non-animated open.
-                        container = null;
+                        try
+                        {
+                            container = list.ContainerFromItem(viewModel.SelectedSnippet) as ListViewItem;
+                            if (container == null && retryCount < maxRetries - 1)
+                            {
+                                await Task.Delay(50).ConfigureAwait(false);
+                                App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => 
+                                {
+                                    try
+                                    {
+                                        list.UpdateLayout();
+                                    }
+                                    catch { }
+                                });
+                                await Task.Delay(50).ConfigureAwait(false);
+                            }
+                        }
+                        catch
+                        {
+                            // ContainerFromItem threw; retry or fallback to non-animated open.
+                            container = null;
+                        }
+                        retryCount++;
                     }
                     if (container != null)
                     {
@@ -940,7 +883,15 @@ namespace Pivot.CodeModule.Views
             }
             finally
             {
-                try { if (list != null) list.IsHitTestVisible = true; } catch { }
+                try 
+                { 
+                    if (list != null) 
+                    {
+                        list.IsHitTestVisible = true;
+                        list.IsItemClickEnabled = true;
+                    }
+                } 
+                catch { }
                 try { _isAnimationActive = false; } catch { }
             }
         }
@@ -1408,7 +1359,25 @@ namespace Pivot.CodeModule.Views
 
         private async void SnippetListView_ItemClick(object sender, ItemClickEventArgs e)
         {
-            if (_isAnimationActive) { return; }
+            // Ensure ListView is clickable before processing click
+            try
+            {
+                var list = sender as ListView;
+                if (list != null)
+                {
+                    list.IsItemClickEnabled = true;
+                    list.IsHitTestVisible = true;
+                }
+            }
+            catch { }
+            
+            if (_isAnimationActive) 
+            { 
+                // Reset animation flag if stuck
+                _isAnimationActive = false;
+                return; 
+            }
+            
             // If a snippet is already open, close it before opening another
             if (ViewModel != null && ViewModel.SelectedSnippet != null)
             {
@@ -1418,7 +1387,6 @@ namespace Pivot.CodeModule.Views
             {
                 if (ViewModel != null)
                 {
-                    
                     // Select clicked snippet for editing
                     ViewModel.SelectedSnippet = clickedSnippet;
                     // Fallback: explicitly push content to the editor and open it in case ViewModel change didn't trigger the UI update
@@ -1427,7 +1395,21 @@ namespace Pivot.CodeModule.Views
                         _ = SendSelectedSnippetToEditorAsync();
                         _ = OpenSnippetWithAnimationAsync();
                     }
-                    catch { }
+                    catch 
+                    {
+                        // Ensure clickability is restored even if animation fails
+                        try
+                        {
+                            var list = sender as ListView;
+                            if (list != null)
+                            {
+                                list.IsItemClickEnabled = true;
+                                list.IsHitTestVisible = true;
+                                _isAnimationActive = false;
+                            }
+                        }
+                        catch { }
+                    }
                 }
             }
         }
@@ -1569,11 +1551,40 @@ namespace Pivot.CodeModule.Views
                         {
                             var insertIndex = ViewModel.Snippets.Count > 0 && ViewModel.Snippets[0].Id == Guid.Empty ? 1 : 0;
                             ViewModel.Snippets.Insert(insertIndex, newSnippet);
-                            // Scroll into view
+                            
+                            // Ensure ListView is clickable after adding new item
                             try
                             {
                                 var list = this.FindName("SnippetListView") as ListView;
-                                list?.ScrollIntoView(newSnippet);
+                                if (list != null)
+                                {
+                                    // Force layout update to ensure new item is rendered
+                                    list.UpdateLayout();
+                                    list.ScrollIntoView(newSnippet);
+                                    
+                                    // Ensure clickability is enabled
+                                    list.IsItemClickEnabled = true;
+                                    list.IsHitTestVisible = true;
+                                    list.SelectionMode = ListViewSelectionMode.Single;
+                                    
+                                    // Small delay to ensure layout is complete
+                                    _ = Task.Run(async () =>
+                                    {
+                                        await Task.Delay(100);
+                                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
+                                        {
+                                            try
+                                            {
+                                                if (list != null)
+                                                {
+                                                    list.IsItemClickEnabled = true;
+                                                    list.IsHitTestVisible = true;
+                                                }
+                                            }
+                                            catch { }
+                                        });
+                                    });
+                                }
                             }
                             catch { }
                         }
@@ -2589,6 +2600,346 @@ namespace Pivot.CodeModule.Views
             }
             catch { }
         }
+
+        private async Task EditTagAsync(Guid filterId, string currentName)
+        {
+            try
+            {
+                var nameBox = new TextBox 
+                { 
+                    Header = "タグ名",
+                    Text = currentName,
+                    Width = 300
+                };
+
+                var panel = new StackPanel();
+                panel.Children.Add(nameBox);
+
+                var dialog = new ContentDialog
+                {
+                    Title = "タグを編集",
+                    Content = panel,
+                    PrimaryButtonText = "保存",
+                    SecondaryButtonText = "キャンセル",
+                    XamlRoot = this.XamlRoot
+                };
+
+                var result = await dialog.ShowAsync();
+
+                if (result == ContentDialogResult.Primary)
+                {
+                    var newName = nameBox.Text?.Trim() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(newName))
+                    {
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "エラー",
+                            Content = "タグ名を入力してください。",
+                            PrimaryButtonText = "OK",
+                            XamlRoot = this.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                        return;
+                    }
+
+                    if (string.Equals(newName, currentName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return; // No change
+                    }
+
+                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                    if (settings != null)
+                    {
+                        var oldName = await settings.UpdateFilterNameAsync(filterId, newName);
+                        if (!string.IsNullOrEmpty(oldName))
+                        {
+                            // Update all snippets that have this tag
+                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                            if (repo != null)
+                            {
+                                repo.UpdateTagInAllSnippets(oldName, newName);
+                                
+                                // Update ViewModel's snippets in-place to avoid flickering
+                                if (ViewModel != null)
+                                {
+                                    // Update snippets in _allSnippets and Snippets collection
+                                    var allSnippets = repo.GetAll().ToList();
+                                    
+                                    // Update _allSnippets (using reflection to access private field)
+                                    try
+                                    {
+                                        var allSnippetsField = ViewModel.GetType().GetField("_allSnippets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                        if (allSnippetsField != null)
+                                        {
+                                            allSnippetsField.SetValue(ViewModel, allSnippets);
+                                        }
+                                    }
+                                    catch { }
+                                    
+                                    // Update visible snippets in-place without clearing the collection
+                                    var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+                                    if (dispatcher != null)
+                                    {
+                                        dispatcher.TryEnqueue(() =>
+                                        {
+                                            try
+                                            {
+                                                // Update existing snippets in-place by updating their properties
+                                                if (ViewModel.Snippets != null)
+                                                {
+                                                    foreach (var snippet in ViewModel.Snippets.ToList())
+                                                    {
+                                                        var updated = allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
+                                                        if (updated != null && updated.Tags != snippet.Tags)
+                                                        {
+                                                            // Update the snippet's tags property directly to avoid UI flickering
+                                                            snippet.Tags = updated.Tags;
+                                                            snippet.Updated = updated.Updated;
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Also update _allSnippets items
+                                                try
+                                                {
+                                                    var allSnippetsField = ViewModel.GetType().GetField("_allSnippets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                                    if (allSnippetsField != null && allSnippetsField.GetValue(ViewModel) is List<Pivot.CodeModule.Models.CodeFile> allSnippetsList)
+                                                    {
+                                                        foreach (var snippet in allSnippetsList)
+                                                        {
+                                                            var updated = allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
+                                                            if (updated != null && updated.Tags != snippet.Tags)
+                                                            {
+                                                                snippet.Tags = updated.Tags;
+                                                                snippet.Updated = updated.Updated;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                catch { }
+                                                
+                                                // Ensure ListView is clickable
+                                                var list = this.FindName("SnippetListView") as ListView;
+                                                if (list != null)
+                                                {
+                                                    list.IsHitTestVisible = true;
+                                                    list.IsItemClickEnabled = true;
+                                                }
+                                            }
+                                            catch { }
+                                        });
+                                    }
+                                }
+                            }
+
+                            // Refresh the navigation menu
+                            BuildNavigationMenu();
+                            
+                            // Ensure ListView is clickable after menu operations
+                            var dispatcher2 = App.Current.MainWindow?.DispatcherQueue;
+                            if (dispatcher2 != null)
+                            {
+                                dispatcher2.TryEnqueue(() =>
+                                {
+                                    try
+                                    {
+                                        var list = this.FindName("SnippetListView") as ListView;
+                                        if (list != null)
+                                        {
+                                            list.IsHitTestVisible = true;
+                                            list.IsItemClickEnabled = true;
+                                        }
+                                    }
+                                    catch { }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"EditTagAsync: Error: {ex.Message}");
+                // Ensure ListView is clickable even on error
+                try
+                {
+                    var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+                    if (dispatcher != null)
+                    {
+                        dispatcher.TryEnqueue(() =>
+                        {
+                            try
+                            {
+                                var list = this.FindName("SnippetListView") as ListView;
+                                if (list != null)
+                                {
+                                    list.IsHitTestVisible = true;
+                                    list.IsItemClickEnabled = true;
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private async Task DeleteTagAsync(Guid filterId, string tagName)
+        {
+            try
+            {
+                var confirmDialog = new ContentDialog
+                {
+                    Title = "タグを削除",
+                    Content = $"タグ「{tagName}」を削除しますか？\n\nこのタグはすべてのカードからも削除されます。",
+                    PrimaryButtonText = "削除",
+                    SecondaryButtonText = "キャンセル",
+                    XamlRoot = this.XamlRoot
+                };
+
+                var result = await confirmDialog.ShowAsync();
+
+                if (result == ContentDialogResult.Primary)
+                {
+                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                    if (settings != null)
+                    {
+                        var deletedName = await settings.DeleteFilterAsync(filterId);
+                        if (!string.IsNullOrEmpty(deletedName))
+                        {
+                            // Remove tag from all snippets
+                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                            if (repo != null)
+                            {
+                                repo.RemoveTagFromAllSnippets(deletedName);
+                                
+                                // Update ViewModel's snippets in-place to avoid flickering
+                                if (ViewModel != null)
+                                {
+                                    // Update snippets in _allSnippets and Snippets collection
+                                    var allSnippets = repo.GetAll().ToList();
+                                    
+                                    // Update _allSnippets (using reflection to access private field)
+                                    try
+                                    {
+                                        var allSnippetsField = ViewModel.GetType().GetField("_allSnippets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                        if (allSnippetsField != null)
+                                        {
+                                            allSnippetsField.SetValue(ViewModel, allSnippets);
+                                        }
+                                    }
+                                    catch { }
+                                    
+                                    // Update visible snippets in-place without clearing the collection
+                                    var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+                                    if (dispatcher != null)
+                                    {
+                                        dispatcher.TryEnqueue(() =>
+                                        {
+                                            try
+                                            {
+                                                // Update existing snippets in-place by updating their properties
+                                                if (ViewModel.Snippets != null)
+                                                {
+                                                    foreach (var snippet in ViewModel.Snippets.ToList())
+                                                    {
+                                                        var updated = allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
+                                                        if (updated != null && updated.Tags != snippet.Tags)
+                                                        {
+                                                            // Update the snippet's tags property directly to avoid UI flickering
+                                                            snippet.Tags = updated.Tags;
+                                                            snippet.Updated = updated.Updated;
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Also update _allSnippets items
+                                                try
+                                                {
+                                                    var allSnippetsField = ViewModel.GetType().GetField("_allSnippets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                                    if (allSnippetsField != null && allSnippetsField.GetValue(ViewModel) is List<Pivot.CodeModule.Models.CodeFile> allSnippetsList)
+                                                    {
+                                                        foreach (var snippet in allSnippetsList)
+                                                        {
+                                                            var updated = allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
+                                                            if (updated != null && updated.Tags != snippet.Tags)
+                                                            {
+                                                                snippet.Tags = updated.Tags;
+                                                                snippet.Updated = updated.Updated;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                catch { }
+                                                
+                                                // Ensure ListView is clickable
+                                                var list = this.FindName("SnippetListView") as ListView;
+                                                if (list != null)
+                                                {
+                                                    list.IsHitTestVisible = true;
+                                                    list.IsItemClickEnabled = true;
+                                                }
+                                            }
+                                            catch { }
+                                        });
+                                    }
+                                }
+                            }
+
+                            // Refresh the navigation menu
+                            BuildNavigationMenu();
+                            
+                            // Ensure ListView is clickable after menu operations
+                            var dispatcher2 = App.Current.MainWindow?.DispatcherQueue;
+                            if (dispatcher2 != null)
+                            {
+                                dispatcher2.TryEnqueue(() =>
+                                {
+                                    try
+                                    {
+                                        var list = this.FindName("SnippetListView") as ListView;
+                                        if (list != null)
+                                        {
+                                            list.IsHitTestVisible = true;
+                                            list.IsItemClickEnabled = true;
+                                        }
+                                    }
+                                    catch { }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"DeleteTagAsync: Error: {ex.Message}");
+                // Ensure ListView is clickable even on error
+                try
+                {
+                    var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+                    if (dispatcher != null)
+                    {
+                        dispatcher.TryEnqueue(() =>
+                        {
+                            try
+                            {
+                                var list = this.FindName("SnippetListView") as ListView;
+                                if (list != null)
+                                {
+                                    list.IsHitTestVisible = true;
+                                    list.IsItemClickEnabled = true;
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+                }
+                catch { }
+            }
+        }
+
     }
 }
 

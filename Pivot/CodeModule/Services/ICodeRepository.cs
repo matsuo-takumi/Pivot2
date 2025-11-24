@@ -22,6 +22,16 @@ namespace Pivot.CodeModule.Services
         void AddTag(string name);
 
         string GetFilterNameById(Guid filterId);
+        
+        /// <summary>
+        /// Updates a tag name in all code snippets that have this tag.
+        /// </summary>
+        void UpdateTagInAllSnippets(string oldTagName, string newTagName);
+        
+        /// <summary>
+        /// Removes a tag from all code snippets that have this tag.
+        /// </summary>
+        void RemoveTagFromAllSnippets(string tagName);
     }
 }
 

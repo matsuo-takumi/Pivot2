@@ -49,7 +49,7 @@
                         </ItemsRepeater.Layout>
                         <ItemsRepeater.ItemTemplate>
                             <DataTemplate>
-                                <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF">
+                                <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF" DoubleTapped="AssetItem_DoubleTapped" Tag="{Binding Path}">
                                     <Border.Transitions>
                                         <TransitionCollection>
                                             <EntranceThemeTransition/>
@@ -106,7 +106,7 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF" Width="{Binding DataContext.MasonryColumnWidth, ElementName=AssetPageRoot}">
+                                            <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF" Width="{Binding DataContext.MasonryColumnWidth, ElementName=AssetPageRoot}" DoubleTapped="AssetItem_DoubleTapped" Tag="{Binding Path}">
                                                 <Border.Transitions>
                                                     <TransitionCollection>
                                                         <EntranceThemeTransition/>

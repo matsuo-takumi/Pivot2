@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
 using Pivot.Models;
+using System;
 
 namespace Pivot.Views
 {
@@ -45,6 +46,31 @@ namespace Pivot.Views
         private void AssetPage_Unloaded(object sender, RoutedEventArgs e)
         {
             try { ViewModel?.CancelLoads(); } catch { }
+        }
+
+        private void AssetItem_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.Tag is string filePath && !string.IsNullOrWhiteSpace(filePath))
+                {
+                    if (System.IO.File.Exists(filePath))
+                    {
+                        // Open file with default application
+                        var processInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = filePath,
+                            UseShellExecute = true
+                        };
+                        System.Diagnostics.Process.Start(processInfo);
+                        e.Handled = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"AssetItem_DoubleTapped error: {ex.Message}");
+            }
         }
 
         private void AssetPage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -132,7 +158,10 @@ namespace Pivot.Views
                         ViewModel.MasonryColumnWidth = System.Math.Floor(available / cols) - 16;
                     }
                     // build masonry columns from currently displayed (filtered) assets so layout change preserves filtering
-                    ViewModel.BuildMasonryColumns(ViewModel.DisplayedAssets);
+                    if (ViewModel != null)
+                    {
+                        ViewModel.BuildMasonryColumns(ViewModel.DisplayedAssets);
+                    }
                     if (itemsRepeater != null) itemsRepeater.Visibility = Visibility.Collapsed;
                     if (masonryControl != null) masonryControl.Visibility = Visibility.Visible;
                     break;

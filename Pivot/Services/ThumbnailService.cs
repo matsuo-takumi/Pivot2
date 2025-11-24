@@ -24,6 +24,7 @@ using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 using Windows.Storage;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Runtime.InteropServices;
 
 namespace Pivot.Services
 {
@@ -178,27 +179,35 @@ namespace Pivot.Services
                     // fallthrough to other handlers if ffmpeg not available or failed
                 }
 
-                var modelExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj", ".fbx", ".gltf", ".glb", ".dae" };
+                var modelExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj", ".fbx", ".gltf", ".glb", ".dae", ".3ds", ".max", ".blend", ".ma", ".mb", ".usd", ".usdz", ".ply", ".stl" };
                 if (modelExts.Contains(ext))
                 {
-			// try shell icon service (per-extension cache)
-			try
-			{
-				if (_shellIconService != null)
-				{
-					var iconPath = await _shellIconService.GetOrCreateIconForExtensionAsync(ext, Math.Max(width, height), ct).ConfigureAwait(false);
-					if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
-					{
-						// copy cached icon to destination (resize not necessary; we generate at requested size)
-						Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
-						File.Copy(iconPath, destinationPngPath, true);
-						return;
-        }
-
-        
-				}
-			}
-			catch { }
+                    // Try Windows Shell API for actual file thumbnail first (better quality)
+                    try
+                    {
+                        if (TryCreateThumbnailFromShell(sourcePath, width, height, destinationPngPath))
+                        {
+                            return;
+                        }
+                    }
+                    catch { }
+                    
+                    // Fallback to shell icon service (per-extension cache)
+                    try
+                    {
+                        if (_shellIconService != null)
+                        {
+                            var iconPath = await _shellIconService.GetOrCreateIconForExtensionAsync(ext, Math.Max(width, height), ct).ConfigureAwait(false);
+                            if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+                            {
+                                // copy cached icon to destination (resize not necessary; we generate at requested size)
+                                Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
+                                File.Copy(iconPath, destinationPngPath, true);
+                                return;
+                            }
+                        }
+                    }
+                    catch { }
 
 					var label = ext.StartsWith(".") ? ext.Substring(1).ToUpperInvariant() : ext.ToUpperInvariant();
 					if (_uiDispatcher != null)
@@ -390,6 +399,113 @@ namespace Pivot.Services
 				_logger.LogWarning(ex, "Thumbnail cache cleanup failed");
 			}
 		}
+
+		private bool TryCreateThumbnailFromShell(string sourcePath, int width, int height, string destinationPngPath)
+		{
+			try
+			{
+				// Use IShellItemImageFactory to get actual file thumbnail (same as Explorer)
+				Guid shellItemGuid = new Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"); // IShellItem
+				Guid imageFactoryGuid = new Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"); // IShellItemImageFactory
+				
+				IntPtr shellItemPtr = IntPtr.Zero;
+				IntPtr imageFactoryPtr = IntPtr.Zero;
+				IntPtr hBitmap = IntPtr.Zero;
+
+				try
+				{
+					// Create IShellItem from file path
+					int hr = SHCreateItemFromParsingName(sourcePath, IntPtr.Zero, shellItemGuid, out shellItemPtr);
+					if (hr != 0 || shellItemPtr == IntPtr.Zero)
+					{
+						return false;
+					}
+
+					// Query IShellItemImageFactory interface
+					hr = Marshal.QueryInterface(shellItemPtr, ref imageFactoryGuid, out imageFactoryPtr);
+					if (hr != 0 || imageFactoryPtr == IntPtr.Zero)
+					{
+						return false;
+					}
+
+					// Get thumbnail bitmap using IShellItemImageFactory.GetImage
+					var size = new SIZE { cx = width, cy = height };
+					uint flags = 0x00000001; // SIIGBF_THUMBNAILONLY
+					hr = IShellItemImageFactory_GetImage(imageFactoryPtr, ref size, flags, out hBitmap);
+					if (hr != 0 || hBitmap == IntPtr.Zero)
+					{
+						return false;
+					}
+
+					// Convert HBITMAP to PNG file
+					using var bmp = System.Drawing.Image.FromHbitmap(hBitmap);
+					using var resized = new System.Drawing.Bitmap(bmp, Math.Max(1, width), Math.Max(1, height));
+					Directory.CreateDirectory(Path.GetDirectoryName(destinationPngPath)!);
+					resized.Save(destinationPngPath, System.Drawing.Imaging.ImageFormat.Png);
+					return File.Exists(destinationPngPath);
+				}
+				finally
+				{
+					if (hBitmap != IntPtr.Zero)
+					{
+						DeleteObject(hBitmap);
+					}
+					if (imageFactoryPtr != IntPtr.Zero)
+					{
+						Marshal.Release(imageFactoryPtr);
+					}
+					if (shellItemPtr != IntPtr.Zero)
+					{
+						Marshal.Release(shellItemPtr);
+					}
+				}
+			}
+			catch { }
+			return false;
+		}
+
+		#region Native Shell API
+		[StructLayout(LayoutKind.Sequential)]
+		private struct SIZE
+		{
+			public int cx;
+			public int cy;
+		}
+
+		[DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
+		private static extern int SHCreateItemFromParsingName(
+			[MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+			IntPtr pbc,
+			[MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+			out IntPtr ppv);
+
+		[DllImport("gdi32.dll")]
+		private static extern bool DeleteObject(IntPtr hObject);
+
+		// IShellItemImageFactory.GetImage method (vtable offset 3)
+		private static int IShellItemImageFactory_GetImage(IntPtr pImageFactory, ref SIZE size, uint flags, out IntPtr phbm)
+		{
+			phbm = IntPtr.Zero;
+			try
+			{
+				// Get vtable pointer
+				IntPtr vtable = Marshal.ReadIntPtr(pImageFactory);
+				// Get GetImage method pointer (offset 3 * IntPtr.Size)
+				IntPtr getImagePtr = Marshal.ReadIntPtr(vtable, 3 * IntPtr.Size);
+				
+				// Create delegate for GetImage method
+				var getImageDelegate = Marshal.GetDelegateForFunctionPointer<GetImageDelegate>(getImagePtr);
+				return getImageDelegate(pImageFactory, ref size, flags, out phbm);
+			}
+			catch
+			{
+				return -1;
+			}
+		}
+
+		[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+		private delegate int GetImageDelegate(IntPtr pImageFactory, ref SIZE size, uint flags, out IntPtr phbm);
+		#endregion
 
 		public void Dispose()
 		{

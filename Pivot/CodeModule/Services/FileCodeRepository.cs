@@ -391,6 +391,91 @@ namespace Pivot.CodeModule.Services
 
         public string GetFilterNameById(Guid filterId) => _settings.GetFilterNameById(filterId);
 
+        public void UpdateTagInAllSnippets(string oldTagName, string newTagName)
+        {
+            if (string.IsNullOrWhiteSpace(oldTagName) || string.IsNullOrWhiteSpace(newTagName)) return;
+            if (string.Equals(oldTagName, newTagName, StringComparison.OrdinalIgnoreCase)) return;
+
+            try
+            {
+                var allSnippets = GetAll().ToList();
+                var updated = false;
+
+                foreach (var snippet in allSnippets)
+                {
+                    if (string.IsNullOrWhiteSpace(snippet.Tags)) continue;
+
+                    var tags = snippet.Tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim())
+                        .ToList();
+
+                    var hasOldTag = tags.Any(t => string.Equals(t, oldTagName, StringComparison.OrdinalIgnoreCase));
+                    if (!hasOldTag) continue;
+
+                    // Replace old tag with new tag
+                    for (int i = 0; i < tags.Count; i++)
+                    {
+                        if (string.Equals(tags[i], oldTagName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            tags[i] = newTagName.Trim();
+                        }
+                    }
+
+                    snippet.Tags = string.Join(", ", tags);
+                    snippet.Updated = DateTime.Now;
+                    Save(snippet);
+                    updated = true;
+                }
+
+                if (updated)
+                {
+                    System.Diagnostics.Debug.WriteLine($"UpdateTagInAllSnippets: Updated tag '{oldTagName}' to '{newTagName}' in {allSnippets.Count} snippets");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"UpdateTagInAllSnippets: Error: {ex.Message}");
+            }
+        }
+
+        public void RemoveTagFromAllSnippets(string tagName)
+        {
+            if (string.IsNullOrWhiteSpace(tagName)) return;
+
+            try
+            {
+                var allSnippets = GetAll().ToList();
+                var updated = false;
+
+                foreach (var snippet in allSnippets)
+                {
+                    if (string.IsNullOrWhiteSpace(snippet.Tags)) continue;
+
+                    var tags = snippet.Tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(t => t.Trim())
+                        .Where(t => !string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    if (tags.Count == snippet.Tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Length)
+                        continue; // Tag was not present
+
+                    snippet.Tags = tags.Count > 0 ? string.Join(", ", tags) : string.Empty;
+                    snippet.Updated = DateTime.Now;
+                    Save(snippet);
+                    updated = true;
+                }
+
+                if (updated)
+                {
+                    System.Diagnostics.Debug.WriteLine($"RemoveTagFromAllSnippets: Removed tag '{tagName}' from snippets");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"RemoveTagFromAllSnippets: Error: {ex.Message}");
+            }
+        }
+
         private static Guid CreateDeterministicGuid(string input)
         {
             try

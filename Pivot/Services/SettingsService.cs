@@ -946,6 +946,52 @@ namespace Pivot.Services
             return string.Empty; // Return empty if not found in either
         }
 
+        /// <summary>
+        /// Updates a filter name by its ID and returns the old name.
+        /// </summary>
+        public async Task<string?> UpdateFilterNameAsync(Guid filterId, string newName)
+        {
+            if (string.IsNullOrWhiteSpace(newName)) return null;
+
+            try
+            {
+                var filter = _cache.CodeFilters.FirstOrDefault(f => f.Id == filterId);
+                if (filter == null) return null;
+
+                var oldName = filter.Name;
+                filter.Name = newName.Trim();
+                await SetCodeFiltersAsync(_cache.CodeFilters);
+                return oldName;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to update filter name.");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Deletes a filter by its ID and returns the old name.
+        /// </summary>
+        public async Task<string?> DeleteFilterAsync(Guid filterId)
+        {
+            try
+            {
+                var filter = _cache.CodeFilters.FirstOrDefault(f => f.Id == filterId);
+                if (filter == null) return null;
+
+                var oldName = filter.Name;
+                _cache.CodeFilters.Remove(filter);
+                await SetCodeFiltersAsync(_cache.CodeFilters);
+                return oldName;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to delete filter.");
+                return null;
+            }
+        }
+
         // Visible filters per tab accessors
         public List<Guid> GetVisibleFiltersForTab(string tabId)
         {

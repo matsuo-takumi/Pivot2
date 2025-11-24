@@ -63,6 +63,8 @@ namespace Pivot.CodeModule.ViewModels
             _repo = repo;
             _snippetCache = snippetCache;
             var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
+            // Remove tags that don't exist in preferences from all snippets
+            RemoveInvalidTagsFromSnippets(all);
             _allSnippets = all;
             _snippets = new ObservableCollection<CodeFile>(_allSnippets);
             InitializeTagInfrastructure();
@@ -131,20 +133,27 @@ namespace Pivot.CodeModule.ViewModels
 
         private IEnumerable<string> CollectTagNames()
         {
+            // Only collect tags that exist in preferences
+            // This ensures that tags deleted from preferences are not shown in the UI
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var name in CollectPreferenceTagNames())
+            var preferenceTags = CollectPreferenceTagNames().ToHashSet(StringComparer.OrdinalIgnoreCase);
+            
+            // Only add tags that exist in preferences
+            foreach (var name in preferenceTags)
             {
                 names.Add(name);
             }
-            foreach (var name in CollectPreferenceTagNames())
-            {
-                names.Add(name);
-            }
+            
+            // Also include tags from snippets, but only if they exist in preferences
             foreach (var snippet in _allSnippets)
             {
                 foreach (var tag in ParseTagList(snippet.Tags))
                 {
-                    names.Add(tag);
+                    // Only add tags that exist in preferences
+                    if (preferenceTags.Contains(tag))
+                    {
+                        names.Add(tag);
+                    }
                 }
             }
             return names.OrderBy(name => name);
@@ -206,13 +215,27 @@ namespace Pivot.CodeModule.ViewModels
         private void UpdateFilteredTags()
         {
             FilteredTags.Clear();
+            var allowedTags = GetAllowedPreferenceTagNames();
+            
+            // If no preferences are set, show all tags (backward compatibility)
+            var shouldFilter = allowedTags.Count > 0;
+            
             foreach (var tag in AvailableTags)
             {
-                if (string.IsNullOrWhiteSpace(_tagFilterKeyword) ||
-                    tag.Name.Contains(_tagFilterKeyword, StringComparison.OrdinalIgnoreCase))
+                // Filter by keyword
+                if (!string.IsNullOrWhiteSpace(_tagFilterKeyword) &&
+                    !tag.Name.Contains(_tagFilterKeyword, StringComparison.OrdinalIgnoreCase))
                 {
-                    FilteredTags.Add(tag);
+                    continue;
                 }
+                
+                // Only show tags that exist in preferences
+                if (shouldFilter && !allowedTags.Contains(tag.Name))
+                {
+                    continue;
+                }
+                
+                FilteredTags.Add(tag);
             }
         }
 
@@ -264,6 +287,53 @@ namespace Pivot.CodeModule.ViewModels
                 _ = PersistSnippetAsync(snippet, refreshAfterSave: false);
             }
             return filtered;
+        }
+
+        /// <summary>
+        /// Removes tags that don't exist in preferences from all snippets.
+        /// This ensures that deleted tags are automatically removed from cards.
+        /// </summary>
+        private void RemoveInvalidTagsFromSnippets(List<CodeFile> snippets)
+        {
+            if (snippets == null || !snippets.Any()) return;
+
+            var allowed = GetAllowedPreferenceTagNames();
+            // If no preferences are set, don't filter (allow all tags)
+            if (allowed.Count == 0) return;
+
+            var updated = false;
+            foreach (var snippet in snippets)
+            {
+                if (string.IsNullOrWhiteSpace(snippet.Tags)) continue;
+
+                var tags = ParseTagList(snippet.Tags);
+                var filtered = tags.Where(tag => allowed.Contains(tag)).ToList();
+                
+                if (filtered.Count != tags.Count)
+                {
+                    snippet.Tags = filtered.Count > 0 ? string.Join(", ", filtered) : string.Empty;
+                    snippet.Updated = DateTime.Now;
+                    updated = true;
+                    
+                    // Persist the change
+                    try
+                    {
+                        if (_repo != null)
+                        {
+                            _repo.Save(snippet);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"RemoveInvalidTagsFromSnippets: Failed to save snippet {snippet.Id}: {ex.Message}");
+                    }
+                }
+            }
+
+            if (updated)
+            {
+                System.Diagnostics.Debug.WriteLine("RemoveInvalidTagsFromSnippets: Removed invalid tags from snippets");
+            }
         }
 
         private HashSet<string> GetAllowedPreferenceTagNames()
@@ -455,6 +525,8 @@ namespace Pivot.CodeModule.ViewModels
                 var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
                 if (all.Any())
                 {
+                    // Remove tags that don't exist in preferences from all snippets
+                    RemoveInvalidTagsFromSnippets(all);
                     _allSnippets = all;
                     ApplyCodeTagFilters();
                 }

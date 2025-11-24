@@ -204,7 +204,7 @@ namespace Pivot.ViewModels
             {
                 var ext = Path.GetExtension(f);
                 AssetKind kind = AssetKind.Other;
-                if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj",".fbx",".gltf",".glb",".dae" }.Contains(ext)) kind = AssetKind.Model;
+                if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj",".fbx",".gltf",".glb",".dae",".3ds",".max",".blend",".ma",".mb",".usd",".usdz",".ply",".stl" }.Contains(ext)) kind = AssetKind.Model;
                 else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png",".jpg",".jpeg",".bmp",".gif",".webp",".tga",".tif",".tiff" }.Contains(ext)) kind = AssetKind.Image;
                 else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp4",".mov",".avi",".mkv",".webm" }.Contains(ext)) kind = AssetKind.Video;
                 else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp3",".wav",".ogg",".flac",".aac" }.Contains(ext)) kind = AssetKind.Audio;

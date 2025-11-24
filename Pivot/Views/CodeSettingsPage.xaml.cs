@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
+using Pivot.CodeModule.Services;
 
 namespace Pivot.Views
 {
@@ -227,9 +228,27 @@ namespace Pivot.Views
                 var user = _settings.GetUserSettings();
                 var target = user.CodeFilters.FirstOrDefault(f => f.Id == id);
                 if (target == null) return;
+                
+                var tagName = target.Name;
+                
                 // allow deleting built-in as requested
                 user.CodeFilters.Remove(target);
                 await _settings.SetCodeFiltersAsync(user.CodeFilters);
+                
+                // Remove tag from all snippets
+                try
+                {
+                    var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
+                    if (repo != null && !string.IsNullOrWhiteSpace(tagName))
+                    {
+                        repo.RemoveTagFromAllSnippets(tagName);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"DeleteFilter_Click: Failed to remove tag from snippets: {ex.Message}");
+                }
+                
                 LoadFilters();
             }
         }
