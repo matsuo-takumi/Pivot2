@@ -52,6 +52,8 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private bool _showThumbnails = true;
 
+        public SelectionManagerViewModel<TemplateItem> SelectionManager { get; }
+
         [RelayCommand]
         private void ToggleLayout()
         {
@@ -62,6 +64,19 @@ namespace Pivot.ViewModels
 
         public ImageViewModel()
         {
+            SelectionManager = new SelectionManagerViewModel<TemplateItem>();
+            SelectionManager.PropertyChanged += (s, e) =>
+            {
+                // 選択状態が変更されたときに、各アイテムのIsSelectedプロパティを更新
+                if (e.PropertyName == nameof(SelectionManagerViewModel<TemplateItem>.SelectedCount))
+                {
+                    foreach (var item in Images)
+                    {
+                        item.IsSelected = SelectionManager.IsSelected(item);
+                    }
+                }
+            };
+
             Images = new ObservableCollection<TemplateItem>
             {
                 new TemplateItem { Name = "Test Image 1", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/160x120?text=Image+1" },

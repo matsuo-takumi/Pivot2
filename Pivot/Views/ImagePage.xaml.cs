@@ -4,15 +4,20 @@ using Pivot.ViewModels;
 using System.ComponentModel;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
 using Pivot.Models;
+using System;
+using System.Linq;
 
 namespace Pivot.Views
 {
     public sealed partial class ImagePage : Page
     {
         public ImageViewModel ViewModel { get; set; }
+
+        private TemplateItem? _lastSelectedItemForRange;
 
         public ImagePage()
         {
@@ -124,8 +129,8 @@ namespace Pivot.Views
                         int cols = ViewModel.MasonryColumnCount > 0 ? ViewModel.MasonryColumnCount : 1;
                         if (cols <= 0) cols = 1;
                         ViewModel.MasonryColumnWidth = System.Math.Floor(available / cols) - 16;
+                        ViewModel.BuildMasonryColumns();
                     }
-                    ViewModel.BuildMasonryColumns();
                     ItemsRepeaterMain.Visibility = Visibility.Collapsed;
                     MasonryColumnsControl.Visibility = Visibility.Visible;
                     break;
@@ -142,6 +147,61 @@ namespace Pivot.Views
                     ItemsRepeaterMain.Visibility = Visibility.Visible;
                     MasonryColumnsControl.Visibility = Visibility.Collapsed;
                     break;
+            }
+        }
+
+        private void ImageItem_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
+                {
+                    var keyModifiers = Windows.System.VirtualKeyModifiers.Control;
+                    var isCtrlPressed = (keyModifiers & Windows.System.VirtualKeyModifiers.Control) == Windows.System.VirtualKeyModifiers.Control;
+                    keyModifiers = Windows.System.VirtualKeyModifiers.Shift;
+                    var isShiftPressed = (keyModifiers & Windows.System.VirtualKeyModifiers.Shift) == Windows.System.VirtualKeyModifiers.Shift;
+                    
+                    // より正確な方法: InputKeyboardSourceを使用
+                    try
+                    {
+                        var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+                        var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+                        isCtrlPressed = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+                        isShiftPressed = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+                    }
+                    catch { }
+
+                    // 範囲選択の開始点を設定
+                    if (isShiftPressed && _lastSelectedItemForRange != null && item != null)
+                    {
+                        // Shift+クリック: 範囲選択
+                        var items = ViewModel.Images.ToList();
+                        var startIndex = items.IndexOf(_lastSelectedItemForRange);
+                        var endIndex = items.IndexOf(item);
+                        if (startIndex >= 0 && endIndex >= 0)
+                        {
+                            var minIndex = Math.Min(startIndex, endIndex);
+                            var maxIndex = Math.Max(startIndex, endIndex);
+                            var rangeItems = items.Skip(minIndex).Take(maxIndex - minIndex + 1);
+                            ViewModel.SelectionManager.SelectRange(rangeItems);
+                        }
+                    }
+                    else if (item != null)
+                    {
+                        // 通常クリックまたはCtrl+クリック
+                        ViewModel.SelectionManager.SelectItem(item, isCtrlPressed, isShiftPressed);
+                        if (!isCtrlPressed)
+                        {
+                            _lastSelectedItemForRange = item;
+                        }
+                    }
+
+                    e.Handled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ImageItem_PointerPressed error: {ex.Message}");
             }
         }
     }

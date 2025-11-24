@@ -187,6 +187,26 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintTransitionMs. Using default.");
             }
 
+            // Text color customization enabled flag
+            try
+            {
+                var customizationEnabled = await _settingsStore.GetAsync("Color.TextCustomizationEnabled");
+                if (bool.TryParse(customizationEnabled, out var parsed))
+                {
+                    _cache.IsTextColorCustomizationEnabled = parsed;
+                }
+                else
+                {
+                    _cache.IsTextColorCustomizationEnabled = false; // Default to false (use theme colors)
+                }
+                _logger.LogInformation("SettingsService: Loaded Color.TextCustomizationEnabled: {Enabled}", _cache.IsTextColorCustomizationEnabled);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Color.TextCustomizationEnabled. Using default (false).");
+                _cache.IsTextColorCustomizationEnabled = false;
+            }
+
             // Text color overrides (light/dark roles that can be customized in Preferences > Color > Text)
             try
             {
@@ -233,6 +253,84 @@ namespace Pivot.Services
 
             await LoadDominantTemplateSettingsAsync();
             await LoadRandomTemplateSettingsAsync();
+
+            // Image selection highlight settings
+            try
+            {
+                var imageSelectionColor = await _settingsStore.GetAsync("Image.SelectionColor");
+                if (!string.IsNullOrWhiteSpace(imageSelectionColor))
+                {
+                    _cache.ImageSelectionColor = imageSelectionColor;
+                }
+                _logger.LogInformation("SettingsService: Loaded Image.SelectionColor: {Color}", _cache.ImageSelectionColor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Image.SelectionColor. Using default.");
+            }
+
+            try
+            {
+                var imageSelectionOpacity = await _settingsStore.GetAsync("Image.SelectionOpacity");
+                if (!string.IsNullOrWhiteSpace(imageSelectionOpacity) &&
+                    double.TryParse(imageSelectionOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var opacity) &&
+                    opacity >= 0 && opacity <= 1)
+                {
+                    _cache.ImageSelectionOpacity = opacity;
+                }
+                _logger.LogInformation("SettingsService: Loaded Image.SelectionOpacity: {Opacity}", _cache.ImageSelectionOpacity);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Image.SelectionOpacity. Using default.");
+            }
+
+            try
+            {
+                var imageSelectionBorderThickness = await _settingsStore.GetAsync("Image.SelectionBorderThickness");
+                if (!string.IsNullOrWhiteSpace(imageSelectionBorderThickness) &&
+                    double.TryParse(imageSelectionBorderThickness, NumberStyles.Float, CultureInfo.InvariantCulture, out var thickness) &&
+                    thickness >= 0)
+                {
+                    _cache.ImageSelectionBorderThickness = thickness;
+                }
+                _logger.LogInformation("SettingsService: Loaded Image.SelectionBorderThickness: {Thickness}", _cache.ImageSelectionBorderThickness);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Image.SelectionBorderThickness. Using default.");
+            }
+
+            // Image drag selection highlight settings
+            try
+            {
+                var imageDragSelectionColor = await _settingsStore.GetAsync("Image.DragSelectionColor");
+                if (!string.IsNullOrWhiteSpace(imageDragSelectionColor))
+                {
+                    _cache.ImageDragSelectionColor = imageDragSelectionColor;
+                }
+                _logger.LogInformation("SettingsService: Loaded Image.DragSelectionColor: {Color}", _cache.ImageDragSelectionColor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Image.DragSelectionColor. Using default.");
+            }
+
+            try
+            {
+                var imageDragSelectionOpacity = await _settingsStore.GetAsync("Image.DragSelectionOpacity");
+                if (!string.IsNullOrWhiteSpace(imageDragSelectionOpacity) &&
+                    double.TryParse(imageDragSelectionOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var opacity) &&
+                    opacity >= 0 && opacity <= 1)
+                {
+                    _cache.ImageDragSelectionOpacity = opacity;
+                }
+                _logger.LogInformation("SettingsService: Loaded Image.DragSelectionOpacity: {Opacity}", _cache.ImageDragSelectionOpacity);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load Image.DragSelectionOpacity. Using default.");
+            }
 
             // Last selected snippet id
             try
@@ -1342,6 +1440,101 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "SettingsService: Failed to clear Color.TextOverrides.");
+            }
+        }
+
+        public bool IsTextColorCustomizationEnabled() => _cache.IsTextColorCustomizationEnabled;
+
+        public async Task SetTextColorCustomizationEnabledAsync(bool enabled)
+        {
+            _cache.IsTextColorCustomizationEnabled = enabled;
+            try
+            {
+                await _settingsStore.UpsertAsync("Color.TextCustomizationEnabled", enabled.ToString());
+                _logger.LogInformation("SettingsService: Set Color.TextCustomizationEnabled to {Enabled}", enabled);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.TextCustomizationEnabled.");
+            }
+        }
+
+        // Image selection highlight settings
+        public string GetImageSelectionColor() => _cache.ImageSelectionColor;
+        public async Task SetImageSelectionColorAsync(string color)
+        {
+            _cache.ImageSelectionColor = color ?? "#0078D4";
+            try
+            {
+                await _settingsStore.UpsertAsync("Image.SelectionColor", _cache.ImageSelectionColor);
+                _logger.LogInformation("SettingsService: Set Image.SelectionColor to {Color}", _cache.ImageSelectionColor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SelectionColor.");
+            }
+        }
+
+        public double GetImageSelectionOpacity() => _cache.ImageSelectionOpacity;
+        public async Task SetImageSelectionOpacityAsync(double opacity)
+        {
+            var clamped = Math.Clamp(opacity, 0.0, 1.0);
+            _cache.ImageSelectionOpacity = clamped;
+            try
+            {
+                await _settingsStore.UpsertAsync("Image.SelectionOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
+                _logger.LogInformation("SettingsService: Set Image.SelectionOpacity to {Opacity}", clamped);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SelectionOpacity.");
+            }
+        }
+
+        public double GetImageSelectionBorderThickness() => _cache.ImageSelectionBorderThickness;
+        public async Task SetImageSelectionBorderThicknessAsync(double thickness)
+        {
+            var clamped = Math.Max(0.0, thickness);
+            _cache.ImageSelectionBorderThickness = clamped;
+            try
+            {
+                await _settingsStore.UpsertAsync("Image.SelectionBorderThickness", clamped.ToString("G", CultureInfo.InvariantCulture));
+                _logger.LogInformation("SettingsService: Set Image.SelectionBorderThickness to {Thickness}", clamped);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SelectionBorderThickness.");
+            }
+        }
+
+        public string GetImageDragSelectionColor() => _cache.ImageDragSelectionColor;
+        public async Task SetImageDragSelectionColorAsync(string color)
+        {
+            _cache.ImageDragSelectionColor = color ?? "#0078D4";
+            try
+            {
+                await _settingsStore.UpsertAsync("Image.DragSelectionColor", _cache.ImageDragSelectionColor);
+                _logger.LogInformation("SettingsService: Set Image.DragSelectionColor to {Color}", _cache.ImageDragSelectionColor);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.DragSelectionColor.");
+            }
+        }
+
+        public double GetImageDragSelectionOpacity() => _cache.ImageDragSelectionOpacity;
+        public async Task SetImageDragSelectionOpacityAsync(double opacity)
+        {
+            var clamped = Math.Clamp(opacity, 0.0, 1.0);
+            _cache.ImageDragSelectionOpacity = clamped;
+            try
+            {
+                await _settingsStore.UpsertAsync("Image.DragSelectionOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
+                _logger.LogInformation("SettingsService: Set Image.DragSelectionOpacity to {Opacity}", clamped);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.DragSelectionOpacity.");
             }
         }
 

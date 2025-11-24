@@ -27,6 +27,13 @@ namespace Pivot.Models
 			get => _thumbnailPath;
 			set => SetProperty(ref _thumbnailPath, value);
 		}
+
+		private bool _isSelected;
+		public bool IsSelected
+		{
+			get => _isSelected;
+			set => SetProperty(ref _isSelected, value);
+		}
 	}
 }
 

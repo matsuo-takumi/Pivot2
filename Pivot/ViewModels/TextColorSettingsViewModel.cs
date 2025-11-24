@@ -50,7 +50,11 @@ namespace Pivot.ViewModels
             {
                 await _settings.SetTextColorOverrideAsync(entry.SettingKey, entry.HexValue);
             }
-            catch { }
+            catch
+            {
+                // Silently ignore persistence errors to avoid disrupting UI responsiveness
+                // Errors are logged by SettingsService internally
+            }
         }
     }
 

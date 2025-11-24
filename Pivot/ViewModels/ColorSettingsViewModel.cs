@@ -16,6 +16,18 @@ namespace Pivot.ViewModels
         private readonly SettingsService _settings;
         private readonly ITextColorResourceManager _resourceManager;
 
+        [ObservableProperty]
+        private bool _isTextColorCustomizationEnabled;
+
+        [ObservableProperty]
+        private string _imageSelectionColor;
+
+        [ObservableProperty]
+        private double _imageSelectionOpacity;
+
+        [ObservableProperty]
+        private double _imageSelectionBorderThickness;
+
         public TextColorSettingsViewModel TextColorSettings { get; }
         public TextColorPresetViewModel PresetViewModel { get; }
 
@@ -27,8 +39,43 @@ namespace Pivot.ViewModels
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
+            IsTextColorCustomizationEnabled = _settings.IsTextColorCustomizationEnabled();
+            ImageSelectionColor = _settings.GetImageSelectionColor();
+            ImageSelectionOpacity = _settings.GetImageSelectionOpacity();
+            ImageSelectionBorderThickness = _settings.GetImageSelectionBorderThickness();
             TextColorSettings = new TextColorSettingsViewModel(settings, resourceManager);
             PresetViewModel = new TextColorPresetViewModel(presetService, TextColorSettings, presetLogger);
+        }
+
+        partial void OnIsTextColorCustomizationEnabledChanged(bool value)
+        {
+            _ = _settings.SetTextColorCustomizationEnabledAsync(value);
+            // When disabled, restore default theme colors
+            if (!value)
+            {
+                RestoreDefaultThemeColors();
+            }
+        }
+
+        partial void OnImageSelectionColorChanged(string value)
+        {
+            _ = _settings.SetImageSelectionColorAsync(value);
+        }
+
+        partial void OnImageSelectionOpacityChanged(double value)
+        {
+            _ = _settings.SetImageSelectionOpacityAsync(value);
+        }
+
+        partial void OnImageSelectionBorderThicknessChanged(double value)
+        {
+            _ = _settings.SetImageSelectionBorderThicknessAsync(value);
+        }
+
+        private void RestoreDefaultThemeColors()
+        {
+            // Restore all text colors to default theme colors
+            _resourceManager.UpdateThemeColors();
         }
 
         public async Task ResetToDefaultsAsync()
@@ -40,6 +87,8 @@ namespace Pivot.ViewModels
                 if (definition != null)
                 {
                     entry.SelectedColor = definition.DefaultColor;
+                    // Apply the default color to the resource manager
+                    _resourceManager.ApplyColor(entry.SettingKey, definition.DefaultColor);
                 }
             }
 

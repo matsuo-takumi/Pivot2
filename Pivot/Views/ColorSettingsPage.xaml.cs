@@ -5,7 +5,9 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Pivot.Services;
 using Pivot.ViewModels;
+using Pivot.Converters;
 using System;
+using Windows.UI;
 
 namespace Pivot.Views
 {
@@ -70,9 +72,9 @@ namespace Pivot.Views
             }
         }
 
-        private async void ApplyPresetButton_Click(object sender, RoutedEventArgs e)
+        private async void PresetItem_Click(object sender, ItemClickEventArgs e)
         {
-            if (sender is Button button && button.Tag is Models.Preset<Models.TextColorPresetData> preset)
+            if (e.ClickedItem is Models.Preset<Models.TextColorPresetData> preset)
             {
                 await ViewModel.PresetViewModel.ApplyPresetAsync(preset);
             }
@@ -147,6 +149,32 @@ namespace Pivot.Views
                 }
             }
         }
+
+        private void ImageSelectionColorButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element)
+            {
+                FlyoutBase.ShowAttachedFlyout(element);
+            }
+        }
+
+        private void ImageSelectionColorPicker_ColorChanged(Microsoft.UI.Xaml.Controls.ColorPicker sender, Microsoft.UI.Xaml.Controls.ColorChangedEventArgs args)
+        {
+            try
+            {
+                var converter = new HexToColorConverter();
+                var hex = converter.ConvertBack(args.NewColor, typeof(string), string.Empty, string.Empty);
+                if (hex is string hexString && !string.IsNullOrWhiteSpace(hexString))
+                {
+                    ViewModel.ImageSelectionColor = hexString;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to update ImageSelectionColor from ColorPicker.");
+            }
+        }
+
     }
 }
 

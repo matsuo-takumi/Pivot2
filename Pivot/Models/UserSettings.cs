@@ -70,5 +70,14 @@ namespace Pivot.Models
         public double OverlayTintLuminosityOpacity { get; set; } = 0.0;
         public int OverlayTintTransitionDurationMs { get; set; } = 250;
         public Dictionary<string, string> TextColorOverrides { get; set; } = new Dictionary<string, string>();
+        // Enable/disable text color customization (when disabled, use default theme colors)
+        public bool IsTextColorCustomizationEnabled { get; set; } = false; // Default to false (use theme colors)
+
+        // Image selection highlight settings
+        public string ImageSelectionColor { get; set; } = "#0078D4"; // Default accent blue
+        public double ImageSelectionOpacity { get; set; } = 0.5; // Default 50% opacity
+        public double ImageSelectionBorderThickness { get; set; } = 1.0; // Default 1px border
+        public string ImageDragSelectionColor { get; set; } = "#0078D4"; // Default accent blue for drag selection
+        public double ImageDragSelectionOpacity { get; set; } = 0.3; // Default 30% opacity for drag selection
     }
 }

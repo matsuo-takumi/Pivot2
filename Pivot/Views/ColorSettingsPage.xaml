@@ -10,7 +10,11 @@
 
     <Page.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:BooleanToOpacityConverter x:Key="BoolToOpacityConverter" />
         <converters:DateTimeFormatConverter x:Key="DateTimeFormatConverter" />
+        <converters:HexToColorConverter x:Key="HexToColorConverter" />
+        <converters:DoubleFormatConverter x:Key="DoubleFormatConverter" />
+        <converters:OpacityToPercentConverter x:Key="OpacityToPercentConverter" />
     </Page.Resources>
 
     <Grid Padding="20">
@@ -25,16 +29,39 @@
                                 Click="ResetToDefaultButton_Click"
                                 Style="{StaticResource SubtleButtonStyle}"
                                 Padding="12,8"
-                                HorizontalAlignment="Right" />
+                                HorizontalAlignment="Right"
+                                IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}" />
                         </StackPanel>
                         <TextBlock Text="Customize the colors used for each semantic text role that responds to overlay lightness." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
+
+                        <!-- Enable Text Color Customization Toggle -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12">
+                            <StackPanel Spacing="8">
+                                <ToggleSwitch
+                                    Header="Enable Text Color Customization"
+                                    IsOn="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=TwoWay}"
+                                    OffContent="Use default theme colors"
+                                    OnContent="Customize text colors" />
+                                <TextBlock 
+                                    Text="When enabled, you can customize individual text color roles. When disabled, the app uses default theme colors that automatically adapt to light/dark mode."
+                                    TextWrapping="Wrap"
+                                    Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                    FontSize="12"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
 
                         <!-- Preset Section -->
                         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 CornerRadius="12"
-                                Padding="12">
+                                Padding="12"
+                                Opacity="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                             <StackPanel Spacing="12">
                                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                     <TextBlock Text="Presets" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center" />
@@ -43,7 +70,8 @@
                                         Click="SavePresetButton_Click"
                                         Style="{StaticResource SubtleButtonStyle}"
                                         Padding="12,8"
-                                        HorizontalAlignment="Right" />
+                                        HorizontalAlignment="Right"
+                                        IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}" />
                                 </StackPanel>
                                 
                                 <ListView
@@ -53,7 +81,10 @@
                                     MaxHeight="200"
                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                                     BorderThickness="0"
-                                    Background="Transparent">
+                                    Background="Transparent"
+                                    IsItemClickEnabled="True"
+                                    ItemClick="PresetItem_Click"
+                                    IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}">
                                     <ListView.ItemContainerStyle>
                                         <Style TargetType="ListViewItem">
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -77,20 +108,13 @@
                                                             <Run Text="{Binding UpdatedAt, Converter={StaticResource DateTimeFormatConverter}, ConverterParameter='yyyy-MM-dd HH:mm'}" />
                                                         </TextBlock>
                                                     </StackPanel>
-                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                                                        <Button
-                                                            Content="Apply"
-                                                            Click="ApplyPresetButton_Click"
-                                                            Tag="{Binding}"
-                                                            Style="{StaticResource SubtleButtonStyle}"
-                                                            Padding="8,4" />
-                                                        <Button
-                                                            Content="Delete"
-                                                            Click="DeletePresetButton_Click"
-                                                            Tag="{Binding}"
-                                                            Style="{StaticResource SubtleButtonStyle}"
-                                                            Padding="8,4" />
-                                                    </StackPanel>
+                                                    <Button
+                                                        Grid.Column="1"
+                                                        Content="Delete"
+                                                        Click="DeletePresetButton_Click"
+                                                        Tag="{Binding}"
+                                                        Style="{StaticResource SubtleButtonStyle}"
+                                                        Padding="8,4" />
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
@@ -102,18 +126,21 @@
                                         Content="Apply Selected"
                                         Click="ApplySelectedPresetButton_Click"
                                         Style="{StaticResource SubtleButtonStyle}"
-                                        Padding="12,8" />
+                                        Padding="12,8"
+                                        IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}" />
                                     <Button
                                         Content="Delete Selected"
                                         Click="DeleteSelectedPresetButton_Click"
                                         Style="{StaticResource SubtleButtonStyle}"
-                                        Padding="12,8" />
+                                        Padding="12,8"
+                                        IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}" />
                                 </StackPanel>
                             </StackPanel>
                         </Border>
 
                         <!-- Individual Text Color Role Settings -->
-                        <StackPanel Spacing="10">
+                        <StackPanel Spacing="10"
+                                    Opacity="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                             <TextBlock Text="Text Color Roles" FontWeight="SemiBold" FontSize="16" />
                             <TextBlock Text="Manually configure each text color role individually." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
                             <ListView
@@ -123,7 +150,8 @@
                                 BorderThickness="0"
                                 Background="Transparent"
                                 ScrollViewer.VerticalScrollMode="Auto"
-                                ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}">
                                 <ListView.ItemContainerStyle>
                                     <Style TargetType="ListViewItem">
                                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -176,6 +204,107 @@
                                 </ListView.ItemTemplate>
                             </ListView>
                         </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </muxc:PivotItem>
+
+            <muxc:PivotItem Header="Selector">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Image Selection Highlight" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Customize the appearance of selected image items in the Image page." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
+
+                        <!-- Select Section -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12">
+                            <StackPanel Spacing="16">
+                                <TextBlock Text="Select" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock Text="Configure the border appearance for selected image items." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" FontSize="12"/>
+
+                                <!-- Color -->
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Color" FontWeight="SemiBold" FontSize="14" />
+                                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                        <Button Width="48" Height="48" Background="Transparent" BorderThickness="0" Padding="0" Click="ImageSelectionColorButton_Click">
+                                            <Border Width="48" Height="48" CornerRadius="6" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1">
+                                                <Border.Background>
+                                                    <SolidColorBrush Color="{x:Bind ViewModel.ImageSelectionColor, Converter={StaticResource HexToColorConverter}}" />
+                                                </Border.Background>
+                                            </Border>
+                                            <flyout:FlyoutBase.AttachedFlyout>
+                                                <Flyout Placement="Bottom">
+                                                    <muxc:ColorPicker
+                                                        x:Name="ImageSelectionColorPicker"
+                                                        Color="{x:Bind ViewModel.ImageSelectionColor, Converter={StaticResource HexToColorConverter}}"
+                                                        ColorChanged="ImageSelectionColorPicker_ColorChanged"
+                                                        ColorSpectrumShape="Ring"
+                                                        IsMoreButtonVisible="False"
+                                                        IsColorSliderVisible="True"
+                                                        IsColorChannelTextInputVisible="False"
+                                                        IsHexInputVisible="True"
+                                                        IsAlphaEnabled="False"
+                                                        IsAlphaSliderVisible="False"
+                                                        IsAlphaTextInputVisible="False" />
+                                                </Flyout>
+                                            </flyout:FlyoutBase.AttachedFlyout>
+                                        </Button>
+                                        <TextBox Width="120" Height="32" MinHeight="32" TextAlignment="Left" VerticalContentAlignment="Center" 
+                                                 Text="{x:Bind ViewModel.ImageSelectionColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 PlaceholderText="#0078D4" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Opacity -->
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Text="Opacity" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                                        <TextBlock FontSize="14" 
+                                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   MinWidth="40"
+                                                   TextAlignment="Right">
+                                            <Run Text="{x:Bind ViewModel.ImageSelectionOpacity, Mode=OneWay, Converter={StaticResource OpacityToPercentConverter}}" />
+                                            <Run Text="%" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <Slider Minimum="0" Maximum="1" 
+                                            Value="{x:Bind ViewModel.ImageSelectionOpacity, Mode=TwoWay}"
+                                            TickFrequency="0.1"
+                                            TickPlacement="BottomRight"
+                                            StepFrequency="0.01" />
+                                    <TextBlock Text="Adjust the transparency of the selection border (0 = fully transparent, 100 = fully opaque)." 
+                                               TextWrapping="Wrap" 
+                                               Foreground="{ThemeResource AppTextCaptionBrush}" 
+                                               FontSize="11" />
+                                </StackPanel>
+
+                                <!-- Border Thickness -->
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Text="Border Thickness" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Bind ViewModel.ImageSelectionBorderThickness, Mode=OneWay}" 
+                                                   FontSize="14" 
+                                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   MinWidth="40"
+                                                   TextAlignment="Right" />
+                                        <TextBlock Text="px" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Slider Minimum="0" Maximum="10" 
+                                            Value="{x:Bind ViewModel.ImageSelectionBorderThickness, Mode=TwoWay}"
+                                            TickFrequency="1"
+                                            TickPlacement="BottomRight"
+                                            StepFrequency="0.5" />
+                                    <TextBlock Text="Adjust the thickness of the selection border." 
+                                               TextWrapping="Wrap" 
+                                               Foreground="{ThemeResource AppTextCaptionBrush}" 
+                                               FontSize="11" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </muxc:PivotItem>

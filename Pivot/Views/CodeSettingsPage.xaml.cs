@@ -20,9 +20,45 @@ namespace Pivot.Views
         {
             this.InitializeComponent();
             _settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-            LoadFilters();
+            this.Loaded += CodeSettingsPage_Loaded;
+            
             LoadSaveFormat();
             LoadSaveOutputDirectory();
+        }
+
+        private void CodeSettingsPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Initialize common filter settings view
+            var logger = App.Current.Services.GetService(typeof(Microsoft.Extensions.Logging.ILogger<ViewModels.FilterSettingsViewModel>)) as Microsoft.Extensions.Logging.ILogger<ViewModels.FilterSettingsViewModel>;
+            
+            if (_settings != null)
+            {
+                var filterView = this.FindName("FilterSettingsView") as FilterSettingsView;
+                if (filterView != null)
+                {
+                    filterView.ViewModel = new ViewModels.FilterSettingsViewModel(
+                        _settings,
+                        Models.FilterType.Code,
+                        "Code",
+                        GetDefaultCodeFilters,
+                        logger);
+                }
+            }
+        }
+
+        private static List<CustomFilter> GetDefaultCodeFilters()
+        {
+            return new List<CustomFilter>
+            {
+                new CustomFilter { Name = "C#", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                new CustomFilter { Name = "Python", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                new CustomFilter { Name = "JavaScript", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                new CustomFilter { Name = "HTML", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                new CustomFilter { Name = "CSS", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                new CustomFilter { Name = "SQL", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                new CustomFilter { Name = "Markdown", IsBuiltIn=true, AllowedExtensions = new List<string>() },
+                new CustomFilter { Name = "Other", IsBuiltIn=true, AllowedExtensions = new List<string>() }
+            };
         }
         
         private void LoadSaveOutputDirectory()
@@ -95,211 +131,6 @@ namespace Pivot.Views
             }
         }
 
-        private void LoadFilters()
-        {
-            try
-            {
-                var settings = _settings?.GetUserSettings();
-                if (settings != null)
-                {
-                    var visible = _settings!.GetVisibleFiltersForTab("Code");
-                var viewItems = settings.CodeFilters.Select(f => new CodeFilterViewItem
-                {
-                    Id = f.Id,
-                    Name = f.Name,
-                    Visible = visible != null && visible.Contains(f.Id)
-                }).ToList();
-
-                    FiltersList.ItemsSource = viewItems;
-                }
-            }
-            catch { }
-        }
-
-        private async void AddFilter_Click(object sender, RoutedEventArgs e)
-        {
-            var nameBox = new TextBox { Header = "Tag Name", PlaceholderText = "Enter tag name (e.g., C#, Python, JavaScript)" };
-
-            var panel = new StackPanel();
-            panel.Children.Add(nameBox);
-
-            var dialog = new ContentDialog()
-            {
-                Title = "Add Code Filter Tag",
-                PrimaryButtonText = "Add",
-                CloseButtonText = "Cancel",
-                Content = panel
-            };
-
-            dialog.XamlRoot = this.XamlRoot;
-            try { dialog.RequestedTheme = _settings?.GetTheme() ?? ElementTheme.Default; } catch { }
-
-            var result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary)
-            {
-                try
-                {
-                    var name = nameBox.Text?.Trim() ?? string.Empty;
-
-                    if (!string.IsNullOrWhiteSpace(name) && _settings != null)
-                    {
-                        var user = _settings.GetUserSettings();
-                        var list = user.CodeFilters;
-                        // Code filters don't use extensions - only tag names
-                        var nf = new CustomFilter { Name = name, AllowedExtensions = new List<string>() };
-                        list.Add(nf);
-                        await _settings.SetCodeFiltersAsync(list);
-                        LoadFilters();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Show error to user
-                    var errorDialog = new ContentDialog()
-                    {
-                        Title = "Error",
-                        Content = $"Failed to add filter: {ex.Message}",
-                        CloseButtonText = "OK"
-                    };
-                    errorDialog.XamlRoot = this.XamlRoot;
-                    try { await errorDialog.ShowAsync(); } catch { }
-                }
-            }
-        }
-
-        private async void EditFilter_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.Tag is Guid id && _settings != null)
-            {
-                var user = _settings.GetUserSettings();
-                var target = user.CodeFilters.FirstOrDefault(f => f.Id == id);
-                if (target == null) return;
-
-                var nameBox = new TextBox { Header = "Tag Name", Text = target.Name, PlaceholderText = "Enter tag name" };
-                var panel = new StackPanel();
-                panel.Children.Add(nameBox);
-
-                var dialog = new ContentDialog()
-                {
-                    Title = "Edit Code Filter Tag",
-                    PrimaryButtonText = "Save",
-                    CloseButtonText = "Cancel",
-                    Content = panel
-                };
-
-                dialog.XamlRoot = this.XamlRoot;
-                try { dialog.RequestedTheme = _settings?.GetTheme() ?? ElementTheme.Default; } catch { }
-
-                var result = await dialog.ShowAsync();
-                if (result == ContentDialogResult.Primary)
-                {
-                    try
-                    {
-                        var name = nameBox.Text?.Trim() ?? string.Empty;
-                        if (!string.IsNullOrWhiteSpace(name))
-                        {
-                            target.Name = name;
-                            // Code filters don't use extensions - keep empty
-                            target.AllowedExtensions = new List<string>();
-                            await _settings!.SetCodeFiltersAsync(user.CodeFilters);
-                            LoadFilters();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Show error to user
-                        var errorDialog = new ContentDialog()
-                        {
-                            Title = "Error",
-                            Content = $"Failed to edit filter: {ex.Message}",
-                            CloseButtonText = "OK"
-                        };
-                        errorDialog.XamlRoot = this.XamlRoot;
-                        try { await errorDialog.ShowAsync(); } catch { }
-                    }
-                }
-            }
-        }
-
-        private async void DeleteFilter_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.Tag is Guid id && _settings != null)
-            {
-                var user = _settings.GetUserSettings();
-                var target = user.CodeFilters.FirstOrDefault(f => f.Id == id);
-                if (target == null) return;
-                
-                var tagName = target.Name;
-                
-                // allow deleting built-in as requested
-                user.CodeFilters.Remove(target);
-                await _settings.SetCodeFiltersAsync(user.CodeFilters);
-                
-                // Remove tag from all snippets
-                try
-                {
-                    var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                    if (repo != null && !string.IsNullOrWhiteSpace(tagName))
-                    {
-                        repo.RemoveTagFromAllSnippets(tagName);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"DeleteFilter_Click: Failed to remove tag from snippets: {ex.Message}");
-                }
-                
-                LoadFilters();
-            }
-        }
-
-        private async void FilterVisible_Toggled(object sender, RoutedEventArgs e)
-        {
-            if (!(sender is ToggleSwitch ts) || !(ts.Tag is Guid id) || _settings == null) return;
-            try
-            {
-                var current = _settings.GetVisibleFiltersForTab("Code") ?? new List<Guid>();
-                if (ts.IsOn)
-                {
-                    if (!current.Contains(id)) current.Add(id);
-                }
-                else
-                {
-                    current.Remove(id);
-                }
-                await _settings.SetVisibleFiltersForTabAsync("Code", current);
-                LoadFilters();
-            }
-            catch { }
-        }
-
-        private async void RestoreDefaults_Click(object sender, RoutedEventArgs e)
-        {
-            if (_settings == null) return;
-            try
-            {
-                await _settings.SetCodeFiltersAsync(new List<CustomFilter>
-                {
-                    new CustomFilter { Name = "C#", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                    new CustomFilter { Name = "Python", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                    new CustomFilter { Name = "JavaScript", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                    new CustomFilter { Name = "HTML", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                    new CustomFilter { Name = "CSS", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                    new CustomFilter { Name = "SQL", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                    new CustomFilter { Name = "Markdown", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                    new CustomFilter { Name = "Other", IsBuiltIn=true, AllowedExtensions = new List<string>() }
-                });
-                LoadFilters();
-            }
-            catch { }
-        }
-
-        private class CodeFilterViewItem
-        {
-            public Guid Id { get; set; }
-            public string Name { get; set; } = string.Empty;
-            public bool Visible { get; set; } = true;
-        }
 
         // Code categories are deprecated and removed from Preferences.
 

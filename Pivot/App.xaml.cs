@@ -202,6 +202,21 @@ namespace Pivot
 			if (MainWindow != null && MainWindow.Content is FrameworkElement root)
 			{
 				root.RequestedTheme = message.Value;
+				
+				// Update text colors if customization is disabled (use default theme colors)
+				try
+				{
+					var settings = Services.GetRequiredService<SettingsService>();
+					if (!settings.IsTextColorCustomizationEnabled())
+					{
+						var textColorManager = Services.GetRequiredService<ITextColorResourceManager>();
+						textColorManager.UpdateThemeColors();
+					}
+				}
+				catch (Exception ex)
+				{
+					System.Diagnostics.Debug.WriteLine($"App.Receive(ThemeChangedMessage): Failed to update theme colors: {ex.Message}");
+				}
 			}
 		}
 	}

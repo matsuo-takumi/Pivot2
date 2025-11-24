@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Pivot.Views"
+    xmlns:models="using:Pivot.Models"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:conv="using:Pivot.Converters"
@@ -15,6 +16,9 @@
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:BitmapImageDecodeConverter x:Key="BitmapDecode"/>
         <conv:KindToVisibilityConverter x:Key="KindToVisibility"/>
+        <conv:SelectionToBorderBrushConverter x:Key="SelectionToBorderBrushConverter"/>
+        <conv:SelectionToBorderThicknessConverter x:Key="SelectionToBorderThicknessConverter"/>
+        <conv:SelectionToBackgroundConverter x:Key="SelectionToBackgroundConverter"/>
     </Page.Resources>
 
     <Grid Padding="12">
@@ -49,13 +53,14 @@
                             <UniformGridLayout MinItemWidth="220" MinItemHeight="160" MinRowSpacing="8" MinColumnSpacing="8"/>
                         </ItemsRepeater.Layout>
                         <ItemsRepeater.ItemTemplate>
-                            <DataTemplate>
-                                <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF">
-                                    <Border.Transitions>
-                                        <TransitionCollection>
-                                            <EntranceThemeTransition/>
-                                        </TransitionCollection>
-                                    </Border.Transitions>
+                            <DataTemplate x:DataType="models:TemplateItem">
+                                <Border BorderBrush="{Binding IsSelected, Converter={StaticResource SelectionToBorderBrushConverter}}" 
+                                        BorderThickness="{Binding IsSelected, Converter={StaticResource SelectionToBorderThicknessConverter}}" 
+                                        CornerRadius="6" 
+                                        Padding="6" 
+                                        Margin="4" 
+                                        Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
+                                        PointerPressed="ImageItem_PointerPressed">
                                     <Grid>
                                         <Grid Visibility="{Binding DataContext.UseTextListMode, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" ColumnSpacing="12">
                                             <Grid.ColumnDefinitions>
@@ -104,13 +109,15 @@
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF" Width="{Binding DataContext.MasonryColumnWidth, ElementName=ImagePageRoot}">
-                                                <Border.Transitions>
-                                                    <TransitionCollection>
-                                                        <EntranceThemeTransition/>
-                                                    </TransitionCollection>
-                                                </Border.Transitions>
+                                        <DataTemplate x:DataType="models:TemplateItem">
+                                            <Border BorderBrush="{Binding IsSelected, Converter={StaticResource SelectionToBorderBrushConverter}}" 
+                                                    BorderThickness="{Binding IsSelected, Converter={StaticResource SelectionToBorderThicknessConverter}}" 
+                                                    CornerRadius="6" 
+                                                    Padding="6" 
+                                                    Margin="4" 
+                                                    Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}" 
+                                                    Width="{Binding DataContext.MasonryColumnWidth, ElementName=ImagePageRoot}"
+                                                    PointerPressed="ImageItem_PointerPressed">
                                                 <StackPanel>
                                                     <Grid Background="Transparent">
                                                         <Image Stretch="Uniform" Source="{Binding ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}"/>

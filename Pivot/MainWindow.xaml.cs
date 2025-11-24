@@ -137,8 +137,18 @@ namespace Pivot
             if (type == BackdropType.None)
             {
                 SystemBackdrop = null;
+                // Register theme change handler for None mode
+                if (Content is FrameworkElement rootElementForNone)
+                {
+                    rootElementForNone.ActualThemeChanged += Window_ThemeChanged;
+                }
+                // Set solid background colors based on theme (light = white, dark = black)
+                SetSolidBackgroundForNone();
                 return;
             }
+
+            // Restore text colors from Color settings when switching away from None
+            RestoreTextColorsFromSettings();
 
             DispatcherQueue.EnsureSystemDispatcherQueue();
 
@@ -244,6 +254,140 @@ namespace Pivot
             if (AppTitleBar != null) AppTitleBar.Background = transparentBrush;
         }
 
+        private void SetSolidBackgroundForNone()
+        {
+            if (Content is FrameworkElement rootElement)
+            {
+                var theme = rootElement.ActualTheme;
+                Windows.UI.Color backgroundColor;
+                Windows.UI.Color textColor;
+
+                if (theme == ElementTheme.Dark)
+                {
+                    // Dark mode: black background, white text
+                    backgroundColor = Windows.UI.Color.FromArgb(255, 0, 0, 0); // Black
+                    textColor = Windows.UI.Color.FromArgb(255, 255, 255, 255); // White
+                }
+                else
+                {
+                    // Light mode: white background, black text
+                    backgroundColor = Windows.UI.Color.FromArgb(255, 255, 255, 255); // White
+                    textColor = Windows.UI.Color.FromArgb(255, 0, 0, 0); // Black
+                }
+
+                var backgroundBrush = new SolidColorBrush(backgroundColor);
+                if (Root != null) Root.Background = backgroundBrush;
+                if (AppTitleBar != null) AppTitleBar.Background = backgroundBrush;
+                
+                // Force all text color resources to match the theme (ignore Color settings)
+                ForceTextColorsForNone(textColor);
+            }
+        }
+
+        private void ForceTextColorsForNone(Windows.UI.Color textColor)
+        {
+            var app = Application.Current;
+            if (app == null) return;
+
+            var textBrush = new SolidColorBrush(textColor);
+            
+            // Force all text color resources to use the specified color
+            // This overrides any Color settings when in None mode
+            var resourceKeys = new[]
+            {
+                "SystemControlForegroundBaseHighBrush",
+                "SystemControlForegroundBaseMediumHighBrush",
+                "SystemControlForegroundBaseMediumBrush",
+                "SystemControlForegroundBaseLowBrush",
+                "SystemControlForegroundAccentBrush",
+                "SystemControlForegroundAccentLowBrush",
+                "SystemControlForegroundAccentHighBrush",
+                "TextFillColorSecondaryBrush",
+                "AppTextBodyBrush",
+                "AppTextSecondaryBrush",
+                "AppTextCaptionBrush",
+                "AppTextMutedBrush",
+                "AppTextDimBrush",
+                "AppTextAccentBrush",
+                "AppTextAccentDimBrush"
+            };
+
+            foreach (var key in resourceKeys)
+            {
+                // Update in main resources
+                if (app.Resources.TryGetValue(key, out var existing) && existing is SolidColorBrush existingBrush)
+                {
+                    existingBrush.Color = textColor;
+                }
+                else
+                {
+                    app.Resources[key] = textBrush;
+                }
+
+                // Update in theme dictionaries
+                foreach (ResourceDictionary themeDictionary in app.Resources.ThemeDictionaries.Values)
+                {
+                    if (themeDictionary.TryGetValue(key, out var themeExisting) && themeExisting is SolidColorBrush themeBrush)
+                    {
+                        themeBrush.Color = textColor;
+                    }
+                    else
+                    {
+                        themeDictionary[key] = textBrush;
+                    }
+                }
+            }
+
+            // AppTextHighlightBrush should be the inverse (for text on colored backgrounds)
+            var highlightColor = Windows.UI.Color.FromArgb(255, 
+                (byte)(255 - textColor.R), 
+                (byte)(255 - textColor.G), 
+                (byte)(255 - textColor.B));
+            var highlightBrush = new SolidColorBrush(highlightColor);
+            
+            if (app.Resources.TryGetValue("AppTextHighlightBrush", out var highlightExisting) && highlightExisting is SolidColorBrush highlightExistingBrush)
+            {
+                highlightExistingBrush.Color = highlightColor;
+            }
+            else
+            {
+                app.Resources["AppTextHighlightBrush"] = highlightBrush;
+            }
+
+            foreach (ResourceDictionary themeDictionary in app.Resources.ThemeDictionaries.Values)
+            {
+                if (themeDictionary.TryGetValue("AppTextHighlightBrush", out var highlightThemeExisting) && highlightThemeExisting is SolidColorBrush highlightThemeBrush)
+                {
+                    highlightThemeBrush.Color = highlightColor;
+                }
+                else
+                {
+                    themeDictionary["AppTextHighlightBrush"] = highlightBrush;
+                }
+            }
+        }
+
+        private void RestoreTextColorsFromSettings()
+        {
+            try
+            {
+                var textColorManager = App.Current.Services.GetService(typeof(ITextColorResourceManager)) as ITextColorResourceManager;
+                if (textColorManager == null) return;
+
+                // Restore all text colors from settings
+                foreach (var role in TextColorRoleDefinitions.Roles)
+                {
+                    var hex = _settingsService.GetTextColorOverride(role.SettingKey, role.DefaultHex);
+                    var color = Pivot.Utilities.TextColorHelper.ParseHexOrDefault(hex, role.DefaultColor);
+                    textColorManager.ApplyColor(role.SettingKey, color);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"RestoreTextColorsFromSettings: Error: {ex.Message}");
+            }
+        }
+
         private void Window_Activated(object sender, WindowActivatedEventArgs args)
         {
             if (_configurationSource != null)
@@ -277,6 +421,26 @@ namespace Pivot
             if (_configurationSource != null)
             {
                 SetConfigurationSourceTheme();
+            }
+            
+            // If backdrop type is None, update background colors when theme changes
+            if (_settingsService.GetBackdropType() == BackdropType.None)
+            {
+                SetSolidBackgroundForNone();
+            }
+            
+            // Update text colors if customization is disabled (use default theme colors)
+            try
+            {
+                if (!_settingsService.IsTextColorCustomizationEnabled())
+                {
+                    var textColorManager = App.Current.Services.GetService(typeof(ITextColorResourceManager)) as ITextColorResourceManager;
+                    textColorManager?.UpdateThemeColors();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Window_ThemeChanged: Failed to update theme colors: {ex.Message}");
             }
         }
 

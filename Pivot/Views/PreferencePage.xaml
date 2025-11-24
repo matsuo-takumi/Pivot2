@@ -29,6 +29,11 @@
             Grid.ColumnSpan="2">
             <NavigationView.MenuItems>
                 <NavigationViewItem Icon="Library" Content="Asset" Tag="Asset" />
+                <NavigationViewItem Content="Image" Tag="Image">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xEB9F;"/> <!-- Image icon -->
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem Content="Code" Tag="Code">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE943;"/> <!-- Code icon -->

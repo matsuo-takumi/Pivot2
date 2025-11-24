@@ -31,6 +31,7 @@ namespace Pivot.ViewModels
             var content = tag switch
             {
                 "Asset" => new Views.AssetSettingsPage(),
+                "Image" => CreateImageSettingsPage(),
                 "Directories" => new DirectoryPage(),
                 "Theme" => new ThemePage(),
                 "Code" => CreateCodeSettingsPage(),
@@ -61,6 +62,11 @@ namespace Pivot.ViewModels
         private object? CreateColorSettingsPage()
         {
             return TryCreatePreferenceContent(nameof(Views.ColorSettingsPage), () => new Views.ColorSettingsPage());
+        }
+
+        private object? CreateImageSettingsPage()
+        {
+            return TryCreatePreferenceContent(nameof(Views.ImageSettingsPage), () => new Views.ImageSettingsPage());
         }
 
         private object? TryCreatePreferenceContent(string name, Func<object> factory)
