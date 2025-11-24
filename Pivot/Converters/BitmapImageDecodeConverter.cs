@@ -13,7 +13,7 @@ namespace Pivot.Converters
 			try
 			{
 				var uri = new Uri(s, UriKind.RelativeOrAbsolute);
-				var bmp = new BitmapImage(uri);
+				var bmp = new BitmapImage();
 				
 				// デコードサイズを設定してメモリ使用量を削減（4K画像の最適化）
 				if (parameter != null && int.TryParse(parameter.ToString(), out var px) && px > 0)
@@ -29,7 +29,12 @@ namespace Pivot.Converters
 				}
 				
 				// 画像の読み込み最適化設定
+				// None: デフォルト設定（キャッシュを活用）
+				// ItemsRepeaterの仮想化により、表示されていない画像は読み込まれない
 				bmp.CreateOptions = BitmapCreateOptions.None;
+				
+				// URIを設定（ItemsRepeaterの仮想化により、表示時に読み込まれる）
+				bmp.UriSource = uri;
 				
 				return bmp;
 			}

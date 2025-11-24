@@ -10,6 +10,7 @@ using Pivot.Services;
 using Pivot.Models;
 using System;
 using System.Linq;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace Pivot.Views
 {
@@ -18,6 +19,7 @@ namespace Pivot.Views
         public ImageViewModel ViewModel { get; set; }
 
         private TemplateItem? _lastSelectedItemForRange;
+        private System.Threading.CancellationTokenSource? _borderThicknessUpdateCts;
 
         public ImagePage()
         {
@@ -48,11 +50,46 @@ namespace Pivot.Views
             catch { }
 
             this.Unloaded += ImagePage_Unloaded;
+            
+            // 設定変更を監視
+            UpdateBorderThicknessPeriodically();
+        }
+        
+        private async void UpdateBorderThicknessPeriodically()
+        {
+            _borderThicknessUpdateCts = new System.Threading.CancellationTokenSource();
+            var ct = _borderThicknessUpdateCts.Token;
+            
+            // 定期的に設定をチェックして更新（簡易的な実装）
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await System.Threading.Tasks.Task.Delay(500, ct); // 500msごとにチェック
+                    if (ct.IsCancellationRequested) break;
+                    
+                    if (ViewModel != null)
+                    {
+                        var settings = App.Current.Services.GetService<SettingsService>();
+                        if (settings != null)
+                        {
+                            var newThickness = settings.GetImageSelectionBorderThickness();
+                            if (Math.Abs(ViewModel.SelectionBorderThickness - newThickness) > 0.01)
+                            {
+                                ViewModel.SelectionBorderThickness = newThickness;
+                            }
+                        }
+                    }
+                }
+                catch (System.OperationCanceledException) { break; }
+                catch { }
+            }
         }
 
         private void ImagePage_Unloaded(object sender, RoutedEventArgs e)
         {
             try { ViewModel?.CancelLoads(); } catch { }
+            try { _borderThicknessUpdateCts?.Cancel(); } catch { }
         }
 
         private void ImagePage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -113,7 +150,7 @@ namespace Pivot.Views
                     ItemsRepeaterMain.Layout = new UniformGridLayout
                     {
                         MinItemWidth = 220,
-                        MinItemHeight = 160,
+                        MinItemHeight = 170,
                         MinRowSpacing = 8,
                         MinColumnSpacing = 8
                     };
@@ -140,7 +177,7 @@ namespace Pivot.Views
                     ItemsRepeaterMain.Layout = new UniformGridLayout
                     {
                         MinItemWidth = 220,
-                        MinItemHeight = 160,
+                        MinItemHeight = 170,
                         MinRowSpacing = 8,
                         MinColumnSpacing = 8
                     };
@@ -202,6 +239,40 @@ namespace Pivot.Views
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"ImageItem_PointerPressed error: {ex.Message}");
+            }
+        }
+
+        private async void ImageItem_DragStarting(UIElement sender, DragStartingEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
+                {
+                    // 選択されているアイテムを取得（選択されていない場合は現在のアイテムのみ）
+                    var selectedItems = ViewModel.SelectionManager.SelectedItems;
+                    var itemsToDrag = selectedItems.Count > 0 ? selectedItems.Cast<object>() : new[] { (object)item };
+
+                    // DragDropServiceを使用してドラッグを開始
+                    var filePaths = itemsToDrag.Cast<TemplateItem>().Select(i => i.Path).Where(path => !string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path)).ToList();
+                    if (filePaths.Count == 0) return;
+
+                    var storageItems = await DragDropService.CreateStorageItems(filePaths);
+                    if (!storageItems.Any()) return;
+
+                    // StorageItemsを設定（外部アプリケーションやフォルダへのドロップをサポート）
+                    e.Data.SetStorageItems(storageItems);
+                    
+                    // コピー操作を要求
+                    e.Data.RequestedOperation = DataPackageOperation.Copy;
+                    
+                    // ドラッグUIの設定（システムが自動的にファイルアイコンを表示）
+                    e.DragUI.SetContentFromDataPackage();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting error: {ex.Message}");
+                e.Cancel = true; // エラー時はドラッグをキャンセル
             }
         }
     }

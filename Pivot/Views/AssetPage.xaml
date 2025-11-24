@@ -7,6 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:conv="using:Pivot.Converters"
     xmlns:ctrls="using:Pivot.Controls"
+    xmlns:models="using:Pivot.Models"
     mc:Ignorable="d"
     x:Name="AssetPageRoot"
     Background="Transparent">
@@ -16,6 +17,10 @@
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:BitmapImageDecodeConverter x:Key="BitmapDecode"/>
         <conv:KindToVisibilityConverter x:Key="KindToVisibility"/>
+        <conv:SelectionToBorderBrushConverter x:Key="SelectionToBorderBrushConverter"/>
+        <conv:SelectionToBorderThicknessConverter x:Key="SelectionToBorderThicknessConverter"/>
+        <conv:SelectionToBackgroundConverter x:Key="SelectionToBackgroundConverter"/>
+        <conv:SelectionToPaddingConverter x:Key="SelectionToPaddingConverter"/>
     </Page.Resources>
 
     <Grid Padding="12">
@@ -45,11 +50,20 @@
                 <Grid>
                     <ItemsRepeater x:Name="ItemsRepeaterMain" ItemsSource="{Binding DisplayedAssets}">
                         <ItemsRepeater.Layout>
-                            <UniformGridLayout MinItemWidth="220" MinItemHeight="160" MinRowSpacing="8" MinColumnSpacing="8"/>
+                            <UniformGridLayout MinItemWidth="220" MinItemHeight="170" MinRowSpacing="8" MinColumnSpacing="8"/>
                         </ItemsRepeater.Layout>
                         <ItemsRepeater.ItemTemplate>
-                            <DataTemplate>
-                                <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF" DoubleTapped="AssetItem_DoubleTapped" Tag="{Binding Path}">
+                            <DataTemplate x:DataType="models:TemplateItem">
+                                <Border BorderBrush="{Binding IsSelected, Converter={StaticResource SelectionToBorderBrushConverter}}" 
+                                        BorderThickness="{Binding IsSelected, Converter={StaticResource SelectionToBorderThicknessConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=AssetPageRoot}}" 
+                                        CornerRadius="6" 
+                                        Padding="{Binding IsSelected, Converter={StaticResource SelectionToPaddingConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=AssetPageRoot}}" 
+                                        Margin="4" 
+                                        Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
+                                        PointerPressed="AssetItem_PointerPressed"
+                                        DragStarting="AssetItem_DragStarting"
+                                        DoubleTapped="AssetItem_DoubleTapped" 
+                                        Tag="{Binding Path}">
                                     <Border.Transitions>
                                         <TransitionCollection>
                                             <EntranceThemeTransition/>
@@ -76,11 +90,11 @@
                                             <TextBlock Grid.Column="5" Text="" FontSize="12" Foreground="{ThemeResource AppTextDimBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         </Grid>
 
-                                        <StackPanel Visibility="{Binding DataContext.ShowThumbnails, ElementName=AssetPageRoot, Converter={StaticResource BoolToVisibility}}">
+                                        <StackPanel Visibility="{Binding DataContext.ShowThumbnails, ElementName=AssetPageRoot, Converter={StaticResource BoolToVisibility}}" MaxWidth="200">
                                             <Grid Width="200" Height="120" Background="Transparent">
                                                 <Image Stretch="UniformToFill" Source="{Binding ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}"/>
                                             </Grid>
-                                            <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0"/>
+                                            <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Stretch" MinHeight="18"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -105,8 +119,18 @@
                                         </ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border BorderBrush="#E0E0E0" BorderThickness="0" CornerRadius="6" Padding="6" Margin="4" Background="#10FFFFFF" Width="{Binding DataContext.MasonryColumnWidth, ElementName=AssetPageRoot}" DoubleTapped="AssetItem_DoubleTapped" Tag="{Binding Path}">
+                                        <DataTemplate x:DataType="models:TemplateItem">
+                                            <Border BorderBrush="{Binding IsSelected, Converter={StaticResource SelectionToBorderBrushConverter}}" 
+                                                    BorderThickness="{Binding IsSelected, Converter={StaticResource SelectionToBorderThicknessConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=AssetPageRoot}}" 
+                                                    CornerRadius="6" 
+                                                    Padding="{Binding IsSelected, Converter={StaticResource SelectionToPaddingConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=AssetPageRoot}}" 
+                                                    Margin="4" 
+                                                    Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
+                                                    Width="{Binding DataContext.MasonryColumnWidth, ElementName=AssetPageRoot}"
+                                                    PointerPressed="AssetItem_PointerPressed"
+                                                    DragStarting="AssetItem_DragStarting"
+                                                    DoubleTapped="AssetItem_DoubleTapped" 
+                                                    Tag="{Binding Path}">
                                                 <Border.Transitions>
                                                     <TransitionCollection>
                                                         <EntranceThemeTransition/>
@@ -116,7 +140,7 @@
                                                     <Grid Background="Transparent">
                                                         <Image Stretch="Uniform" Source="{Binding ThumbnailPath}"/>
                                                     </Grid>
-                                                    <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0"/>
+                                                    <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>

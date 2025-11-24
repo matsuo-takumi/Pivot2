@@ -9,9 +9,13 @@ namespace Pivot.Converters
     {
         public object Convert(object value, Type targetType, object parameter, string language)
         {
-            // Background remains unchanged (no highlight background)
-            // Only border is used for selection indication
-            return new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)); // Transparent
+            if (value is bool isSelected && isSelected)
+            {
+                // 選択時: わずかに明るい背景（ハイライト効果）
+                return new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)); // #1EFFFFFF
+            }
+            // 非選択時: 半透明の背景（カードが見えるように）
+            return new SolidColorBrush(Color.FromArgb(16, 255, 255, 255)); // #10FFFFFF
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)

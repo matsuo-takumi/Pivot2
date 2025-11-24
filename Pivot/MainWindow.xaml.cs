@@ -484,27 +484,48 @@ namespace Pivot
 
         private void NavigateTo(NavigationRegion region)
         {
+            // 既にナビゲート済みの場合は再ナビゲートしない（パフォーマンス最適化）
             var transition = new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight };
             switch (region)
             {
                 case NavigationRegion.Asset:
-                    AssetFrame.Navigate(typeof(Views.AssetPage), null, transition);
+                    // 既にAssetPageが表示されている場合は再ナビゲートしない
+                    if (AssetFrame.Content?.GetType() != typeof(Views.AssetPage))
+                    {
+                        AssetFrame.Navigate(typeof(Views.AssetPage), null, transition);
+                    }
                     break;
                 case NavigationRegion.Image:
-                    ImageFrame.Navigate(typeof(Views.ImagePage), null, transition);
+                    // 既にImagePageが表示されている場合は再ナビゲートしない
+                    if (ImageFrame.Content?.GetType() != typeof(Views.ImagePage))
+                    {
+                        ImageFrame.Navigate(typeof(Views.ImagePage), null, transition);
+                    }
                     break;
                 case NavigationRegion.Project:
-                    ProjectFrame.Navigate(typeof(Views.ProjectPage), null, transition);
+                    // 既にProjectPageが表示されている場合は再ナビゲートしない
+                    if (ProjectFrame.Content?.GetType() != typeof(Views.ProjectPage))
+                    {
+                        ProjectFrame.Navigate(typeof(Views.ProjectPage), null, transition);
+                    }
                     break;
                     case NavigationRegion.Code:
                         var pivotItem = MainPivot.Items.OfType<PivotItem>().FirstOrDefault(pi => (pi.Header as string) == "Code");
                         if (pivotItem?.Content is Frame codeFrameObj)
                         {
-                            codeFrameObj.Navigate(typeof(Pivot.CodeModule.Views.CodePage), null, transition);
+                            // 既にCodePageが表示されている場合は再ナビゲートしない
+                            if (codeFrameObj.Content?.GetType() != typeof(Pivot.CodeModule.Views.CodePage))
+                            {
+                                codeFrameObj.Navigate(typeof(Pivot.CodeModule.Views.CodePage), null, transition);
+                            }
                         }
                         break;
                 case NavigationRegion.Preference:
-                    PreferenceFrame.Navigate(typeof(Views.PreferencePage), null, transition);
+                    // 既にPreferencePageが表示されている場合は再ナビゲートしない
+                    if (PreferenceFrame.Content?.GetType() != typeof(Views.PreferencePage))
+                    {
+                        PreferenceFrame.Navigate(typeof(Views.PreferencePage), null, transition);
+                    }
                     break;
             }
         }

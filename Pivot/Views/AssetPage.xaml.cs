@@ -8,12 +8,18 @@ using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
 using Pivot.Models;
 using System;
+using System.Linq;
+using Microsoft.UI.Xaml.Input;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace Pivot.Views
 {
     public sealed partial class AssetPage : Page
     {
         public AssetViewModel ViewModel { get; set; }
+
+        private TemplateItem? _lastSelectedItemForRange;
+        private System.Threading.CancellationTokenSource? _borderThicknessUpdateCts;
 
         public AssetPage()
         {
@@ -41,11 +47,135 @@ namespace Pivot.Views
             catch { }
 
             this.Unloaded += AssetPage_Unloaded;
+            
+            // 設定変更を監視
+            UpdateBorderThicknessPeriodically();
+        }
+        
+        private async void UpdateBorderThicknessPeriodically()
+        {
+            _borderThicknessUpdateCts = new System.Threading.CancellationTokenSource();
+            var ct = _borderThicknessUpdateCts.Token;
+            
+            // 定期的に設定をチェックして更新（簡易的な実装）
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await System.Threading.Tasks.Task.Delay(500, ct); // 500msごとにチェック
+                    if (ct.IsCancellationRequested) break;
+                    
+                    if (ViewModel != null)
+                    {
+                        var settings = App.Current.Services.GetService<SettingsService>();
+                        if (settings != null)
+                        {
+                            var newThickness = settings.GetImageSelectionBorderThickness();
+                            if (Math.Abs(ViewModel.SelectionBorderThickness - newThickness) > 0.01)
+                            {
+                                ViewModel.SelectionBorderThickness = newThickness;
+                            }
+                        }
+                    }
+                }
+                catch (System.OperationCanceledException) { break; }
+                catch { }
+            }
         }
 
         private void AssetPage_Unloaded(object sender, RoutedEventArgs e)
         {
             try { ViewModel?.CancelLoads(); } catch { }
+            try { _borderThicknessUpdateCts?.Cancel(); } catch { }
+        }
+
+        private void AssetItem_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
+                {
+                    var keyModifiers = Windows.System.VirtualKeyModifiers.Control;
+                    var isCtrlPressed = (keyModifiers & Windows.System.VirtualKeyModifiers.Control) == Windows.System.VirtualKeyModifiers.Control;
+                    keyModifiers = Windows.System.VirtualKeyModifiers.Shift;
+                    var isShiftPressed = (keyModifiers & Windows.System.VirtualKeyModifiers.Shift) == Windows.System.VirtualKeyModifiers.Shift;
+                    
+                    // より正確な方法: InputKeyboardSourceを使用
+                    try
+                    {
+                        var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+                        var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+                        isCtrlPressed = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+                        isShiftPressed = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+                    }
+                    catch { }
+
+                    // 範囲選択の開始点を設定
+                    if (isShiftPressed && _lastSelectedItemForRange != null && item != null)
+                    {
+                        // Shift+クリック: 範囲選択
+                        var items = ViewModel.DisplayedAssets.ToList();
+                        var startIndex = items.IndexOf(_lastSelectedItemForRange);
+                        var endIndex = items.IndexOf(item);
+                        if (startIndex >= 0 && endIndex >= 0)
+                        {
+                            var minIndex = Math.Min(startIndex, endIndex);
+                            var maxIndex = Math.Max(startIndex, endIndex);
+                            var rangeItems = items.Skip(minIndex).Take(maxIndex - minIndex + 1);
+                            ViewModel.SelectionManager.SelectRange(rangeItems);
+                        }
+                    }
+                    else if (item != null)
+                    {
+                        // 通常クリックまたはCtrl+クリック
+                        ViewModel.SelectionManager.SelectItem(item, isCtrlPressed, isShiftPressed);
+                        if (!isCtrlPressed)
+                        {
+                            _lastSelectedItemForRange = item;
+                        }
+                    }
+
+                    e.Handled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"AssetItem_PointerPressed error: {ex.Message}");
+            }
+        }
+
+        private async void AssetItem_DragStarting(UIElement sender, DragStartingEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
+                {
+                    // 選択されているアイテムを取得（選択されていない場合は現在のアイテムのみ）
+                    var selectedItems = ViewModel.SelectionManager.SelectedItems;
+                    var itemsToDrag = selectedItems.Count > 0 ? selectedItems.Cast<object>() : new[] { (object)item };
+
+                    // DragDropServiceを使用してドラッグを開始
+                    var filePaths = itemsToDrag.Cast<TemplateItem>().Select(i => i.Path).Where(path => !string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path)).ToList();
+                    if (filePaths.Count == 0) return;
+
+                    var storageItems = await DragDropService.CreateStorageItems(filePaths);
+                    if (!storageItems.Any()) return;
+
+                    // StorageItemsを設定（外部アプリケーションやフォルダへのドロップをサポート）
+                    e.Data.SetStorageItems(storageItems);
+                    
+                    // コピー操作を要求
+                    e.Data.RequestedOperation = DataPackageOperation.Copy;
+                    
+                    // ドラッグUIの設定（システムが自動的にファイルアイコンを表示）
+                    e.DragUI.SetContentFromDataPackage();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"AssetItem_DragStarting error: {ex.Message}");
+                e.Cancel = true; // エラー時はドラッグをキャンセル
+            }
         }
 
         private void AssetItem_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
@@ -139,7 +269,7 @@ namespace Pivot.Views
                         itemsRepeater.Layout = new Microsoft.UI.Xaml.Controls.UniformGridLayout
                         {
                             MinItemWidth = 220,
-                            MinItemHeight = 160,
+                            MinItemHeight = 170,
                             MinRowSpacing = 8,
                             MinColumnSpacing = 8
                         };
@@ -173,7 +303,7 @@ namespace Pivot.Views
                         itemsRepeater.Layout = new Microsoft.UI.Xaml.Controls.UniformGridLayout
                         {
                             MinItemWidth = 220,
-                            MinItemHeight = 160,
+                            MinItemHeight = 170,
                             MinRowSpacing = 8,
                             MinColumnSpacing = 8
                         };

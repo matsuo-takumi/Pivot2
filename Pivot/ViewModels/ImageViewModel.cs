@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System;
 using Microsoft.Extensions.DependencyInjection;
+using Pivot.Services;
 
 namespace Pivot.ViewModels
 {
@@ -52,6 +53,9 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private bool _showThumbnails = true;
 
+        [ObservableProperty]
+        private double _selectionBorderThickness = 2.0;
+
         public SelectionManagerViewModel<TemplateItem> SelectionManager { get; }
 
         [RelayCommand]
@@ -70,12 +74,28 @@ namespace Pivot.ViewModels
                 // 選択状態が変更されたときに、各アイテムのIsSelectedプロパティを更新
                 if (e.PropertyName == nameof(SelectionManagerViewModel<TemplateItem>.SelectedCount))
                 {
-                    foreach (var item in Images)
+                    if (Images != null)
                     {
-                        item.IsSelected = SelectionManager.IsSelected(item);
+                        foreach (var item in Images)
+                        {
+                            item.IsSelected = SelectionManager.IsSelected(item);
+                        }
                     }
                 }
             };
+
+            // 設定変更を監視してBorderThicknessを更新
+            try
+            {
+                var settings = App.Current.Services.GetService<SettingsService>();
+                if (settings != null)
+                {
+                    SelectionBorderThickness = settings.GetImageSelectionBorderThickness();
+                    // 設定変更を監視するために、定期的にチェックするか、イベントを購読する
+                    // ここでは簡易的に初期値を設定し、ページ側で更新する
+                }
+            }
+            catch { }
 
             Images = new ObservableCollection<TemplateItem>
             {

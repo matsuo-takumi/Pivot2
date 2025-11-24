@@ -67,6 +67,11 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private bool _showThumbnails = true;
 
+        [ObservableProperty]
+        private double _selectionBorderThickness = 2.0;
+
+        public SelectionManagerViewModel<TemplateItem> SelectionManager { get; }
+
         [RelayCommand]
         private void ToggleLayout()
         {
@@ -77,6 +82,27 @@ namespace Pivot.ViewModels
 
         public AssetViewModel()
         {
+            SelectionManager = new SelectionManagerViewModel<TemplateItem>();
+            SelectionManager.PropertyChanged += (s, e) =>
+            {
+                // 選択状態が変更されたときに、各アイテムのIsSelectedプロパティを更新
+                if (e.PropertyName == nameof(SelectionManagerViewModel<TemplateItem>.SelectedCount))
+                {
+                    if (Assets != null)
+                    {
+                        foreach (var item in Assets)
+                        {
+                            item.IsSelected = SelectionManager.IsSelected(item);
+                        }
+                    }
+                    // DisplayedAssetsも更新
+                    foreach (var item in DisplayedAssets)
+                    {
+                        item.IsSelected = SelectionManager.IsSelected(item);
+                    }
+                }
+            };
+
             Assets = new ObservableCollection<TemplateItem>
             {
                 new TemplateItem { Name = "Test Asset 1", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/160x120?text=Asset+1" },
@@ -112,6 +138,17 @@ namespace Pivot.ViewModels
 
             // initialize displayed assets
             ApplyFilterFromService();
+
+            // 設定変更を監視してBorderThicknessを更新
+            try
+            {
+                var settings = App.Current.Services.GetService<SettingsService>();
+                if (settings != null)
+                {
+                    SelectionBorderThickness = settings.GetImageSelectionBorderThickness();
+                }
+            }
+            catch { }
         }
 
         partial void OnSelectedFilterChanged(FilterViewModel? value)

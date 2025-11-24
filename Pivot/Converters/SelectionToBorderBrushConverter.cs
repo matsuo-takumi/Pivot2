@@ -35,10 +35,10 @@ namespace Pivot.Converters
                 catch { }
                 
                 // Fallback: Default semi-transparent blue
-                return new SolidColorBrush(Color.FromArgb(128, 0, 120, 212));
+                return new SolidColorBrush(Color.FromArgb(200, 0, 120, 212));
             }
-            // Not selected: Transparent
-            return new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            // Not selected: 薄いグレーのボーダー（カードの境界が見えるように）
+            return new SolidColorBrush(Color.FromArgb(32, 128, 128, 128)); // #20808080
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)
