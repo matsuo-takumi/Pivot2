@@ -65,7 +65,8 @@
                                         CanDrag="True"
                                         PointerPressed="ImageItem_PointerPressed"
                                         DragStarting="ImageItem_DragStarting"
-                                        DoubleTapped="ImageItem_DoubleTapped">
+                                        DoubleTapped="ImageItem_DoubleTapped"
+                                        RightTapped="ImageItem_RightTapped">
                                     <Grid>
                                         <Grid Visibility="{Binding DataContext.UseTextListMode, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" ColumnSpacing="12">
                                             <Grid.ColumnDefinitions>
@@ -125,7 +126,8 @@
                                                     CanDrag="True"
                                                     PointerPressed="ImageItem_PointerPressed"
                                                     DragStarting="ImageItem_DragStarting"
-                                                    DoubleTapped="ImageItem_DoubleTapped">
+                                                    DoubleTapped="ImageItem_DoubleTapped"
+                                                    RightTapped="ImageItem_RightTapped">
                                                 <StackPanel>
                                                     <Grid Background="Transparent">
                                                         <Image Stretch="Uniform" Source="{Binding ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}"/>
@@ -151,10 +153,8 @@
                       IsHitTestVisible="True" 
                       PointerPressed="ImagePreviewOverlay_PointerPressed"
                       PointerWheelChanged="ImagePreviewOverlay_PointerWheelChanged">
-                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Padding="48">
                         <Border x:Name="ImagePreviewContainer" 
-                                MinWidth="400"
-                                MinHeight="300"
                                 Background="Transparent"
                                 PointerPressed="ImagePreviewContainer_PointerPressed"
                                 PointerMoved="ImagePreviewContainer_PointerMoved"
@@ -166,8 +166,14 @@
                                         HorizontalScrollBarVisibility="Auto"
                                         VerticalScrollBarVisibility="Auto"
                                         HorizontalScrollMode="Enabled"
-                                        VerticalScrollMode="Enabled">
-                                <Grid>
+                                        VerticalScrollMode="Enabled"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent">
+                                <Grid HorizontalAlignment="Center" 
+                                      VerticalAlignment="Center"
+                                      Background="Transparent"
+                                      PointerPressed="ImagePreviewBackground_PointerPressed">
                                     <Image x:Name="ImagePreviewImage" 
                                            Stretch="Uniform"
                                            HorizontalAlignment="Center"

@@ -187,6 +187,25 @@ namespace Pivot.Views
             }
         }
 
+        // 右クリックメニュー
+        private void AssetItem_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.DataContext is TemplateItem item)
+                {
+                    // 共通サービスを使用してメニューを設定
+                    ItemContextMenuService.SetupContextMenu(element, item);
+                    // メニューを更新（パス情報を最新化）
+                    ItemContextMenuService.HandleRightTapped(sender, e);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"AssetItem_RightTapped error: {ex.Message}");
+            }
+        }
+
         private void AssetPage_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             UpdateResponsive(e.NewSize.Width);

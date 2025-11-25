@@ -64,7 +64,8 @@
                                         PointerPressed="AssetItem_PointerPressed"
                                         DragStarting="AssetItem_DragStarting"
                                         DoubleTapped="AssetItem_DoubleTapped" 
-                                        Tag="{Binding Path}">
+                                        Tag="{Binding Path}"
+                                        RightTapped="AssetItem_RightTapped">
                                     <Border.Transitions>
                                         <TransitionCollection>
                                             <EntranceThemeTransition/>
@@ -132,7 +133,8 @@
                                                     PointerPressed="AssetItem_PointerPressed"
                                                     DragStarting="AssetItem_DragStarting"
                                                     DoubleTapped="AssetItem_DoubleTapped" 
-                                                    Tag="{Binding Path}">
+                                                    Tag="{Binding Path}"
+                                                    RightTapped="AssetItem_RightTapped">
                                                 <Border.Transitions>
                                                     <TransitionCollection>
                                                         <EntranceThemeTransition/>

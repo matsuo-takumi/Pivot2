@@ -298,6 +298,25 @@ namespace Pivot.Views
             }
         }
 
+        // 右クリックメニュー
+        private void ImageItem_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.DataContext is TemplateItem item)
+                {
+                    // 共通サービスを使用してメニューを設定
+                    ItemContextMenuService.SetupContextMenu(element, item);
+                    // メニューを更新（パス情報を最新化）
+                    ItemContextMenuService.HandleRightTapped(sender, e);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ImageItem_RightTapped error: {ex.Message}");
+            }
+        }
+
         private async System.Threading.Tasks.Task ShowImagePreview(TemplateItem item)
         {
             try
@@ -411,15 +430,15 @@ namespace Pivot.Views
                     {
                         imageControl.Source = bitmapImage;
                         
-                        // プレビューサイズを更新
-                        UpdatePreviewSize();
-                        
-                        // ズームとスクロール位置をリセット
+                        // ズームとスクロール位置をリセット（最初は全体表示）
+                        _currentZoomFactor = 1.0;
                         if (overlay.Visibility == Visibility.Visible)
                         {
-                            scrollViewer.ChangeView(0, 0, 1.0f, true);
-                            _currentZoomFactor = 1.0;
+                            scrollViewer.ChangeView(0, 0, 1.0f, false);
                         }
+                        
+                        // プレビューサイズを更新（画像全体が表示されるように）
+                        UpdatePreviewSize();
 
                         // オーバーレイを表示
                         overlay.Visibility = Visibility.Visible;
@@ -442,14 +461,15 @@ namespace Pivot.Views
                             
                             imageControl2.Source = bitmapImage;
                             
-                            // プレビューサイズを更新
-                            UpdatePreviewSize();
-                            
+                            // ズームとスクロール位置をリセット（最初は全体表示）
+                            _currentZoomFactor = 1.0;
                             if (overlay2.Visibility == Visibility.Visible)
                             {
-                                scrollViewer2.ChangeView(0, 0, 1.0f, true);
-                                _currentZoomFactor = 1.0;
+                                scrollViewer2.ChangeView(0, 0, 1.0f, false);
                             }
+                            
+                            // プレビューサイズを更新（画像全体が表示されるように）
+                            UpdatePreviewSize();
                             
                             overlay2.Visibility = Visibility.Visible;
                         });
@@ -514,6 +534,7 @@ namespace Pivot.Views
                     try
                     {
                         var imageControl = this.FindName("ImagePreviewImage") as Image;
+                        var scrollViewer = this.FindName("ImagePreviewScrollViewer") as ScrollViewer;
                         if (imageControl == null) return;
                         
                         // 画像の実際のサイズを取得
@@ -522,8 +543,18 @@ namespace Pivot.Views
                         
                         if (actualWidth > 0 && actualHeight > 0)
                         {
+                            // 画像サイズに関わらず、アスペクト比を正しく計算
                             _previewImageAspectRatio = (double)actualWidth / actualHeight;
+                            
+                            // プレビューサイズを更新（画像全体が表示されるように）
                             UpdatePreviewSize();
+                            
+                            // 画像全体が表示されるようにスクロール位置をリセット
+                            // 画像サイズに関わらず、常に画像全体が表示されるようにする
+                            if (scrollViewer != null && Math.Abs(_currentZoomFactor - 1.0) < 0.01)
+                            {
+                                scrollViewer.ChangeView(0, 0, 1.0f, false);
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -545,41 +576,57 @@ namespace Pivot.Views
                 var overlay = this.FindName("ImagePreviewOverlay") as Grid;
                 var container = this.FindName("ImagePreviewContainer") as Border;
                 var imageControl = this.FindName("ImagePreviewImage") as Image;
+                var scrollViewer = this.FindName("ImagePreviewScrollViewer") as ScrollViewer;
                 
-                if (overlay == null || container == null || imageControl == null) return;
-                if (overlay.Visibility != Visibility.Visible) return;
+                if (overlay == null || container == null || imageControl == null || scrollViewer == null) return;
                 
-                // ウィンドウサイズに基づいて表示サイズを計算
+                // ウィンドウサイズに基づいて最大表示エリアを計算
                 var windowWidth = ActualWidth > 0 ? ActualWidth : 1200;
                 var windowHeight = ActualHeight > 0 ? ActualHeight : 800;
                 
-                // マージンを考慮（左右上下に5%の余白）
-                var maxDisplayWidth = Math.Max(400, windowWidth * 0.9);
-                var maxDisplayHeight = Math.Max(300, windowHeight * 0.9);
+                // 最大表示エリアサイズ（マージン10%を考慮）
+                var maxDisplayWidth = Math.Max(400, windowWidth * 0.8);
+                var maxDisplayHeight = Math.Max(300, windowHeight * 0.8);
                 
-                // コンテナのサイズを設定
-                container.MaxWidth = maxDisplayWidth;
-                container.MaxHeight = maxDisplayHeight;
-                
-                // 画像のアスペクト比が有効な場合、画像サイズを更新
+                // 画像のアスペクト比が有効な場合、画像全体が表示されるようにサイズを計算
                 if (_previewImageAspectRatio > 0)
                 {
-                    double displayWidth = maxDisplayWidth;
-                    double displayHeight = maxDisplayWidth / _previewImageAspectRatio;
+                    double displayWidth, displayHeight;
                     
-                    // 高さが最大値を超える場合は、高さを基準にする
-                    if (displayHeight > maxDisplayHeight)
+                    // 最大エリア内に画像全体が収まるように計算（fit to view）
+                    var maxAspectRatio = maxDisplayWidth / maxDisplayHeight;
+                    
+                    if (_previewImageAspectRatio > maxAspectRatio)
                     {
+                        // 横長の画像: 幅を基準にする
+                        displayWidth = maxDisplayWidth;
+                        displayHeight = maxDisplayWidth / _previewImageAspectRatio;
+                    }
+                    else
+                    {
+                        // 縦長の画像: 高さを基準にする
                         displayHeight = maxDisplayHeight;
                         displayWidth = maxDisplayHeight * _previewImageAspectRatio;
                     }
                     
-                    // 最小サイズを確保
-                    displayWidth = Math.Max(400, displayWidth);
-                    displayHeight = Math.Max(300, displayHeight);
+                    displayWidth = Math.Min(displayWidth, maxDisplayWidth);
+                    displayHeight = Math.Min(displayHeight, maxDisplayHeight);
                     
+                    // 画像サイズを設定（最初は全体が表示される）
                     imageControl.Width = displayWidth;
                     imageControl.Height = displayHeight;
+                    
+                    // コンテナも画像サイズに合わせて比率を変える
+                    container.Width = displayWidth;
+                    container.Height = displayHeight;
+                    container.MaxWidth = maxDisplayWidth;
+                    container.MaxHeight = maxDisplayHeight;
+                    
+                    // ズームが1.0の場合は、画像全体が表示されるようにスクロール位置をリセット
+                    if (Math.Abs(_currentZoomFactor - 1.0) < 0.01)
+                    {
+                        scrollViewer.ChangeView(0, 0, 1.0f, false);
+                    }
                 }
             }
             catch (Exception ex)
@@ -641,39 +688,75 @@ namespace Pivot.Views
 
         private void ImagePreviewOverlay_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            // 背景クリックで閉じる（コンテナの外側をクリックした場合）
+            // 背景クリックで閉じる（画像の外側、またはオーバーレイ背景をクリックした場合）
             try
             {
                 var overlay = sender as FrameworkElement;
-                var container = overlay?.FindName("ImagePreviewContainer") as FrameworkElement;
-                
-                if (container == null)
-                {
-                    var root = this.Content as FrameworkElement;
-                    container = root?.FindName("ImagePreviewContainer") as FrameworkElement;
-                }
+                if (overlay == null) return;
 
-                if (container == null || container.ActualWidth <= 0 || container.ActualHeight <= 0)
+                var closeButton = this.FindName("ImagePreviewCloseButton") as FrameworkElement;
+                if (closeButton != null && IsOrDescendant(e.OriginalSource as DependencyObject, closeButton))
                 {
-                    CloseImagePreview();
-                    e.Handled = true;
                     return;
                 }
 
-                var pt = e.GetCurrentPoint(overlay).Position;
-                var transform = container.TransformToVisual(overlay);
-                var bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
-                
-                if (!bounds.Contains(pt))
+                var imageControl = this.FindName("ImagePreviewImage") as FrameworkElement;
+                if (imageControl != null && IsPointInsideElement(e.GetCurrentPoint(overlay).Position, imageControl, overlay))
                 {
-                    CloseImagePreview();
-                    e.Handled = true;
+                    return;
                 }
+
+                CloseImagePreview();
+                e.Handled = true;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"ImagePreviewOverlay_PointerPressed error: {ex.Message}");
             }
+        }
+
+        private bool IsPointInsideElement(Point point, FrameworkElement element, FrameworkElement reference)
+        {
+            try
+            {
+                if (element == null || reference == null) return false;
+                if (element.ActualWidth <= 0 || element.ActualHeight <= 0) return false;
+
+                var transform = element.TransformToVisual(reference);
+                var bounds = transform.TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+                return bounds.Contains(point);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool IsOrDescendant(DependencyObject? source, FrameworkElement target)
+        {
+            if (source == null || target == null) return false;
+            if (source == target) return true;
+            var parent = VisualTreeHelper.GetParent(source);
+            while (parent != null)
+            {
+                if (parent == target) return true;
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+            return false;
+        }
+
+        private bool IsDescendantOf(FrameworkElement? element, FrameworkElement ancestor)
+        {
+            if (element == null || ancestor == null) return false;
+            if (element == ancestor) return true;
+            
+            var parent = element.Parent as FrameworkElement;
+            while (parent != null)
+            {
+                if (parent == ancestor) return true;
+                parent = parent.Parent as FrameworkElement;
+            }
+            return false;
         }
 
         private void ImagePreviewOverlay_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
@@ -781,5 +864,30 @@ namespace Pivot.Views
                 System.Diagnostics.Debug.WriteLine($"ImagePreviewContainer_PointerReleased error: {ex.Message}");
             }
         }
+
+        private void ImagePreviewBackground_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            // ScrollViewer内の背景（画像の周囲）がクリックされた場合に閉じる
+            try
+            {
+                var originalSource = e.OriginalSource as FrameworkElement;
+                var imageControl = this.FindName("ImagePreviewImage") as FrameworkElement;
+                
+                // 画像がクリックされた場合は処理しない（パンニング用）
+                if (imageControl != null && (originalSource == imageControl || IsDescendantOf(originalSource, imageControl)))
+                {
+                    return;
+                }
+                
+                // 画像以外の場所（背景）がクリックされた場合は閉じる
+                CloseImagePreview();
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ImagePreviewBackground_PointerPressed error: {ex.Message}");
+            }
+        }
     }
 }
+
