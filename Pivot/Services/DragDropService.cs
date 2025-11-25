@@ -61,18 +61,27 @@ namespace Pivot.Services
                     {
                         var file = await StorageFile.GetFileFromPathAsync(path);
                         storageItems.Add(file);
+                        System.Diagnostics.Debug.WriteLine($"DragDropService: Successfully created StorageFile for {path}");
                     }
                     else if (Directory.Exists(path))
                     {
                         var folder = await StorageFolder.GetFolderFromPathAsync(path);
                         storageItems.Add(folder);
+                        System.Diagnostics.Debug.WriteLine($"DragDropService: Successfully created StorageFolder for {path}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"DragDropService: Path does not exist: {path}");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
                     // ファイルにアクセスできない場合はスキップ
+                    System.Diagnostics.Debug.WriteLine($"DragDropService: Failed to create StorageItem for {path}: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"  Exception type: {ex.GetType().Name}");
                 }
             }
+            System.Diagnostics.Debug.WriteLine($"DragDropService: Created {storageItems.Count} storage item(s) from {filePaths.Count} path(s)");
             return storageItems;
         }
 

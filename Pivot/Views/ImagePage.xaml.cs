@@ -11,6 +11,9 @@ using Pivot.Models;
 using System;
 using System.Linq;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Streams;
+using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace Pivot.Views
 {
@@ -233,7 +236,10 @@ namespace Pivot.Views
                         }
                     }
 
-                    e.Handled = true;
+                    // 注意: e.Handled = true を設定しないことで、ドラッグが正常に開始される
+                    // ただし、これにより他のイベントも処理される可能性がある
+                    // ドラッグを開始するためには、この行をコメントアウトする必要がある
+                    // e.Handled = true;
                 }
             }
             catch (Exception ex)
@@ -244,34 +250,138 @@ namespace Pivot.Views
 
         private async void ImageItem_DragStarting(UIElement sender, DragStartingEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine("ImageItem_DragStarting: Event fired!");
             try
             {
                 if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
                 {
+                    System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Item found - Name: {item.Name}, Path: {item.Path}");
                     // 選択されているアイテムを取得（選択されていない場合は現在のアイテムのみ）
                     var selectedItems = ViewModel.SelectionManager.SelectedItems;
                     var itemsToDrag = selectedItems.Count > 0 ? selectedItems.Cast<object>() : new[] { (object)item };
 
                     // DragDropServiceを使用してドラッグを開始
                     var filePaths = itemsToDrag.Cast<TemplateItem>().Select(i => i.Path).Where(path => !string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path)).ToList();
-                    if (filePaths.Count == 0) return;
+                    if (filePaths.Count == 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine("ImageItem_DragStarting: No valid file paths found");
+                        return;
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Attempting to drag {filePaths.Count} file(s)");
+                    foreach (var path in filePaths)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"  - File: {path}");
+                    }
 
                     var storageItems = await DragDropService.CreateStorageItems(filePaths);
-                    if (!storageItems.Any()) return;
+                    if (storageItems.Count == 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine("ImageItem_DragStarting: Failed to create storage items");
+                        return;
+                    }
 
-                    // StorageItemsを設定（外部アプリケーションやフォルダへのドロップをサポート）
-                    e.Data.SetStorageItems(storageItems);
+                    System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Created {storageItems.Count} storage item(s)");
+
+                    // StorageItemsを設定（WinUI3では、readOnlyパラメータはオプション）
+                    // ファイルをコピー可能にするため、readOnly: falseを指定
+                    e.Data.SetStorageItems(storageItems, readOnly: false);
+                    System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: SetStorageItems called with {storageItems.Count} item(s), readOnly=false");
                     
                     // コピー操作を要求
                     e.Data.RequestedOperation = DataPackageOperation.Copy;
+                    System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: RequestedOperation set to {e.Data.RequestedOperation}");
                     
-                    // ドラッグUIの設定（システムが自動的にファイルアイコンを表示）
-                    e.DragUI.SetContentFromDataPackage();
+                    // カスタムドラッグプレビュー: 画像のサムネイルを表示
+                    try
+                    {
+                        // 最初のアイテムのサムネイルを使用（複数選択時も最初の画像を表示）
+                        var firstItem = itemsToDrag.Cast<TemplateItem>().FirstOrDefault();
+                        if (firstItem != null)
+                        {
+                            BitmapImage? bitmapImage = null;
+                            
+                            // ThumbnailPathから画像を読み込む
+                            if (!string.IsNullOrWhiteSpace(firstItem.ThumbnailPath))
+                            {
+                                try
+                                {
+                                    // URI形式の場合（file:/// や http:// など）
+                                    if (Uri.TryCreate(firstItem.ThumbnailPath, UriKind.Absolute, out var thumbnailUri))
+                                    {
+                                        bitmapImage = new BitmapImage(thumbnailUri);
+                                        bitmapImage.DecodePixelWidth = 200; // ドラッグプレビュー用にサイズを制限
+                                        System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Created BitmapImage from URI: {firstItem.ThumbnailPath}");
+                                    }
+                                    // ファイルパスの場合
+                                    else if (System.IO.File.Exists(firstItem.ThumbnailPath))
+                                    {
+                                        var thumbnailFile = await StorageFile.GetFileFromPathAsync(firstItem.ThumbnailPath);
+                                        var stream = await thumbnailFile.OpenReadAsync();
+                                        bitmapImage = new BitmapImage();
+                                        bitmapImage.DecodePixelWidth = 200;
+                                        await bitmapImage.SetSourceAsync(stream);
+                                        System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Created BitmapImage from file: {firstItem.ThumbnailPath}");
+                                    }
+                                }
+                                catch (Exception thumbEx)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Failed to load thumbnail: {thumbEx.Message}");
+                                }
+                            }
+                            
+                            // サムネイルが利用できない場合は、元の画像ファイルから読み込む
+                            if (bitmapImage == null && System.IO.File.Exists(firstItem.Path))
+                            {
+                                try
+                                {
+                                    var imageFile = await StorageFile.GetFileFromPathAsync(firstItem.Path);
+                                    var stream = await imageFile.OpenReadAsync();
+                                    bitmapImage = new BitmapImage();
+                                    bitmapImage.DecodePixelWidth = 200; // ドラッグプレビュー用にサイズを制限
+                                    await bitmapImage.SetSourceAsync(stream);
+                                    System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Created BitmapImage from original image: {firstItem.Path}");
+                                }
+                                catch (Exception imgEx)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Failed to load original image: {imgEx.Message}");
+                                }
+                            }
+                            
+                            // BitmapImageが作成できた場合は、カスタムプレビューを設定
+                            if (bitmapImage != null)
+                            {
+                                e.DragUI.SetContentFromBitmapImage(bitmapImage);
+                                System.Diagnostics.Debug.WriteLine("ImageItem_DragStarting: Set custom drag preview with image");
+                            }
+                            else
+                            {
+                                // フォールバック: システムデフォルトを使用
+                                e.DragUI.SetContentFromDataPackage();
+                                System.Diagnostics.Debug.WriteLine("ImageItem_DragStarting: Using default drag preview (fallback)");
+                            }
+                        }
+                        else
+                        {
+                            // フォールバック: システムデフォルトを使用
+                            e.DragUI.SetContentFromDataPackage();
+                            System.Diagnostics.Debug.WriteLine("ImageItem_DragStarting: Using default drag preview (no item found)");
+                        }
+                    }
+                    catch (Exception previewEx)
+                    {
+                        // プレビュー設定に失敗した場合は、システムデフォルトを使用
+                        System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting: Failed to set custom preview: {previewEx.Message}");
+                        e.DragUI.SetContentFromDataPackage();
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine("ImageItem_DragStarting: Drag started successfully");
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
                 e.Cancel = true; // エラー時はドラッグをキャンセル
             }
         }

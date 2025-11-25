@@ -61,6 +61,7 @@
                                         Padding="{Binding IsSelected, Converter={StaticResource SelectionToPaddingConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
                                         Margin="4" 
                                         Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
+                                        CanDrag="True"
                                         PointerPressed="ImageItem_PointerPressed"
                                         DragStarting="ImageItem_DragStarting">
                                     <Grid>
@@ -119,6 +120,7 @@
                                                     Margin="4" 
                                                     Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}" 
                                                     Width="{Binding DataContext.MasonryColumnWidth, ElementName=ImagePageRoot}"
+                                                    CanDrag="True"
                                                     PointerPressed="ImageItem_PointerPressed"
                                                     DragStarting="ImageItem_DragStarting">
                                                 <StackPanel>
