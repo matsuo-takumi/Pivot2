@@ -46,8 +46,9 @@
 
         <!-- 本体: グリッド表示（ImageItemにバインド） -->
         <Border Grid.Row="1" Background="#20E8F5E9" CornerRadius="6" Padding="6">
-            <ScrollViewer x:Name="MainScrollViewer" VerticalScrollBarVisibility="Auto" Background="Transparent">
-                <Grid>
+            <Grid>
+                <ScrollViewer x:Name="MainScrollViewer" VerticalScrollBarVisibility="Auto" Background="Transparent">
+                    <Grid>
                     <!-- Standard ItemsRepeater (Grid / List / Justified fallback) -->
                     <ItemsRepeater x:Name="ItemsRepeaterMain" ItemsSource="{Binding Images}">
                         <ItemsRepeater.Layout>
@@ -63,7 +64,8 @@
                                         Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
                                         CanDrag="True"
                                         PointerPressed="ImageItem_PointerPressed"
-                                        DragStarting="ImageItem_DragStarting">
+                                        DragStarting="ImageItem_DragStarting"
+                                        DoubleTapped="ImageItem_DoubleTapped">
                                     <Grid>
                                         <Grid Visibility="{Binding DataContext.UseTextListMode, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" ColumnSpacing="12">
                                             <Grid.ColumnDefinitions>
@@ -122,7 +124,8 @@
                                                     Width="{Binding DataContext.MasonryColumnWidth, ElementName=ImagePageRoot}"
                                                     CanDrag="True"
                                                     PointerPressed="ImageItem_PointerPressed"
-                                                    DragStarting="ImageItem_DragStarting">
+                                                    DragStarting="ImageItem_DragStarting"
+                                                    DoubleTapped="ImageItem_DoubleTapped">
                                                 <StackPanel>
                                                     <Grid Background="Transparent">
                                                         <Image Stretch="Uniform" Source="{Binding ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}"/>
@@ -138,8 +141,58 @@
                     </ItemsControl>
 
                     <!-- Justified layout removed -->
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- 画像プレビューオーバーレイ -->
+                <Grid x:Name="ImagePreviewOverlay" 
+                      Visibility="Collapsed" 
+                      Background="#CC000000" 
+                      IsHitTestVisible="True" 
+                      PointerPressed="ImagePreviewOverlay_PointerPressed"
+                      PointerWheelChanged="ImagePreviewOverlay_PointerWheelChanged">
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border x:Name="ImagePreviewContainer" 
+                                MinWidth="400"
+                                MinHeight="300"
+                                Background="Transparent"
+                                PointerPressed="ImagePreviewContainer_PointerPressed"
+                                PointerMoved="ImagePreviewContainer_PointerMoved"
+                                PointerReleased="ImagePreviewContainer_PointerReleased">
+                            <ScrollViewer x:Name="ImagePreviewScrollViewer"
+                                        ZoomMode="Enabled"
+                                        MinZoomFactor="0.1"
+                                        MaxZoomFactor="10.0"
+                                        HorizontalScrollBarVisibility="Auto"
+                                        VerticalScrollBarVisibility="Auto"
+                                        HorizontalScrollMode="Enabled"
+                                        VerticalScrollMode="Enabled">
+                                <Grid>
+                                    <Image x:Name="ImagePreviewImage" 
+                                           Stretch="Uniform"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                                </Grid>
+                            </ScrollViewer>
+                        </Border>
+                        <!-- 閉じるボタン -->
+                        <Button x:Name="ImagePreviewCloseButton"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                Margin="16"
+                                Width="40"
+                                Height="40"
+                                Background="#CC000000"
+                                BorderThickness="0"
+                                CornerRadius="20"
+                                Click="ImagePreviewCloseButton_Click">
+                            <Button.Content>
+                                <FontIcon Glyph="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="20"/>
+                            </Button.Content>
+                        </Button>
+                    </Grid>
                 </Grid>
-            </ScrollViewer>
+            </Grid>
         </Border>
     </Grid>
 </Page>

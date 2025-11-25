@@ -150,25 +150,9 @@ namespace Pivot.Views
             {
                 if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
                 {
-                    // 選択されているアイテムを取得（選択されていない場合は現在のアイテムのみ）
+                    // DragDropServiceのモジュール化されたメソッドを使用
                     var selectedItems = ViewModel.SelectionManager.SelectedItems;
-                    var itemsToDrag = selectedItems.Count > 0 ? selectedItems.Cast<object>() : new[] { (object)item };
-
-                    // DragDropServiceを使用してドラッグを開始
-                    var filePaths = itemsToDrag.Cast<TemplateItem>().Select(i => i.Path).Where(path => !string.IsNullOrWhiteSpace(path) && System.IO.File.Exists(path)).ToList();
-                    if (filePaths.Count == 0) return;
-
-                    var storageItems = await DragDropService.CreateStorageItems(filePaths);
-                    if (!storageItems.Any()) return;
-
-                    // StorageItemsを設定（外部アプリケーションやフォルダへのドロップをサポート）
-                    e.Data.SetStorageItems(storageItems);
-                    
-                    // コピー操作を要求
-                    e.Data.RequestedOperation = DataPackageOperation.Copy;
-                    
-                    // ドラッグUIの設定（システムが自動的にファイルアイコンを表示）
-                    e.DragUI.SetContentFromDataPackage();
+                    await DragDropService.HandleDragStartingForTemplateItem(sender, e, item, selectedItems);
                 }
             }
             catch (Exception ex)
