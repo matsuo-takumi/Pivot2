@@ -21,6 +21,7 @@ namespace Pivot.CodeModule.ViewModels
     {
         private readonly ICodeRepository? _repo;
         private readonly SnippetCacheService? _snippetCache;
+        private readonly SnippetSyncService? _syncService;
         private List<CodeFile> _allSnippets = new List<CodeFile>();
         // track snippets that were created in-memory and not yet persisted
         private HashSet<Guid> _transientSnippetIds = new HashSet<Guid>();
@@ -48,6 +49,7 @@ namespace Pivot.CodeModule.ViewModels
 
         public ObservableCollection<TagItem> AvailableTags { get; } = new();
         public ObservableCollection<TagItem> FilteredTags { get; } = new();
+        public SnippetSyncService? SyncService => _syncService;
         private string _tagFilterKeyword = string.Empty;
         private volatile bool _isTagSelectionUpdating = false;
         public RelayCommand<TagItem> ToggleTagCommand { get; private set; } = null!;
@@ -62,6 +64,7 @@ namespace Pivot.CodeModule.ViewModels
         {
             _repo = repo;
             _snippetCache = snippetCache;
+            _syncService = new SnippetSyncService(_repo, this);
             var all = (_repo.GetAll() ?? Enumerable.Empty<CodeFile>()).ToList();
             // Remove tags that don't exist in preferences from all snippets
             RemoveInvalidTagsFromSnippets(all);
@@ -852,6 +855,20 @@ namespace Pivot.CodeModule.ViewModels
                 }
 
                 await ApplyCachedValuesAsync(file);
+                
+                // Use sync service for immediate save if available (cancels pending debounced saves)
+                if (_syncService != null)
+                {
+                    _syncService.SaveImmediate(file);
+                    if (refreshAfterSave)
+                    {
+                        try { App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() => Refresh()); } catch { }
+                    }
+                    // if it was transient, it's now persisted
+                    try { _transientSnippetIds.Remove(file.Id); } catch { }
+                    return;
+                }
+                
                 if (_repo != null)
                 {
                     // Save synchronously on calling thread to avoid concurrent DbContext access

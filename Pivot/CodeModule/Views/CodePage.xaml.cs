@@ -305,6 +305,13 @@ namespace Pivot.CodeModule.Views
                     }
                     catch { }
                 }
+                
+                // Cancel all pending debounced saves in sync service
+                try
+                {
+                    ViewModel?.SyncService?.CancelAllPendingSaves();
+                }
+                catch { }
             }
             catch (Exception ex)
             {
@@ -2002,21 +2009,13 @@ namespace Pivot.CodeModule.Views
             {
                 var tb = sender as TextBox;
                 if (tb == null) return;
-                if (ViewModel != null && ViewModel.SelectedSnippet != null)
+                if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newContent = tb.Text ?? string.Empty;
                     
-                    // SelectedSnippetを更新
-                    selectedSnippet.Content = newContent;
-                    ViewModel.IsDirty = true;
-                    
-                    // Snippetsコレクション内の対応するインスタンスも更新（リアルタイム更新のため）
-                    var snippetInCollection = ViewModel.Snippets.FirstOrDefault(s => s.Id == selectedSnippet.Id);
-                    if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, selectedSnippet))
-                    {
-                        snippetInCollection.Content = newContent;
-                    }
+                    // Use sync service for immediate UI update and debounced SQLite save
+                    ViewModel.SyncService.UpdateContentImmediate(selectedSnippet, newContent);
                 }
             }
             catch { }
@@ -2028,21 +2027,13 @@ namespace Pivot.CodeModule.Views
             {
                 var tb = sender as TextBox;
                 if (tb == null) return;
-                if (ViewModel != null && ViewModel.SelectedSnippet != null)
+                if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newContent = tb.Text ?? string.Empty;
                     
-                    // SelectedSnippetを更新
-                    selectedSnippet.Content = newContent;
-                    ViewModel.IsDirty = true;
-                    
-                    // Snippetsコレクション内の対応するインスタンスも更新（リアルタイム更新のため）
-                    var snippetInCollection = ViewModel.Snippets.FirstOrDefault(s => s.Id == selectedSnippet.Id);
-                    if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, selectedSnippet))
-                    {
-                        snippetInCollection.Content = newContent;
-                    }
+                    // Use sync service for immediate UI update and debounced SQLite save
+                    ViewModel.SyncService.UpdateContentImmediate(selectedSnippet, newContent);
                 }
             }
             catch { }
@@ -2054,21 +2045,13 @@ namespace Pivot.CodeModule.Views
             {
                 var tb = sender as TextBox;
                 if (tb == null) return;
-                if (ViewModel != null && ViewModel.SelectedSnippet != null)
+                if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newTitle = tb.Text ?? string.Empty;
                     
-                    // SelectedSnippetを更新
-                    selectedSnippet.Title = newTitle;
-                    ViewModel.IsDirty = true;
-                    
-                    // Snippetsコレクション内の対応するインスタンスも更新（リアルタイム更新のため）
-                    var snippetInCollection = ViewModel.Snippets.FirstOrDefault(s => s.Id == selectedSnippet.Id);
-                    if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, selectedSnippet))
-                    {
-                        snippetInCollection.Title = newTitle;
-                    }
+                    // Use sync service for immediate UI update and debounced SQLite save
+                    ViewModel.SyncService.UpdateTitleImmediate(selectedSnippet, newTitle);
                 }
             }
             catch { }
