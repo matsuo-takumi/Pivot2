@@ -119,13 +119,13 @@
                             </ScrollViewer>
 
                             <!-- Scratchpad overlay moved into CardPanel so it covers the card area only -->
-                            <Grid x:Name="ScratchpadOverlay" Visibility="Collapsed" Background="Transparent" IsHitTestVisible="True" PointerPressed="ScratchpadOverlay_PointerPressed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Grid x:Name="ScratchpadOverlay" Visibility="Collapsed" Background="#66000000" IsHitTestVisible="True" PointerPressed="ScratchpadOverlay_PointerPressed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <Border x:Name="ScratchpadContainer" MinWidth="320" MinHeight="240" MaxWidth="900" MaxHeight="640" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                         <Grid RowDefinitions="Auto,Auto,*,Auto" ColumnDefinitions="*">
                                             <!-- Header: editable title -->
                                             <Grid Grid.Row="0" ColumnDefinitions="*">
-                                                <TextBox x:Name="ScratchpadTitleBox" PlaceholderText="Title" TextChanging="ScratchpadTitleBox_TextChanged" FontSize="16" FontWeight="SemiBold" BorderThickness="0" />
+                                                <TextBox x:Name="ScratchpadTitleBox" PlaceholderText="Title" TextChanged="ScratchpadTitleBox_TextChanged" KeyDown="ScratchpadTitleBox_KeyDown" FontSize="16" FontWeight="SemiBold" BorderThickness="0" />
                                             </Grid>
 
 

@@ -10,6 +10,8 @@ using Pivot.Models;
 using System;
 using System.Linq;
 using Microsoft.UI.Xaml.Input;
+using System.IO;
+using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace Pivot.Views
@@ -29,6 +31,14 @@ namespace Pivot.Views
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             SizeChanged += AssetPage_SizeChanged;
+
+            var copyAccelerator = new KeyboardAccelerator
+            {
+                Key = Windows.System.VirtualKey.C,
+                Modifiers = Windows.System.VirtualKeyModifiers.Control
+            };
+            copyAccelerator.Invoked += CopySelectionKeyboardAccelerator_Invoked;
+            this.KeyboardAccelerators.Add(copyAccelerator);
 
             ApplyLayout(ViewModel.CurrentLayout);
 
@@ -196,13 +206,55 @@ namespace Pivot.Views
                 {
                     // 共通サービスを使用してメニューを設定
                     ItemContextMenuService.SetupContextMenu(element, item);
-                    // メニューを更新（パス情報を最新化）
-                    ItemContextMenuService.HandleRightTapped(sender, e);
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"AssetItem_RightTapped error: {ex.Message}");
+            }
+        }
+
+        private async void CopySelectionKeyboardAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            args.Handled = true;
+            await CopySelectedFilesToClipboardAsync().ConfigureAwait(false);
+        }
+
+        private async Task CopySelectedFilesToClipboardAsync()
+        {
+            try
+            {
+                if (ViewModel == null) return;
+
+                var selectedItems = ViewModel.SelectionManager.SelectedItems;
+                if (selectedItems == null || selectedItems.Count == 0) return;
+
+                var filePaths = selectedItems
+                    .Select(item => item.Path)
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Distinct()
+                    .Where(File.Exists)
+                    .ToList();
+
+                if (filePaths.Count == 0) return;
+
+                var storageItems = await DragDropService.CreateStorageItems(filePaths).ConfigureAwait(false);
+                if (storageItems.Count == 0) return;
+
+                var dataPackage = new DataPackage
+                {
+                    RequestedOperation = DataPackageOperation.Copy
+                };
+                dataPackage.SetStorageItems(storageItems, readOnly: false);
+
+                Clipboard.SetContent(dataPackage);
+                Clipboard.Flush();
+
+                System.Diagnostics.Debug.WriteLine($"AssetPage: Copied {storageItems.Count} item(s) to clipboard");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"AssetPage.CopySelectedFilesToClipboardAsync error: {ex.Message}");
             }
         }
 

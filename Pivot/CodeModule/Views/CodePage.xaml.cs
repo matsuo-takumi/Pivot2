@@ -1170,8 +1170,31 @@ namespace Pivot.CodeModule.Views
             if (_isAnimationActive) return;
             _isAnimationActive = true;
             // Debug: mark close start and persist current/previous snippet before closing so cards reflect changes.
+            var root = this.Content as FrameworkElement;
             try
             {
+                // エディタの内容をSelectedSnippetに反映
+                try
+                {
+                    var scratchEditor = root?.FindName("ScratchpadEditor") as TextBox;
+                    var titleBox = root?.FindName("ScratchpadTitleBox") as TextBox;
+                    var vmForSync = ViewModel;
+                    var snipForSync = vmForSync?.SelectedSnippet;
+                    
+                    if (vmForSync != null && snipForSync != null)
+                    {
+                        if (scratchEditor != null)
+                        {
+                            snipForSync.Content = scratchEditor.Text ?? string.Empty;
+                        }
+                        if (titleBox != null)
+                        {
+                            snipForSync.Title = titleBox.Text ?? string.Empty;
+                        }
+                    }
+                }
+                catch { }
+                
 #if DEBUG
                 System.Diagnostics.Debug.WriteLine($"[DEBUG] CloseSnippetWithAnimationAsync: start. prevSelectedId={_previousSelectedSnippet?.Id}, currentSelectedId={ViewModel?.SelectedSnippet?.Id}");
 #endif
@@ -1193,7 +1216,6 @@ namespace Pivot.CodeModule.Views
                 }
             }
             catch { }
-            var root = this.Content as FrameworkElement;
             var list = root?.FindName("SnippetListView") as ListView;
             var editorPanel = root?.FindName("EditorPanel") as Grid;
             var cardPanel = root?.FindName("CardPanel") as Grid;
@@ -1790,6 +1812,29 @@ namespace Pivot.CodeModule.Views
             try
             {
                 var root = this.Content as FrameworkElement;
+                
+                // エディタの内容をSelectedSnippetに反映
+                try
+                {
+                    var scratchEditor = root?.FindName("ScratchpadEditor") as TextBox;
+                    var titleBox = root?.FindName("ScratchpadTitleBox") as TextBox;
+                    var vm = ViewModel;
+                    var snip = vm?.SelectedSnippet;
+                    
+                    if (vm != null && snip != null)
+                    {
+                        if (scratchEditor != null)
+                        {
+                            snip.Content = scratchEditor.Text ?? string.Empty;
+                        }
+                        if (titleBox != null)
+                        {
+                            snip.Title = titleBox.Text ?? string.Empty;
+                        }
+                    }
+                }
+                catch { }
+                
                 var overlay = root?.FindName("ScratchpadOverlay") as UIElement;
                 if (overlay != null) overlay.Visibility = Visibility.Collapsed;
                 // Save current snippet before closing if present, then clear selection
@@ -1959,8 +2004,19 @@ namespace Pivot.CodeModule.Views
                 if (tb == null) return;
                 if (ViewModel != null && ViewModel.SelectedSnippet != null)
                 {
-                    ViewModel.SelectedSnippet.Content = tb.Text ?? string.Empty;
+                    var selectedSnippet = ViewModel.SelectedSnippet;
+                    var newContent = tb.Text ?? string.Empty;
+                    
+                    // SelectedSnippetを更新
+                    selectedSnippet.Content = newContent;
                     ViewModel.IsDirty = true;
+                    
+                    // Snippetsコレクション内の対応するインスタンスも更新（リアルタイム更新のため）
+                    var snippetInCollection = ViewModel.Snippets.FirstOrDefault(s => s.Id == selectedSnippet.Id);
+                    if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, selectedSnippet))
+                    {
+                        snippetInCollection.Content = newContent;
+                    }
                 }
             }
             catch { }
@@ -1974,14 +2030,25 @@ namespace Pivot.CodeModule.Views
                 if (tb == null) return;
                 if (ViewModel != null && ViewModel.SelectedSnippet != null)
                 {
-                    ViewModel.SelectedSnippet.Content = tb.Text ?? string.Empty;
+                    var selectedSnippet = ViewModel.SelectedSnippet;
+                    var newContent = tb.Text ?? string.Empty;
+                    
+                    // SelectedSnippetを更新
+                    selectedSnippet.Content = newContent;
                     ViewModel.IsDirty = true;
+                    
+                    // Snippetsコレクション内の対応するインスタンスも更新（リアルタイム更新のため）
+                    var snippetInCollection = ViewModel.Snippets.FirstOrDefault(s => s.Id == selectedSnippet.Id);
+                    if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, selectedSnippet))
+                    {
+                        snippetInCollection.Content = newContent;
+                    }
                 }
             }
             catch { }
         }
 
-        private void ScratchpadTitleBox_TextChanged(object? sender, TextBoxTextChangingEventArgs e)
+        private void ScratchpadTitleBox_TextChanged(object? sender, TextChangedEventArgs e)
         {
             try
             {
@@ -1989,8 +2056,36 @@ namespace Pivot.CodeModule.Views
                 if (tb == null) return;
                 if (ViewModel != null && ViewModel.SelectedSnippet != null)
                 {
-                    ViewModel.SelectedSnippet.Title = tb.Text ?? string.Empty;
+                    var selectedSnippet = ViewModel.SelectedSnippet;
+                    var newTitle = tb.Text ?? string.Empty;
+                    
+                    // SelectedSnippetを更新
+                    selectedSnippet.Title = newTitle;
                     ViewModel.IsDirty = true;
+                    
+                    // Snippetsコレクション内の対応するインスタンスも更新（リアルタイム更新のため）
+                    var snippetInCollection = ViewModel.Snippets.FirstOrDefault(s => s.Id == selectedSnippet.Id);
+                    if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, selectedSnippet))
+                    {
+                        snippetInCollection.Title = newTitle;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void ScratchpadTitleBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            try
+            {
+                if (e.Key == Windows.System.VirtualKey.Enter)
+                {
+                    e.Handled = true;
+                    var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
+                    if (scratchEditor != null)
+                    {
+                        scratchEditor.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+                    }
                 }
             }
             catch { }

@@ -25,6 +25,13 @@ namespace Pivot.Views
 
         private TemplateItem? _lastSelectedItemForRange;
         private System.Threading.CancellationTokenSource? _borderThicknessUpdateCts;
+        private const double DragActivationThresholdSquared = 16.0;
+        private bool _isPointerDown = false;
+        private bool _isDragIntent = false;
+        private Windows.Foundation.Point _pointerDownPoint;
+        private TemplateItem? _pressedItem;
+        private bool _pendingSelectionForClick = false;
+        private TemplateItem? _pendingSelectionItem;
         
         // 画像プレビュー用の変数
         private bool _isPanning = false;
@@ -214,7 +221,7 @@ namespace Pivot.Views
                     var isCtrlPressed = (keyModifiers & Windows.System.VirtualKeyModifiers.Control) == Windows.System.VirtualKeyModifiers.Control;
                     keyModifiers = Windows.System.VirtualKeyModifiers.Shift;
                     var isShiftPressed = (keyModifiers & Windows.System.VirtualKeyModifiers.Shift) == Windows.System.VirtualKeyModifiers.Shift;
-                    
+
                     // より正確な方法: InputKeyboardSourceを使用
                     try
                     {
@@ -225,10 +232,16 @@ namespace Pivot.Views
                     }
                     catch { }
 
-                    // 範囲選択の開始点を設定
-                    if (isShiftPressed && _lastSelectedItemForRange != null && item != null)
+                    _isPointerDown = true;
+                    _isDragIntent = false;
+                    _pointerDownPoint = e.GetCurrentPoint(element).Position;
+                    _pressedItem = item;
+                    _pendingSelectionForClick = false;
+                    _pendingSelectionItem = null;
+                    element.CapturePointer(e.Pointer);
+
+                    if (isShiftPressed && _lastSelectedItemForRange != null)
                     {
-                        // Shift+クリック: 範囲選択
                         var items = ViewModel.Images.ToList();
                         var startIndex = items.IndexOf(_lastSelectedItemForRange);
                         var endIndex = items.IndexOf(item);
@@ -240,25 +253,59 @@ namespace Pivot.Views
                             ViewModel.SelectionManager.SelectRange(rangeItems);
                         }
                     }
-                    else if (item != null)
+                    else if (isCtrlPressed)
                     {
-                        // 通常クリックまたはCtrl+クリック
                         ViewModel.SelectionManager.SelectItem(item, isCtrlPressed, isShiftPressed);
                         if (!isCtrlPressed)
                         {
                             _lastSelectedItemForRange = item;
                         }
                     }
-
-                    // 注意: e.Handled = true を設定しないことで、ドラッグが正常に開始される
-                    // ただし、これにより他のイベントも処理される可能性がある
-                    // ドラッグを開始するためには、この行をコメントアウトする必要がある
-                    // e.Handled = true;
+                    else
+                    {
+                        _pendingSelectionForClick = true;
+                        _pendingSelectionItem = item;
+                    }
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"ImageItem_PointerPressed error: {ex.Message}");
+            }
+        }
+
+        private void ImageItem_PointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_isPointerDown || _pressedItem == null) return;
+            try
+            {
+                var currentPoint = e.GetCurrentPoint((UIElement)sender).Position;
+                var dx = currentPoint.X - _pointerDownPoint.X;
+                var dy = currentPoint.Y - _pointerDownPoint.Y;
+                if (!_isDragIntent && (dx * dx + dy * dy) >= DragActivationThresholdSquared)
+                {
+                    _isDragIntent = true;
+                }
+            }
+            catch { }
+        }
+
+        private void ImageItem_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_isPointerDown) return;
+            _isPointerDown = false;
+            if (!_isDragIntent && _pendingSelectionForClick && _pendingSelectionItem != null)
+            {
+                ViewModel.SelectionManager.SelectItem(_pendingSelectionItem, false, false);
+                _lastSelectedItemForRange = _pendingSelectionItem;
+            }
+            _pendingSelectionForClick = false;
+            _pendingSelectionItem = null;
+            _isDragIntent = false;
+            _pressedItem = null;
+            if (sender is UIElement uiElement)
+            {
+                try { uiElement.ReleasePointerCapture(e.Pointer); } catch { }
             }
         }
 
@@ -307,8 +354,6 @@ namespace Pivot.Views
                 {
                     // 共通サービスを使用してメニューを設定
                     ItemContextMenuService.SetupContextMenu(element, item);
-                    // メニューを更新（パス情報を最新化）
-                    ItemContextMenuService.HandleRightTapped(sender, e);
                 }
             }
             catch (Exception ex)

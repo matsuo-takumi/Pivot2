@@ -639,9 +639,21 @@ namespace Pivot.CodeModule.ViewModels
                 return;
             }
 
+            // 既存のSelectedSnippetのIDを保存
+            var selectedId = SelectedSnippet?.Id ?? Guid.Empty;
+
             if (Snippets == null)
             {
                 Snippets = new ObservableCollection<CodeFile>(desiredSnippets);
+                // SelectedSnippetを新しいインスタンスに更新
+                if (selectedId != Guid.Empty)
+                {
+                    var newSelected = Snippets.FirstOrDefault(s => s.Id == selectedId);
+                    if (newSelected != null)
+                    {
+                        SelectedSnippet = newSelected;
+                    }
+                }
                 return;
             }
 
@@ -673,6 +685,16 @@ namespace Pivot.CodeModule.ViewModels
                 if (!ReferenceEquals(existing, desired))
                 {
                     CopySnippetValues(desired, existing);
+                }
+            }
+            
+            // SelectedSnippetを新しいインスタンスに更新
+            if (selectedId != Guid.Empty)
+            {
+                var newSelected = Snippets.FirstOrDefault(s => s.Id == selectedId);
+                if (newSelected != null && newSelected != SelectedSnippet)
+                {
+                    SelectedSnippet = newSelected;
                 }
             }
         }
@@ -904,12 +926,24 @@ namespace Pivot.CodeModule.ViewModels
                         var existing = _allSnippets.FirstOrDefault(s => s.Id == file.Id);
                         if (existing != null)
                         {
-                            existing.Title = file.Title;
-                            existing.Content = file.Content;
-                            existing.Tags = file.Tags;
-                            existing.Language = file.Language;
-                            existing.Tool = file.Tool;
-                            existing.Updated = file.Updated;
+                            CopySnippetValues(file, existing);
+                            
+                            // Snippetsコレクション内のインスタンスも更新
+                            var inSnippets = Snippets.FirstOrDefault(s => s.Id == file.Id);
+                            if (inSnippets != null && !ReferenceEquals(inSnippets, existing))
+                            {
+                                CopySnippetValues(file, inSnippets);
+                            }
+                            
+                            // SelectedSnippetがSnippetsコレクション内のインスタンスを参照している場合も更新
+                            if (SelectedSnippet != null && SelectedSnippet.Id == file.Id)
+                            {
+                                if (!ReferenceEquals(SelectedSnippet, existing) && !ReferenceEquals(SelectedSnippet, inSnippets))
+                                {
+                                    CopySnippetValues(file, SelectedSnippet);
+                                }
+                            }
+                            
                             // Refresh visible collection
                             ApplyCodeTagFilters();
                         }

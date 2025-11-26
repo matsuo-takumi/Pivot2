@@ -64,6 +64,8 @@
                                         Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
                                         CanDrag="True"
                                         PointerPressed="ImageItem_PointerPressed"
+                                        PointerMoved="ImageItem_PointerMoved"
+                                        PointerReleased="ImageItem_PointerReleased"
                                         DragStarting="ImageItem_DragStarting"
                                         DoubleTapped="ImageItem_DoubleTapped"
                                         RightTapped="ImageItem_RightTapped">
@@ -125,6 +127,8 @@
                                                     Width="{Binding DataContext.MasonryColumnWidth, ElementName=ImagePageRoot}"
                                                     CanDrag="True"
                                                     PointerPressed="ImageItem_PointerPressed"
+                                                    PointerMoved="ImageItem_PointerMoved"
+                                                    PointerReleased="ImageItem_PointerReleased"
                                                     DragStarting="ImageItem_DragStarting"
                                                     DoubleTapped="ImageItem_DoubleTapped"
                                                     RightTapped="ImageItem_RightTapped">

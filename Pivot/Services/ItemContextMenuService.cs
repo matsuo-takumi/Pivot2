@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Pivot.Models;
 using System;
 using System.IO;
@@ -26,21 +25,6 @@ namespace Pivot.Services
             {
                 var menuFlyout = new MenuFlyout();
 
-                // ディレクトリパス表示（無効化）
-                var directoryItem = new MenuFlyoutItem
-                {
-                    IsEnabled = false
-                };
-
-                // ファイル名表示（太字）
-                var fileNameItem = new MenuFlyoutItem
-                {
-                    FontWeight = Microsoft.UI.Text.FontWeights.Bold
-                };
-
-                // セパレーター
-                var separator = new MenuFlyoutSeparator();
-
                 // フォルダを開く
                 var openFolderItem = new MenuFlyoutItem
                 {
@@ -53,25 +37,7 @@ namespace Pivot.Services
                 };
                 openFolderItem.Click += (s, e) => OpenContainingFolder(item.Path);
 
-                // パス情報を設定
-                try
-                {
-                    var directoryPath = Path.GetDirectoryName(item.Path) ?? string.Empty;
-                    var fileName = Path.GetFileName(item.Path);
-
-                    directoryItem.Text = directoryPath;
-                    fileNameItem.Text = fileName;
-                }
-                catch
-                {
-                    directoryItem.Text = string.Empty;
-                    fileNameItem.Text = item.Path ?? string.Empty;
-                }
-
                 // メニューアイテムを追加
-                menuFlyout.Items.Add(directoryItem);
-                menuFlyout.Items.Add(fileNameItem);
-                menuFlyout.Items.Add(separator);
                 menuFlyout.Items.Add(openFolderItem);
 
                 // ContextFlyoutを設定
@@ -80,52 +46,6 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"ItemContextMenuService.SetupContextMenu error: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// RightTappedイベントハンドラーでメニューを更新
-        /// </summary>
-        /// <param name="sender">イベント送信元</param>
-        /// <param name="e">イベント引数</param>
-        public static void HandleRightTapped(object sender, RightTappedRoutedEventArgs e)
-        {
-            try
-            {
-                if (sender is FrameworkElement element && element.DataContext is TemplateItem item)
-                {
-                    var border = element as Border;
-                    if (border?.ContextFlyout is MenuFlyout menuFlyout)
-                    {
-                        // メニューアイテムを更新
-                        if (menuFlyout.Items.Count >= 2)
-                        {
-                            var directoryItem = menuFlyout.Items[0] as MenuFlyoutItem;
-                            var fileNameItem = menuFlyout.Items[1] as MenuFlyoutItem;
-
-                            if (directoryItem != null && fileNameItem != null)
-                            {
-                                try
-                                {
-                                    var directoryPath = Path.GetDirectoryName(item.Path) ?? string.Empty;
-                                    var fileName = Path.GetFileName(item.Path);
-
-                                    directoryItem.Text = directoryPath;
-                                    fileNameItem.Text = fileName;
-                                }
-                                catch
-                                {
-                                    directoryItem.Text = string.Empty;
-                                    fileNameItem.Text = item.Path ?? string.Empty;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"ItemContextMenuService.HandleRightTapped error: {ex.Message}");
             }
         }
 
