@@ -30,11 +30,14 @@ namespace Pivot.CodeModule.Services
         }
 
         /// <summary>
-        /// Updates snippet content in memory immediately (UI updates instantly).
+        /// Updates snippet content in memory immediately (UI updates when editor is closed).
         /// Schedules a debounced save to SQLite.
         /// </summary>
         public void UpdateContentImmediate(CodeFile snippet, string newContent)
         {
+#if DEBUG
+            System.Diagnostics.Debug.WriteLine($"[DEBUG] SnippetSyncService.UpdateContentImmediate: called, snippetId={snippet?.Id}, contentLength={newContent?.Length ?? 0}");
+#endif
             if (snippet == null) return;
 
             // Update SelectedSnippet immediately
@@ -47,7 +50,16 @@ namespace Pivot.CodeModule.Services
                 var snippetInCollection = _viewModel.Snippets.FirstOrDefault(s => s.Id == snippet.Id);
                 if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, snippet))
                 {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] SnippetSyncService.UpdateContentImmediate: updating snippetInCollection, sameInstance={ReferenceEquals(snippetInCollection, snippet)}");
+#endif
                     snippetInCollection.Content = newContent;
+                }
+                else
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] SnippetSyncService.UpdateContentImmediate: snippetInCollection not found or same instance");
+#endif
                 }
             }
 
@@ -56,11 +68,14 @@ namespace Pivot.CodeModule.Services
         }
 
         /// <summary>
-        /// Updates snippet title in memory immediately (UI updates instantly).
+        /// Updates snippet title in memory immediately (UI updates when editor is closed).
         /// Schedules a debounced save to SQLite.
         /// </summary>
         public void UpdateTitleImmediate(CodeFile snippet, string newTitle)
         {
+#if DEBUG
+            System.Diagnostics.Debug.WriteLine($"[DEBUG] SnippetSyncService.UpdateTitleImmediate: called, snippetId={snippet?.Id}, newTitle='{newTitle}'");
+#endif
             if (snippet == null) return;
 
             // Update SelectedSnippet immediately
@@ -73,12 +88,59 @@ namespace Pivot.CodeModule.Services
                 var snippetInCollection = _viewModel.Snippets.FirstOrDefault(s => s.Id == snippet.Id);
                 if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, snippet))
                 {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] SnippetSyncService.UpdateTitleImmediate: updating snippetInCollection, sameInstance={ReferenceEquals(snippetInCollection, snippet)}");
+#endif
                     snippetInCollection.Title = newTitle;
+                }
+                else
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] SnippetSyncService.UpdateTitleImmediate: snippetInCollection not found or same instance");
+#endif
                 }
             }
 
             // Schedule debounced SQLite save
             ScheduleDebouncedSave(snippet);
+        }
+
+        /// <summary>
+        /// Triggers UI update for a snippet in the ListView (called when editor is closed).
+        /// </summary>
+        public void TriggerUiUpdate(CodeFile snippet)
+        {
+            if (snippet == null || _viewModel == null) return;
+
+            var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+            if (dispatcher != null)
+            {
+                dispatcher.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        // Force UI update by triggering collection change notification
+                        // This ensures ListView re-renders even with virtualization
+                        var snippetInCollection = _viewModel.Snippets.FirstOrDefault(s => s.Id == snippet.Id);
+                        if (snippetInCollection != null)
+                        {
+                            var index = _viewModel.Snippets.IndexOf(snippetInCollection);
+                            if (index >= 0)
+                            {
+                                // Temporarily remove and re-add to trigger CollectionChanged
+                                // This is a workaround for ListView virtualization not updating
+                                var temp = _viewModel.Snippets[index];
+                                _viewModel.Snippets.RemoveAt(index);
+                                _viewModel.Snippets.Insert(index, temp);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"SnippetSyncService.TriggerUiUpdate: Error triggering UI update: {ex.Message}");
+                    }
+                });
+            }
         }
 
         /// <summary>

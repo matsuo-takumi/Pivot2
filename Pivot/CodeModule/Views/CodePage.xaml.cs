@@ -1860,6 +1860,9 @@ namespace Pivot.CodeModule.Views
 #if DEBUG
                             System.Diagnostics.Debug.WriteLine($"[DEBUG] CloseScratchpadSimple: save returned for snippet id={snip.Id}");
 #endif
+                            
+                            // Trigger UI update after save
+                            vm.SyncService?.TriggerUiUpdate(snip);
                         }
                         catch { }
                         vm.IsDirty = false;
@@ -2007,15 +2010,32 @@ namespace Pivot.CodeModule.Views
         {
             try
             {
+#if DEBUG
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] CodeEditor_TextChanged: called");
+#endif
                 var tb = sender as TextBox;
-                if (tb == null) return;
+                if (tb == null)
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] CodeEditor_TextChanged: tb is null");
+#endif
+                    return;
+                }
                 if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newContent = tb.Text ?? string.Empty;
-                    
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] CodeEditor_TextChanged: snippetId={selectedSnippet.Id}, contentLength={newContent.Length}, calling UpdateContentImmediate");
+#endif
                     // Use sync service for immediate UI update and debounced SQLite save
                     ViewModel.SyncService.UpdateContentImmediate(selectedSnippet, newContent);
+                }
+                else
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] CodeEditor_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}, SyncService={ViewModel?.SyncService != null}");
+#endif
                 }
             }
             catch { }
@@ -2025,15 +2045,32 @@ namespace Pivot.CodeModule.Views
         {
             try
             {
+#if DEBUG
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadEditor_TextChanged: called");
+#endif
                 var tb = sender as TextBox;
-                if (tb == null) return;
+                if (tb == null)
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadEditor_TextChanged: tb is null");
+#endif
+                    return;
+                }
                 if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newContent = tb.Text ?? string.Empty;
-                    
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadEditor_TextChanged: snippetId={selectedSnippet.Id}, contentLength={newContent.Length}, calling UpdateContentImmediate");
+#endif
                     // Use sync service for immediate UI update and debounced SQLite save
                     ViewModel.SyncService.UpdateContentImmediate(selectedSnippet, newContent);
+                }
+                else
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadEditor_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}, SyncService={ViewModel?.SyncService != null}");
+#endif
                 }
             }
             catch { }
@@ -2043,15 +2080,32 @@ namespace Pivot.CodeModule.Views
         {
             try
             {
+#if DEBUG
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadTitleBox_TextChanged: called");
+#endif
                 var tb = sender as TextBox;
-                if (tb == null) return;
+                if (tb == null)
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadTitleBox_TextChanged: tb is null");
+#endif
+                    return;
+                }
                 if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newTitle = tb.Text ?? string.Empty;
-                    
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadTitleBox_TextChanged: snippetId={selectedSnippet.Id}, newTitle='{newTitle}', calling UpdateTitleImmediate");
+#endif
                     // Use sync service for immediate UI update and debounced SQLite save
                     ViewModel.SyncService.UpdateTitleImmediate(selectedSnippet, newTitle);
+                }
+                else
+                {
+#if DEBUG
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadTitleBox_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}, SyncService={ViewModel?.SyncService != null}");
+#endif
                 }
             }
             catch { }
