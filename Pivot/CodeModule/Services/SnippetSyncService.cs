@@ -110,7 +110,7 @@ namespace Pivot.CodeModule.Services
 
         /// <summary>
         /// Triggers UI update for a snippet in the ListView (called when editor is closed).
-        /// Updates silently without animation by refreshing the binding.
+        /// Updates silently by disabling animations temporarily, then refreshing ItemsSource.
         /// </summary>
         public void TriggerUiUpdate(CodeFile snippet)
         {
@@ -135,13 +135,25 @@ namespace Pivot.CodeModule.Services
                         }
                         
                         // Force UI refresh by temporarily clearing and restoring ItemsSource
-                        // This updates without animation
+                        // Disable animations to make update less noticeable
                         var listView = FindListView();
                         if (listView != null)
                         {
-                            var currentSource = listView.ItemsSource;
-                            listView.ItemsSource = null;
-                            listView.ItemsSource = currentSource;
+                            // Temporarily disable transitions to prevent animation
+                            var originalTransitions = listView.ItemContainerTransitions;
+                            listView.ItemContainerTransitions = null;
+                            
+                            try
+                            {
+                                var currentSource = listView.ItemsSource;
+                                listView.ItemsSource = null;
+                                listView.ItemsSource = currentSource;
+                            }
+                            finally
+                            {
+                                // Restore transitions after update
+                                listView.ItemContainerTransitions = originalTransitions;
+                            }
                         }
                     }
                     catch (Exception ex)
