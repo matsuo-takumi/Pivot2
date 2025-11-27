@@ -4,6 +4,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Pivot;
 using Pivot.CodeModule.Models;
 using Pivot.CodeModule.ViewModels;
@@ -107,6 +110,7 @@ namespace Pivot.CodeModule.Services
 
         /// <summary>
         /// Triggers UI update for a snippet in the ListView (called when editor is closed).
+        /// Updates silently without animation by refreshing the binding.
         /// </summary>
         public void TriggerUiUpdate(CodeFile snippet)
         {
@@ -119,20 +123,25 @@ namespace Pivot.CodeModule.Services
                 {
                     try
                     {
-                        // Force UI update by triggering collection change notification
-                        // This ensures ListView re-renders even with virtualization
+                        // Update the snippet in collection to ensure properties are synced
                         var snippetInCollection = _viewModel.Snippets.FirstOrDefault(s => s.Id == snippet.Id);
-                        if (snippetInCollection != null)
+                        if (snippetInCollection != null && !ReferenceEquals(snippetInCollection, snippet))
                         {
-                            var index = _viewModel.Snippets.IndexOf(snippetInCollection);
-                            if (index >= 0)
-                            {
-                                // Temporarily remove and re-add to trigger CollectionChanged
-                                // This is a workaround for ListView virtualization not updating
-                                var temp = _viewModel.Snippets[index];
-                                _viewModel.Snippets.RemoveAt(index);
-                                _viewModel.Snippets.Insert(index, temp);
-                            }
+                            // Copy updated values to collection instance
+                            snippetInCollection.Title = snippet.Title;
+                            snippetInCollection.Content = snippet.Content;
+                            snippetInCollection.Updated = snippet.Updated;
+                            snippetInCollection.Tags = snippet.Tags;
+                        }
+                        
+                        // Force UI refresh by temporarily clearing and restoring ItemsSource
+                        // This updates without animation
+                        var listView = FindListView();
+                        if (listView != null)
+                        {
+                            var currentSource = listView.ItemsSource;
+                            listView.ItemsSource = null;
+                            listView.ItemsSource = currentSource;
                         }
                     }
                     catch (Exception ex)
@@ -141,6 +150,55 @@ namespace Pivot.CodeModule.Services
                     }
                 });
             }
+        }
+
+        /// <summary>
+        /// Finds the ListView control in the UI tree.
+        /// </summary>
+        private ListView? FindListView()
+        {
+            try
+            {
+                var mainWindow = App.Current.MainWindow;
+                if (mainWindow == null) return null;
+
+                // Try to find ListView by name
+                var content = mainWindow.Content as FrameworkElement;
+                if (content == null) return null;
+
+                return FindListViewRecursive(content, "SnippetListView");
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Recursively searches for a ListView with the specified name.
+        /// </summary>
+        private ListView? FindListViewRecursive(DependencyObject parent, string name)
+        {
+            try
+            {
+                if (parent is ListView listView && listView.Name == name)
+                {
+                    return listView;
+                }
+
+                var count = VisualTreeHelper.GetChildrenCount(parent);
+                for (int i = 0; i < count; i++)
+                {
+                    var child = VisualTreeHelper.GetChild(parent, i);
+                    if (child is DependencyObject depObj)
+                    {
+                        var result = FindListViewRecursive(depObj, name);
+                        if (result != null) return result;
+                    }
+                }
+            }
+            catch { }
+            return null;
         }
 
         /// <summary>
