@@ -12,7 +12,15 @@
     x:Name="DirectoryPageRoot">
 
     <!-- Grid for dynamic 4-column layout (wrapped in horizontal ScrollViewer) -->
-    <ScrollViewer x:Name="DirectoriesScrollViewer" Padding="20" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+    <ScrollViewer x:Name="DirectoriesScrollViewer" 
+                  Padding="20" 
+                  HorizontalScrollBarVisibility="Auto" 
+                  VerticalScrollBarVisibility="Disabled"
+                  HorizontalScrollMode="Enabled"
+                  ZoomMode="Disabled"
+                  ManipulationMode="All"
+                  IsScrollInertiaEnabled="True"
+                  IsDeferredScrollingEnabled="False">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1*"/>

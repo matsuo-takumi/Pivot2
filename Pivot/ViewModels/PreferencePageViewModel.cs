@@ -36,9 +36,6 @@ namespace Pivot.ViewModels
                 "Theme" => new ThemePage(),
                 "Code" => CreateCodeSettingsPage(),
                 "Color" => CreateColorSettingsPage(),
-                "MenuItem2" => new MenuItem2ContentControl(),
-                "MenuItem3" => new MenuItem3ContentControl(),
-                "MenuItem4" => new MenuItem4ContentControl(),
                 _ => null
             };
 

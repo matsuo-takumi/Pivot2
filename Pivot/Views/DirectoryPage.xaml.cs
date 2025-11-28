@@ -36,11 +36,14 @@ namespace Pivot.Views
                 var pt = e.GetCurrentPoint(scroller);
                 var delta = pt.Properties.MouseWheelDelta; // typically +-120 units
                 if (delta == 0) return;
-                // Scroll horizontally by a scaled amount
-                double step = delta * -1.0; // invert so wheel up => scroll right
+                // Scroll horizontally by a scaled amount (reduced multiplier for smoother scrolling)
+                double step = delta * -5.0; // more distance per wheel notch for wider travel, still smooth
                 var newOffset = scroller.HorizontalOffset + step;
+                var maxOffset = scroller.ScrollableWidth;
                 if (newOffset < 0) newOffset = 0;
-                scroller.ChangeView(newOffset, null, null, true);
+                if (newOffset > maxOffset) newOffset = maxOffset;
+                // Use smooth scrolling animation (false = enable animation)
+                scroller.ChangeView(newOffset, null, null, false);
                 try { e.Handled = true; } catch { }
             }
             catch { }
