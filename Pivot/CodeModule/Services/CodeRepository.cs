@@ -116,6 +116,80 @@ namespace Pivot.CodeModule.Services
                                     }
                                 }
 
+                                else if (string.Equals(ext, ".md", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    // Try to parse Markdown file with YAML front matter
+                                    var txt = File.ReadAllText(file);
+                                    try
+                                    {
+                                        // Check if file starts with YAML front matter (---)
+                                        if (txt.StartsWith("---", StringComparison.Ordinal))
+                                        {
+                                            var yamlEnd = txt.IndexOf("\n---\n", 3, StringComparison.Ordinal);
+                                            if (yamlEnd > 0)
+                                            {
+                                                var yamlSection = txt.Substring(4, yamlEnd - 4);
+                                                var body = txt.Substring(yamlEnd + 5);
+                                                
+                                                // Parse YAML front matter to extract id, title, tags, updated
+                                                Guid? id = null;
+                                                string? title = null;
+                                                string? tags = null;
+                                                DateTime? updated = null;
+                                                
+                                                foreach (var line in yamlSection.Split('\n'))
+                                                {
+                                                    var trimmed = line.Trim();
+                                                    if (string.IsNullOrEmpty(trimmed)) continue;
+                                                    
+                                                    var colonIndex = trimmed.IndexOf(':');
+                                                    if (colonIndex <= 0) continue;
+                                                    
+                                                    var key = trimmed.Substring(0, colonIndex).Trim();
+                                                    var value = trimmed.Substring(colonIndex + 1).Trim().Trim('"');
+                                                    
+                                                    switch (key.ToLowerInvariant())
+                                                    {
+                                                        case "id":
+                                                            if (Guid.TryParse(value, out var guidValue))
+                                                                id = guidValue;
+                                                            break;
+                                                        case "title":
+                                                            title = value;
+                                                            break;
+                                                        case "tags":
+                                                            // Handle array format: [tag1, tag2] or comma-separated
+                                                            tags = value.Trim('[', ']').Replace("\"", "");
+                                                            break;
+                                                        case "updated":
+                                                            if (DateTime.TryParse(value, out var dateValue))
+                                                                updated = dateValue;
+                                                            break;
+                                                    }
+                                                }
+                                                
+                                                if (id.HasValue)
+                                                {
+                                                    parsed = new CodeFile
+                                                    {
+                                                        Id = id.Value,
+                                                        Title = title ?? Path.GetFileNameWithoutExtension(file),
+                                                        Content = body,
+                                                        Language = "MARKDOWN",
+                                                        Tags = tags ?? string.Empty,
+                                                        Updated = updated ?? File.GetLastWriteTimeUtc(file),
+                                                    };
+                                                }
+                                            }
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        // Failed to parse YAML front matter; treat as raw content below
+                                        parsed = null;
+                                    }
+                                }
+
                                 if (parsed == null)
                                 {
                                     // Create snippet from raw file content
