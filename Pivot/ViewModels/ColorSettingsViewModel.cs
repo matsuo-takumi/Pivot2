@@ -46,11 +46,16 @@ namespace Pivot.ViewModels
             ImageSelectionOpacity = _settings.GetImageSelectionOpacity();
             ImageSelectionBorderThickness = _settings.GetImageSelectionBorderThickness();
             
-            // Initialize TextColorSettings (entries will be loaded asynchronously)
+            // Initialize TextColorSettings (entries will be loaded asynchronously after page loads)
             TextColorSettings = new TextColorSettingsViewModel(settings, resourceManager);
             
             // Initialize PresetViewModel last (lightweight, just holds references)
             PresetViewModel = new TextColorPresetViewModel(presetService, TextColorSettings, presetLogger);
+        }
+
+        public async Task LoadEntriesAsync()
+        {
+            await TextColorSettings.LoadEntriesAsync();
         }
 
         partial void OnIsTextColorCustomizationEnabledChanged(bool value)

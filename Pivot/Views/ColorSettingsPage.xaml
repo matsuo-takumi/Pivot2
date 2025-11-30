@@ -151,8 +151,7 @@
                                 Background="Transparent"
                                 ScrollViewer.VerticalScrollMode="Auto"
                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}"
-                                ContainerContentChanging="TextColorEntryListView_ContainerContentChanging">
+                                IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}">
                                 <ListView.ItemContainerStyle>
                                     <Style TargetType="ListViewItem">
                                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />

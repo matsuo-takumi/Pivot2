@@ -6,6 +6,7 @@ using Pivot.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Threading.Tasks;
 using Windows.UI;
@@ -16,44 +17,64 @@ namespace Pivot.ViewModels
     {
         private readonly SettingsService _settings;
         private readonly ITextColorResourceManager _resourceManager;
+        private bool _isLoading;
 
-        public ObservableCollection<TextColorSettingViewModel> Entries { get; } = new();
+        public ObservableCollection<TextColorSettingViewModel> Entries { get; } = new BatchObservableCollection<TextColorSettingViewModel>();
+        public bool IsLoading
+        {
+            get => _isLoading;
+            private set => SetProperty(ref _isLoading, value);
+        }
 
         public TextColorSettingsViewModel(SettingsService settings, ITextColorResourceManager resourceManager)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
+            // Don't create entries synchronously - load them asynchronously after page loads
+        }
+
+        public async Task LoadEntriesAsync()
+        {
+            if (IsLoading || Entries.Count > 0) return;
+            IsLoading = true;
             
-            // Batch initialize all brushes first to populate cache (fast lookup)
-            // This is fast because brushes are cached in TextColorResourceManager
-            foreach (var definition in TextColorRoleDefinitions.Roles)
+            try
             {
-                _resourceManager.EnsureBrush(definition.ResourceKey, definition.DefaultColor);
+                // Yield to UI thread first to allow page to render
+                await Task.Yield();
+                
+                // Create all entries off the UI thread (settings lookups are cached and fast)
+                var entriesToAdd = new List<TextColorSettingViewModel>(TextColorRoleDefinitions.Roles.Count);
+                foreach (var definition in TextColorRoleDefinitions.Roles)
+                {
+                    var hex = _settings.GetTextColorOverride(definition.SettingKey, definition.DefaultHex);
+                    var color = TextColorHelper.ParseHexOrDefault(hex, definition.DefaultColor);
+                    var entry = new TextColorSettingViewModel(
+                        definition.SettingKey,
+                        definition.DisplayName,
+                        definition.Description,
+                        color,
+                        OnColorChanged);
+                    entriesToAdd.Add(entry);
+                }
+                
+                // Add all entries at once on UI thread - triggers only one CollectionChanged event
+                if (Entries is BatchObservableCollection<TextColorSettingViewModel> batchCollection)
+                {
+                    batchCollection.AddRange(entriesToAdd);
+                }
+                else
+                {
+                    // Fallback: add one by one
+                    foreach (var entry in entriesToAdd)
+                    {
+                        Entries.Add(entry);
+                    }
+                }
             }
-            
-            // Create entries efficiently - minimize object allocations
-            // Pre-allocate list to avoid resizing
-            var entriesToAdd = new List<TextColorSettingViewModel>(TextColorRoleDefinitions.Roles.Count);
-            
-            // Prepare all data first (settings lookups are cached and fast)
-            foreach (var definition in TextColorRoleDefinitions.Roles)
+            finally
             {
-                var hex = _settings.GetTextColorOverride(definition.SettingKey, definition.DefaultHex);
-                var color = TextColorHelper.ParseHexOrDefault(hex, definition.DefaultColor);
-                var entry = new TextColorSettingViewModel(
-                    definition.SettingKey,
-                    definition.DisplayName,
-                    definition.Description,
-                    color,
-                    OnColorChanged);
-                entriesToAdd.Add(entry);
-            }
-            
-            // Add all entries at once - ObservableCollection will batch notifications
-            // This is faster than adding one by one
-            foreach (var entry in entriesToAdd)
-            {
-                Entries.Add(entry);
+                IsLoading = false;
             }
         }
 
@@ -83,7 +104,7 @@ namespace Pivot.ViewModels
         private readonly Action<TextColorSettingViewModel>? _colorChangedCallback;
         private Color _selectedColor;
         private string _hexValue;
-        private readonly SolidColorBrush _previewBrush;
+        private SolidColorBrush? _previewBrush;
 
         public TextColorSettingViewModel(string settingKey, string displayName, string description, Color initialColor, Action<TextColorSettingViewModel>? onColorChanged)
         {
@@ -92,7 +113,7 @@ namespace Pivot.ViewModels
             Description = description;
             _selectedColor = initialColor;
             _hexValue = FormatHex(initialColor);
-            _previewBrush = new SolidColorBrush(initialColor);
+            // Don't create brush immediately - create it lazily when accessed
             _colorChangedCallback = onColorChanged;
         }
 
@@ -116,7 +137,11 @@ namespace Pivot.ViewModels
                     _hexValue = hex;
                     OnPropertyChanged(nameof(HexValue));
                 }
-                _previewBrush.Color = value;
+                // Update brush if it exists, otherwise it will be created lazily
+                if (_previewBrush != null)
+                {
+                    _previewBrush.Color = value;
+                }
                 _colorChangedCallback?.Invoke(this);
             }
         }
@@ -137,7 +162,18 @@ namespace Pivot.ViewModels
             }
         }
 
-        public SolidColorBrush PreviewBrush => _previewBrush;
+        public SolidColorBrush PreviewBrush
+        {
+            get
+            {
+                // Lazy initialization - create brush only when actually accessed (when item becomes visible)
+                if (_previewBrush == null)
+                {
+                    _previewBrush = new SolidColorBrush(_selectedColor);
+                }
+                return _previewBrush!;
+            }
+        }
 
         private static string FormatHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
 
@@ -167,6 +203,41 @@ namespace Pivot.ViewModels
             catch
             {
                 return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// ObservableCollection that supports batch AddRange to minimize CollectionChanged events
+    /// </summary>
+    public class BatchObservableCollection<T> : ObservableCollection<T>
+    {
+        private bool _suppressNotifications;
+
+        public void AddRange(IEnumerable<T> items)
+        {
+            if (items == null) throw new ArgumentNullException(nameof(items));
+
+            _suppressNotifications = true;
+            try
+            {
+                foreach (var item in items)
+                {
+                    Items.Add(item);
+                }
+            }
+            finally
+            {
+                _suppressNotifications = false;
+                OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+            }
+        }
+
+        protected override void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
+        {
+            if (!_suppressNotifications)
+            {
+                base.OnCollectionChanged(e);
             }
         }
     }

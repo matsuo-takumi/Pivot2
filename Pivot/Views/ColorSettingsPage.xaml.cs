@@ -34,7 +34,7 @@ namespace Pivot.Views
             
             try
             {
-                // Create ViewModel immediately but entries will be loaded asynchronously
+                // Create ViewModel immediately - entries will be loaded asynchronously after page loads
                 ViewModel = new ColorSettingsViewModel(settings, textColorManager, presetService, presetLogger);
                 this.DataContext = ViewModel;
                 _logger?.LogInformation("ColorSettingsPage initialized successfully.");
@@ -54,8 +54,11 @@ namespace Pivot.Views
             // Unsubscribe to avoid multiple calls
             Loaded -= OnPageLoaded;
             
-            // Load presets asynchronously (entries are already loaded in constructor)
-            await LoadPresetsAsync();
+            // Load entries and presets asynchronously to avoid blocking UI
+            await Task.WhenAll(
+                ViewModel.LoadEntriesAsync(),
+                LoadPresetsAsync()
+            );
         }
 
         private async Task LoadPresetsAsync()
@@ -228,22 +231,6 @@ namespace Pivot.Views
             }
         }
 
-        private void TextColorEntryListView_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
-        {
-            // Optimize ListView rendering by deferring non-visible items
-            if (args.InRecycleQueue)
-            {
-                // Item is being recycled, no action needed
-                return;
-            }
-
-            // For visible items, ensure they're loaded efficiently
-            if (args.ItemContainer != null && args.ItemContainer.ContentTemplateRoot != null)
-            {
-                // Item is already loaded, no action needed
-                return;
-            }
-        }
 
     }
 }
