@@ -23,11 +23,16 @@ namespace Pivot.Services
     {
         private readonly Dictionary<string, TextColorRoleDefinition> _roleMap;
         private readonly SettingsService _settings;
+        private readonly Dictionary<string, SolidColorBrush> _brushCache;
 
         public TextColorResourceManager(SettingsService settings)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _roleMap = TextColorRoleDefinitions.Roles.ToDictionary(def => def.SettingKey);
+            _brushCache = new Dictionary<string, SolidColorBrush>();
+            
+            // Pre-initialize all brushes to avoid repeated lookups
+            InitializeAllBrushes();
             
             // Initialize colors based on customization enabled state
             if (_settings.IsTextColorCustomizationEnabled())
@@ -44,6 +49,19 @@ namespace Pivot.Services
             {
                 // Use default theme colors
                 UpdateThemeColors();
+            }
+        }
+
+        private void InitializeAllBrushes()
+        {
+            var app = Application.Current;
+            if (app == null || app.Resources == null) return;
+
+            // Pre-create all brushes for all roles to populate cache
+            foreach (var role in TextColorRoleDefinitions.Roles)
+            {
+                var brush = GetOrCreateBrush(role.ResourceKey, role.DefaultColor);
+                _brushCache[role.ResourceKey] = brush;
             }
         }
 
@@ -121,7 +139,15 @@ namespace Pivot.Services
 
         public SolidColorBrush EnsureBrush(string resourceKey, Color fallback)
         {
-            return GetOrCreateBrush(resourceKey, fallback);
+            // Check cache first to avoid expensive dictionary lookups
+            if (_brushCache.TryGetValue(resourceKey, out var cachedBrush))
+            {
+                return cachedBrush;
+            }
+
+            var brush = GetOrCreateBrush(resourceKey, fallback);
+            _brushCache[resourceKey] = brush;
+            return brush;
         }
 
         private SolidColorBrush GetOrCreateBrush(string key, Color fallback)

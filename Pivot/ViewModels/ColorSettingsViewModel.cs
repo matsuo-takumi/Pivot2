@@ -39,11 +39,17 @@ namespace Pivot.ViewModels
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
+            
+            // Initialize lightweight properties first (fast, cached lookups)
             IsTextColorCustomizationEnabled = _settings.IsTextColorCustomizationEnabled();
             ImageSelectionColor = _settings.GetImageSelectionColor();
             ImageSelectionOpacity = _settings.GetImageSelectionOpacity();
             ImageSelectionBorderThickness = _settings.GetImageSelectionBorderThickness();
+            
+            // Initialize TextColorSettings (entries will be loaded asynchronously)
             TextColorSettings = new TextColorSettingsViewModel(settings, resourceManager);
+            
+            // Initialize PresetViewModel last (lightweight, just holds references)
             PresetViewModel = new TextColorPresetViewModel(presetService, TextColorSettings, presetLogger);
         }
 

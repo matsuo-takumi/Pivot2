@@ -151,7 +151,8 @@
                                 Background="Transparent"
                                 ScrollViewer.VerticalScrollMode="Auto"
                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}">
+                                IsEnabled="{x:Bind ViewModel.IsTextColorCustomizationEnabled, Mode=OneWay}"
+                                ContainerContentChanging="TextColorEntryListView_ContainerContentChanging">
                                 <ListView.ItemContainerStyle>
                                     <Style TargetType="ListViewItem">
                                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -179,22 +180,8 @@
                                                     <TextBlock Text="Hex value (examples: #000000, #FFFFFF)" Foreground="{ThemeResource AppTextDimBrush}" FontSize="10" Margin="0,2,0,0" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
-                                                    <Button Width="32" Height="32" Background="Transparent" BorderThickness="0" Padding="0" Click="ColorSwatchButton_Click">
+                                                    <Button x:Name="ColorSwatchButton" Width="32" Height="32" Background="Transparent" BorderThickness="0" Padding="0" Click="ColorSwatchButton_Click" Tag="{x:Bind}">
                                                         <Border Width="32" Height="32" CornerRadius="4" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind PreviewBrush}" />
-                                                        <flyout:FlyoutBase.AttachedFlyout>
-                                                            <Flyout Placement="Bottom">
-                                                                <muxc:ColorPicker
-                                                                    Color="{x:Bind SelectedColor, Mode=TwoWay}"
-                                                                    ColorSpectrumShape="Ring"
-                                                                    IsMoreButtonVisible="False"
-                                                                    IsColorSliderVisible="True"
-                                                                    IsColorChannelTextInputVisible="False"
-                                                                    IsHexInputVisible="False"
-                                                                    IsAlphaEnabled="False"
-                                                                    IsAlphaSliderVisible="False"
-                                                                    IsAlphaTextInputVisible="False" />
-                                                            </Flyout>
-                                                        </flyout:FlyoutBase.AttachedFlyout>
                                                     </Button>
                                                     <TextBox Width="100" Height="30" MinHeight="30" TextAlignment="Left" VerticalContentAlignment="Center" Text="{x:Bind HexValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                                 </StackPanel>

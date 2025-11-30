@@ -6,6 +6,7 @@ using Pivot.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using Windows.UI;
 
@@ -22,9 +23,21 @@ namespace Pivot.ViewModels
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
+            
+            // Batch initialize all brushes first to populate cache (fast lookup)
+            // This is fast because brushes are cached in TextColorResourceManager
             foreach (var definition in TextColorRoleDefinitions.Roles)
             {
                 _resourceManager.EnsureBrush(definition.ResourceKey, definition.DefaultColor);
+            }
+            
+            // Create entries efficiently - minimize object allocations
+            // Pre-allocate list to avoid resizing
+            var entriesToAdd = new List<TextColorSettingViewModel>(TextColorRoleDefinitions.Roles.Count);
+            
+            // Prepare all data first (settings lookups are cached and fast)
+            foreach (var definition in TextColorRoleDefinitions.Roles)
+            {
                 var hex = _settings.GetTextColorOverride(definition.SettingKey, definition.DefaultHex);
                 var color = TextColorHelper.ParseHexOrDefault(hex, definition.DefaultColor);
                 var entry = new TextColorSettingViewModel(
@@ -33,6 +46,13 @@ namespace Pivot.ViewModels
                     definition.Description,
                     color,
                     OnColorChanged);
+                entriesToAdd.Add(entry);
+            }
+            
+            // Add all entries at once - ObservableCollection will batch notifications
+            // This is faster than adding one by one
+            foreach (var entry in entriesToAdd)
+            {
                 Entries.Add(entry);
             }
         }

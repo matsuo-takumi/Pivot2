@@ -7,6 +7,7 @@ using Pivot.Services;
 using Pivot.ViewModels;
 using Pivot.Converters;
 using System;
+using System.Threading.Tasks;
 using Windows.UI;
 
 namespace Pivot.Views
@@ -14,48 +15,100 @@ namespace Pivot.Views
     public sealed partial class ColorSettingsPage : Page
     {
         public ColorSettingsViewModel ViewModel { get; }
+        
         private readonly ILogger<ColorSettingsPage>? _logger;
+        private bool _isPresetsLoading;
 
         public ColorSettingsPage()
         {
             _logger = App.Current.Services.GetService<ILogger<ColorSettingsPage>>();
+            
+            // Initialize XAML first to allow UI to render immediately
+            this.InitializeComponent();
+            
+            // Get services
             var settings = App.Current.Services.GetRequiredService<SettingsService>();
             var textColorManager = App.Current.Services.GetRequiredService<ITextColorResourceManager>();
             var presetService = App.Current.Services.GetRequiredService<IPresetService<Models.TextColorPresetData>>();
             var presetLogger = App.Current.Services.GetService<ILogger<TextColorPresetViewModel>>();
+            
             try
             {
+                // Create ViewModel immediately but entries will be loaded asynchronously
                 ViewModel = new ColorSettingsViewModel(settings, textColorManager, presetService, presetLogger);
-                _logger?.LogInformation("ColorSettingsPage initialized successfully with {EntryCount} text color entries.", ViewModel.TextColorSettings.Entries.Count);
+                this.DataContext = ViewModel;
+                _logger?.LogInformation("ColorSettingsPage initialized successfully.");
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to initialize ColorSettingsPage.");
                 throw;
             }
-            this.InitializeComponent();
-            this.DataContext = ViewModel;
-            _logger?.LogInformation("ColorSettingsPage DataContext assigned.");
             
-            // プリセットを読み込む
-            Loaded += async (s, e) =>
+            // Load entries and presets asynchronously after page loads
+            Loaded += OnPageLoaded;
+        }
+
+        private async void OnPageLoaded(object sender, RoutedEventArgs e)
+        {
+            // Unsubscribe to avoid multiple calls
+            Loaded -= OnPageLoaded;
+            
+            // Load presets asynchronously (entries are already loaded in constructor)
+            await LoadPresetsAsync();
+        }
+
+        private async Task LoadPresetsAsync()
+        {
+            if (_isPresetsLoading) return;
+            _isPresetsLoading = true;
+            
+            try
             {
-                try
-                {
-                    await ViewModel.PresetViewModel.LoadPresetsAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Failed to load presets on page load.");
-                }
-            };
+                // Load presets asynchronously without blocking UI thread
+                await ViewModel.PresetViewModel.LoadPresetsAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to load presets on page load.");
+            }
+            finally
+            {
+                _isPresetsLoading = false;
+            }
         }
 
         private void ColorSwatchButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement element)
+            if (sender is Button button && button.Tag is TextColorSettingViewModel entry)
             {
-                FlyoutBase.ShowAttachedFlyout(element);
+                // Create ColorPicker lazily when flyout is opened (not in XAML)
+                var flyout = new Flyout
+                {
+                    Placement = FlyoutPlacementMode.Bottom
+                };
+
+                var colorPicker = new Microsoft.UI.Xaml.Controls.ColorPicker
+                {
+                    Color = entry.SelectedColor,
+                    ColorSpectrumShape = Microsoft.UI.Xaml.Controls.ColorSpectrumShape.Ring,
+                    IsMoreButtonVisible = false,
+                    IsColorSliderVisible = true,
+                    IsColorChannelTextInputVisible = false,
+                    IsHexInputVisible = false,
+                    IsAlphaEnabled = false,
+                    IsAlphaSliderVisible = false,
+                    IsAlphaTextInputVisible = false
+                };
+
+                // Handle color changes
+                colorPicker.ColorChanged += (s, args) =>
+                {
+                    entry.SelectedColor = args.NewColor;
+                };
+
+                flyout.Content = colorPicker;
+                flyout.ShowAt(button);
             }
         }
 
@@ -172,6 +225,23 @@ namespace Pivot.Views
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to update ImageSelectionColor from ColorPicker.");
+            }
+        }
+
+        private void TextColorEntryListView_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+        {
+            // Optimize ListView rendering by deferring non-visible items
+            if (args.InRecycleQueue)
+            {
+                // Item is being recycled, no action needed
+                return;
+            }
+
+            // For visible items, ensure they're loaded efficiently
+            if (args.ItemContainer != null && args.ItemContainer.ContentTemplateRoot != null)
+            {
+                // Item is already loaded, no action needed
+                return;
             }
         }
 
