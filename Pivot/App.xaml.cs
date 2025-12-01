@@ -79,6 +79,7 @@ namespace Pivot
 			sc.AddSingleton<ICatalogService, JsonCatalogService>();
 			sc.AddSingleton<FileScannerService>();
 			sc.AddSingleton<IThumbnailService, ThumbnailService>();
+			sc.AddSingleton<IModelLoaderService, ModelLoaderService>();
 
 			// Preset services (汎用的なプリセットサービス)
 			sc.AddSingleton<IPresetService<Pivot.Models.TextColorPresetData>>(sp =>
@@ -95,6 +96,7 @@ namespace Pivot
 			sc.AddTransient<AssetViewModel>();
 			sc.AddTransient<WindowViewModel>();
 			sc.AddTransient<PreferencePageViewModel>();
+			sc.AddTransient<ModelViewModel>();
             // Filter service (depends on SettingsService)
             sc.AddSingleton<FilterService>();
 

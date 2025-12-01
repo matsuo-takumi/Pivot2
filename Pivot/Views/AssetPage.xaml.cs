@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Input;
 using System.IO;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
+using Pivot.Views;
 
 namespace Pivot.Views
 {
@@ -172,7 +173,7 @@ namespace Pivot.Views
             }
         }
 
-        private void AssetItem_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+        private async void AssetItem_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
         {
             try
             {
@@ -180,7 +181,17 @@ namespace Pivot.Views
                 {
                     if (System.IO.File.Exists(filePath))
                     {
-                        // Open file with default application
+                        // Check if it's a 3D model file
+                        var modelLoaderService = App.Current.Services.GetService<IModelLoaderService>();
+                        if (modelLoaderService != null && modelLoaderService.IsSupportedFormat(filePath))
+                        {
+                            // Show 3D model viewer
+                            await ShowModelViewerAsync(filePath);
+                            e.Handled = true;
+                            return;
+                        }
+
+                        // Open file with default application for other file types
                         var processInfo = new System.Diagnostics.ProcessStartInfo
                         {
                             FileName = filePath,
@@ -194,6 +205,33 @@ namespace Pivot.Views
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"AssetItem_DoubleTapped error: {ex.Message}");
+            }
+        }
+
+        private async Task ShowModelViewerAsync(string filePath)
+        {
+            try
+            {
+                var viewer = new ModelViewerControl();
+                var dialog = new ContentDialog
+                {
+                    Title = System.IO.Path.GetFileName(filePath),
+                    Content = viewer,
+                    CloseButtonText = "閉じる",
+                    DefaultButton = ContentDialogButton.Close,
+                    XamlRoot = this.XamlRoot,
+                    MinWidth = 800,
+                    MinHeight = 600
+                };
+
+                // モデルを読み込み
+                await viewer.LoadModelAsync(filePath);
+
+                await dialog.ShowAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ShowModelViewerAsync error: {ex.Message}");
             }
         }
 
