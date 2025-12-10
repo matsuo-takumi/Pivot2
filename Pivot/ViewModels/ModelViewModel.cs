@@ -10,13 +10,12 @@ using System.Collections.Generic;
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
-using Pivot.ViewModels;
 
 namespace Pivot.ViewModels
 {
-    public partial class AssetViewModel : ObservableObject
+    public partial class ModelViewModel : ObservableObject
     {
-        public ObservableCollection<TemplateItem> Assets { get; set; }
+        public ObservableCollection<TemplateItem> Models { get; set; }
 
         // FilterService-backed filters
         public ObservableCollection<FilterViewModel> Filters { get; } = new ObservableCollection<FilterViewModel>();
@@ -26,11 +25,10 @@ namespace Pivot.ViewModels
 
         private readonly FilterService? _filterService;
 
-        // Assets after applying current filter
-        public ObservableCollection<TemplateItem> DisplayedAssets { get; } = new ObservableCollection<TemplateItem>();
+        // Models after applying current filter
+        public ObservableCollection<TemplateItem> DisplayedModels { get; } = new ObservableCollection<TemplateItem>();
 
         public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
-// ... existing code ...
 
         private int _masonryColumnCount = 3;
         public int MasonryColumnCount
@@ -40,8 +38,7 @@ namespace Pivot.ViewModels
             {
                 if (value <= 0) return;
                 _masonryColumnCount = value;
-                // rebuild using currently displayed (filtered) assets so resizing preserves filter
-                BuildMasonryColumns(DisplayedAssets);
+                BuildMasonryColumns(DisplayedModels);
             }
         }
 
@@ -53,8 +50,7 @@ namespace Pivot.ViewModels
             {
                 if (value <= 0) return;
                 _masonryColumnWidth = value;
-                // rebuild using currently displayed (filtered) assets so resizing preserves filter
-                BuildMasonryColumns(DisplayedAssets);
+                BuildMasonryColumns(DisplayedModels);
             }
         }
 
@@ -70,6 +66,9 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private double _selectionBorderThickness = 2.0;
 
+        [ObservableProperty]
+        private TemplateItem? _selectedModel;
+
         public SelectionManagerViewModel<TemplateItem> SelectionManager { get; }
 
         [RelayCommand]
@@ -80,51 +79,39 @@ namespace Pivot.ViewModels
 
         private System.Threading.CancellationTokenSource? _loadCts;
 
-        public AssetViewModel()
+        public ModelViewModel()
         {
             SelectionManager = new SelectionManagerViewModel<TemplateItem>();
             SelectionManager.PropertyChanged += (s, e) =>
             {
-                // 選択状態が変更されたときに、各アイテムのIsSelectedプロパティを更新
                 if (e.PropertyName == nameof(SelectionManagerViewModel<TemplateItem>.SelectedCount))
                 {
-                    if (Assets != null)
+                    if (Models != null)
                     {
-                        foreach (var item in Assets)
+                        foreach (var item in Models)
                         {
                             item.IsSelected = SelectionManager.IsSelected(item);
                         }
                     }
-                    // DisplayedAssetsも更新
-                    foreach (var item in DisplayedAssets)
+                    foreach (var item in DisplayedModels)
                     {
                         item.IsSelected = SelectionManager.IsSelected(item);
                     }
                 }
             };
 
-            Assets = new ObservableCollection<TemplateItem>
-            {
-                new TemplateItem { Name = "Test Asset 1", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/160x120?text=Asset+1" },
-                new TemplateItem { Name = "Test Asset 2", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/300x260?text=Asset+2" },
-                new TemplateItem { Name = "Test Asset 3", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/200x180?text=Asset+3" },
-                new TemplateItem { Name = "Test Asset 4", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/400x140?text=Asset+4" },
-                new TemplateItem { Name = "Test Asset 5", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/120x200?text=Asset+5" }
-            };
+            Models = new ObservableCollection<TemplateItem>();
 
             BuildMasonryColumns();
             UseTextListMode = _currentLayout == LayoutType.List;
             ShowThumbnails = !UseTextListMode;
 
-            // obtain FilterService from DI and wire up
             try
             {
                 _filterService = App.Current.Services.GetService<FilterService>();
                 if (_filterService != null)
                 {
-                    // mirror list reference
                     foreach (var f in _filterService.Filters) Filters.Add(f);
-                    // subscribe to changes on service - reapply filters when selection changes
                     _filterService.PropertyChanged += (s, e) =>
                     {
                         if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(FilterService.SelectedFilterIds))
@@ -136,10 +123,8 @@ namespace Pivot.ViewModels
             }
             catch { }
 
-            // initialize displayed assets
             ApplyFilterFromService();
 
-            // 設定変更を監視してBorderThicknessを更新
             try
             {
                 var settings = App.Current.Services.GetService<SettingsService>();
@@ -159,7 +144,6 @@ namespace Pivot.ViewModels
                 {
                     if (value == null) _filterService.ClearSelectedFilters();
                     else _filterService.SetSelectedFilters(new[] { value.Id });
-                    // Note: TagFilterControl persists per-tab selection; here we just update service selection
                 }
             }
             catch { }
@@ -168,26 +152,25 @@ namespace Pivot.ViewModels
 
         private void ApplyFilterFromService()
         {
-            DisplayedAssets.Clear();
+            DisplayedModels.Clear();
             try
             {
                 if (_filterService == null)
                 {
-                    foreach (var a in Assets) DisplayedAssets.Add(a);
+                    foreach (var m in Models) DisplayedModels.Add(m);
                     return;
                 }
-                var res = _filterService.ApplyFilter(Assets);
-                foreach (var a in res) DisplayedAssets.Add(a);
+                var res = _filterService.ApplyFilter(Models);
+                foreach (var m in res) DisplayedModels.Add(m);
             }
             catch
             {
-                foreach (var a in Assets) DisplayedAssets.Add(a);
+                foreach (var m in Models) DisplayedModels.Add(m);
             }
 
-            // rebuild masonry columns from displayed assets so Masonry layout shows filtered items
             try
             {
-                BuildMasonryColumns(DisplayedAssets);
+                BuildMasonryColumns(DisplayedModels);
             }
             catch { }
         }
@@ -195,8 +178,7 @@ namespace Pivot.ViewModels
         public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
         {
             if (directories == null) return;
-            // var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
-            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tga", ".tif", ".tiff", ".mp4", ".mov", ".avi", ".mkv", ".webm", ".obj", ".fbx", ".glb", ".mp3", ".wav", ".ogg", ".flac", ".aac" };
+            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".fbx", ".obj", ".glb" };
             var files = new List<string>();
             await Task.Run(() =>
             {
@@ -224,7 +206,7 @@ namespace Pivot.ViewModels
             _loadCts = new System.Threading.CancellationTokenSource();
             var ct = _loadCts.Token;
 
-            Assets.Clear();
+            Models.Clear();
             var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
             try
             {
@@ -239,16 +221,9 @@ namespace Pivot.ViewModels
 
             foreach (var f in files)
             {
-                var ext = Path.GetExtension(f);
-                AssetKind kind = AssetKind.Other;
-                if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj",".fbx",".glb" }.Contains(ext)) kind = AssetKind.Model;
-                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png",".jpg",".jpeg",".bmp",".gif",".webp",".tga",".tif",".tiff" }.Contains(ext)) kind = AssetKind.Image;
-                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp4",".mov",".avi",".mkv",".webm" }.Contains(ext)) kind = AssetKind.Video;
-                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp3",".wav",".ogg",".flac",".aac" }.Contains(ext)) kind = AssetKind.Audio;
-
                 var item = new TemplateItem
                 {
-                    Kind = kind,
+                    Kind = AssetKind.Model,
                     Path = f,
                     Name = Path.GetFileName(f)
                 };
@@ -264,10 +239,9 @@ namespace Pivot.ViewModels
                     }
                 }
                 catch { }
-                Assets.Add(item);
+                Models.Add(item);
             }
 
-            // apply current filter to newly loaded assets
             try { ApplyFilterFromService(); } catch { }
 
             BuildMasonryColumns();
@@ -278,7 +252,7 @@ namespace Pivot.ViewModels
                 if (thumbService == null) return;
 
                 var tasks = new List<Task>();
-                foreach (var item in Assets.ToList())
+                foreach (var item in Models.ToList())
                 {
                     var originalPath = item.Path;
                     if (string.IsNullOrWhiteSpace(originalPath) || !File.Exists(originalPath)) continue;
@@ -308,7 +282,7 @@ namespace Pivot.ViewModels
 
         public void BuildMasonryColumns(IEnumerable<TemplateItem>? source = null)
         {
-            var items = source ?? Assets;
+            var items = source ?? Models;
             MasonryColumns.Clear();
             for (int i = 0; i < MasonryColumnCount; i++)
             {
@@ -329,10 +303,6 @@ namespace Pivot.ViewModels
             }
         }
 
-// ... existing code ...
-
-// ... existing code ...
-
         public void CancelLoads()
         {
             try { _loadCts?.Cancel(); } catch { }
@@ -350,3 +320,4 @@ namespace Pivot.ViewModels
         }
     }
 }
+

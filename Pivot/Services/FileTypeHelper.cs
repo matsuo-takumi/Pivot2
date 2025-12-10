@@ -14,7 +14,7 @@ namespace Pivot.Services
 
 		private static readonly HashSet<string> ModelExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 		{
-			".fbx", ".obj", ".usd", ".usdz", ".gltf", ".glb", ".hdr", ".exr"
+			".fbx", ".obj", ".glb"
 		};
 
 		private static readonly HashSet<string> ScriptExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
