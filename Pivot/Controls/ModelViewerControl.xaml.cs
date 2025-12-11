@@ -6,8 +6,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-using System.Reflection;
-using Windows.ApplicationModel;
+using HelixToolkit.SharpDX.Core.Assimp;
+using System.Text.Json;
+using System.Text;
 
 namespace Pivot.Controls
 {
@@ -36,6 +37,9 @@ namespace Pivot.Controls
         }
 
         private System.Threading.CancellationTokenSource? _loadCts;
+        private const string DebugLogPath = @"c:\Users\ta_matsuo\source\repos\matsuo-takumi\Pivot2\.cursor\debug.log";
+        private const string DebugSessionId = "debug-session";
+        private const string DebugRunId = "run1";
 
         public ModelViewerControl()
         {
@@ -86,16 +90,18 @@ namespace Pivot.Controls
                 _loadCts = new System.Threading.CancellationTokenSource();
                 var ct = _loadCts.Token;
 
+                LogDebug("H1", "LoadModelAsync entry", new { filePath, exists = !string.IsNullOrWhiteSpace(filePath) && File.Exists(filePath) });
+
                 if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
                 {
                     DispatcherQueue.TryEnqueue(() =>
                     {
                         ShowLoading(false);
                         ShowError(false);
-                        var modelGroup = this.FindName("ModelGroup") as HelixToolkit.WinUI.GroupModel3D;
-                        if (modelGroup != null && modelGroup.Items != null)
+                               var presenter = this.FindName("ModelPresenter") as HelixToolkit.WinUI.Element3DPresenter;
+                               if (presenter != null)
                         {
-                            modelGroup.Items.Clear();
+                                   presenter.Content = null;
                         }
                     });
                     return;
@@ -111,8 +117,7 @@ namespace Pivot.Controls
                 string? errorMessage = null;
 
                 // モデルファイルの読み込みはバックグラウンドスレッドで実行
-                System.Collections.Generic.List<HelixToolkit.SharpDX.Core.Object3D>? objModels = null;
-                HelixToolkit.SharpDX.Core.Model.Scene.SceneNode? assimpScene = null;
+                HelixToolkit.SharpDX.Core.Assimp.HelixToolkitScene? assimpScene = null;
                 
                 await Task.Run(() =>
                 {
@@ -120,128 +125,47 @@ namespace Pivot.Controls
                     {
                         if (ct.IsCancellationRequested) return;
 
-                        if (ext == ".obj")
+                        if (ext == ".fbx" || ext == ".glb" || ext == ".obj")
                         {
-                            var reader = new HelixToolkit.SharpDX.Core.ObjReader();
-                            objModels = reader.Read(filePath);
-                        }
-                        else if (ext == ".fbx" || ext == ".glb")
-                        {
-                            // Assimpを使用してFBX/GLB形式を読み込む
-                            // アセンブリ名を完全修飾名で指定して読み込む
                             try
                             {
-                                Assembly? assimpAssembly = null;
-                                
-                                // WinUIアプリでは、複数の場所からアセンブリを読み込む
-                                var searchPaths = new List<string>();
-                                
-                                // 1. Package.Current.InstalledLocation
-                                try
+                                // HelixToolkit.SharpDX.Core.Assimp 2.25.0 では Importer クラスを使用する
+                                var importer = new Importer();
+                                assimpScene = importer.Load(filePath);
+                                LogDebug("H2", "Assimp importer result", new
                                 {
-                                    var packageLocation = Package.Current.InstalledLocation.Path;
-                                    searchPaths.Add(packageLocation);
-                                }
-                                catch { }
-                                
-                                // 2. 現在のアセンブリの場所
-                                try
-                                {
-                                    var currentAssembly = Assembly.GetExecutingAssembly();
-                                    var assemblyLocation = Path.GetDirectoryName(currentAssembly.Location);
-                                    if (!string.IsNullOrEmpty(assemblyLocation))
-                                    {
-                                        searchPaths.Add(assemblyLocation);
-                                    }
-                                }
-                                catch { }
-                                
-                                // 3. AppXフォルダ（デバッグ時）
-                                try
-                                {
-                                    var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                                    var appXPath = Path.Combine(appDataPath, "Packages", Package.Current.Id.FamilyName, "LocalCache", "Local", "Microsoft", "Windows", "WinX");
-                                    if (Directory.Exists(appXPath))
-                                    {
-                                        searchPaths.Add(appXPath);
-                                    }
-                                }
-                                catch { }
-                                
-                                // 各パスを試す
-                                foreach (var searchPath in searchPaths)
-                                {
-                                    try
-                                    {
-                                        var assimpDllPath = Path.Combine(searchPath, "HelixToolkit.SharpDX.Assimp.dll");
-                                        if (File.Exists(assimpDllPath))
-                                        {
-                                            assimpAssembly = Assembly.LoadFrom(assimpDllPath);
-                                            System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Assimpアセンブリを読み込みました: {assimpDllPath}");
-                                            break;
-                                        }
-                                    }
-                                    catch { }
-                                }
-                                
-                                // 最後のフォールバック: アセンブリ名で読み込む
-                                if (assimpAssembly == null)
-                                {
-                                    try
-                                    {
-                                        assimpAssembly = Assembly.Load(new AssemblyName("HelixToolkit.SharpDX.Assimp"));
-                                        System.Diagnostics.Debug.WriteLine("ModelViewerControl: Assimpアセンブリをアセンブリ名で読み込みました");
-                                    }
-                                    catch (Exception loadEx)
-                                    {
-                                        System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Assimpアセンブリの読み込みに失敗: {loadEx.Message}");
-                                    }
-                                }
-                                
-                                if (assimpAssembly != null)
-                                {
-                                    var importerType = assimpAssembly.GetType("HelixToolkit.SharpDX.Assimp.AssimpImporter");
-                                    if (importerType != null)
-                                    {
-                                        var importer = Activator.CreateInstance(importerType);
-                                        var loadMethod = importerType.GetMethod("Load", new[] { typeof(string) });
-                                        if (loadMethod != null)
-                                        {
-                                            assimpScene = loadMethod.Invoke(importer, new object[] { filePath }) as HelixToolkit.SharpDX.Core.Model.Scene.SceneNode;
-                                        }
-                                    }
-                                }
+                                    hasScene = assimpScene != null,
+                                    sceneType = assimpScene?.Root?.GetType().Name,
+                                    rootNull = assimpScene?.Root == null
+                                });
                             }
                             catch (Exception assimpEx)
                             {
-                                errorMessage = $"AssimpImporterの読み込みに失敗しました: {assimpEx.Message}";
+                                errorMessage = $"Assimp importer の読み込みに失敗しました: {assimpEx.Message}";
                                 System.Diagnostics.Debug.WriteLine($"ModelViewerControl: {errorMessage}");
                                 System.Diagnostics.Debug.WriteLine($"ModelViewerControl: {ext}形式は現在サポートされていません。");
-                                
-                                // アセンブリが見つからない場合の詳細情報
-                                if (assimpEx is FileNotFoundException || assimpEx is System.IO.FileNotFoundException)
-                                {
-                                    errorMessage = $"HelixToolkit.SharpDX.Assimpアセンブリが見つかりません。\n{ext}形式の読み込みにはこのアセンブリが必要です。";
-                                }
                             }
                         }
                         else
                         {
                             errorMessage = $"サポートされていない形式: {ext}";
                             System.Diagnostics.Debug.WriteLine($"ModelViewerControl: {errorMessage}");
+                            LogDebug("H3", "Unsupported extension", new { ext });
                         }
                     }
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"ModelViewerControl.LoadModelAsync Task.Run error: {ex.Message}");
+                        LogDebug("H4", "Background exception", new { ex.Message, ex.StackTrace });
                     }
                 });
 
                 if (ct.IsCancellationRequested) return;
 
                 // UIスレッドでモデルを追加
-                DispatcherQueue.TryEnqueue(() =>
+                var uiEnqueue = DispatcherQueue.TryEnqueue(() =>
                 {
+                    LogDebug("H7", "UI dispatcher entered", new { filePath, ext, ctCanceled = ct.IsCancellationRequested });
                     if (ct.IsCancellationRequested) return;
 
                     try
@@ -249,27 +173,27 @@ namespace Pivot.Controls
                         ShowLoading(false);
                         
                         var viewport = this.FindName("Viewport3D") as HelixToolkit.WinUI.Viewport3DX;
-                        var modelGroup = this.FindName("ModelGroup") as HelixToolkit.WinUI.GroupModel3D;
-                        if (viewport == null || modelGroup == null || modelGroup.Items == null) return;
+                               var presenter = this.FindName("ModelPresenter") as HelixToolkit.WinUI.Element3DPresenter;
+                               if (viewport == null || presenter == null)
+                        {
+                                   LogDebug("H7", "UI dispatcher missing elements", new { viewportNull = viewport == null, presenterNull = presenter == null });
+                            return;
+                        }
 
-                        modelGroup.Items.Clear();
+                               presenter.Content = null;
 
                         bool modelLoaded = false;
                         
-                        // ObjReaderで読み込んだモデルを追加
-                        if (objModels != null && objModels.Count > 0)
-                        {
-                            foreach (var model in objModels)
-                            {
-                                modelGroup.Items.Add(model);
-                            }
-                            modelLoaded = true;
-                        }
                         // AssimpImporterで読み込んだシーンを追加
-                        else if (assimpScene != null)
+                        if (assimpScene?.Root != null)
                         {
-                            modelGroup.Items.Add(assimpScene);
+                                   presenter.Content = assimpScene.Root;
                             modelLoaded = true;
+                                   LogDebug("H6", "Set presenter content", new
+                            {
+                                       hasContent = presenter.Content != null,
+                                       rootType = assimpScene.Root.GetType().Name
+                            });
                         }
 
                         if (modelLoaded)
@@ -285,13 +209,20 @@ namespace Pivot.Controls
                             // モデルが読み込めなかった場合（サポートされていない形式など）
                             ShowError(true, errorMessage ?? $"モデルの読み込みに失敗しました。\n形式: {ext}");
                         }
+                               LogDebug("H5", "UI update result", new { modelLoaded, hasContent = presenter.Content != null, cameraNull = viewport?.Camera == null, errorMessage });
                     }
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"ModelViewerControl.LoadModelAsync UI update error: {ex.Message}");
                         ShowError(true, $"UI更新エラー: {ex.Message}");
+                        LogDebug("H4", "UI exception", new { ex.Message, ex.StackTrace });
                     }
                 });
+
+                if (!uiEnqueue)
+                {
+                    LogDebug("H7", "UI dispatcher enqueue failed", new { filePath, ext });
+                }
             }
             catch (Exception ex)
             {
@@ -301,8 +232,34 @@ namespace Pivot.Controls
                     ShowLoading(false);
                     ShowError(true, $"エラー: {ex.Message}");
                 });
+                LogDebug("H4", "Outer exception", new { ex.Message, ex.StackTrace });
             }
         }
+
+        // #region agent log
+        private void LogDebug(string hypothesisId, string message, object data)
+        {
+            try
+            {
+                var payload = new
+                {
+                    sessionId = DebugSessionId,
+                    runId = DebugRunId,
+                    hypothesisId,
+                    location = "ModelViewerControl.xaml.cs",
+                    message,
+                    data,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                var json = JsonSerializer.Serialize(payload);
+                File.AppendAllText(DebugLogPath, json + Environment.NewLine, Encoding.UTF8);
+            }
+            catch
+            {
+                // swallow logging errors
+            }
+        }
+        // #endregion
 
         private void ShowError(bool show, string? detailMessage = null)
         {
@@ -348,10 +305,10 @@ namespace Pivot.Controls
             try
             {
                 _loadCts?.Cancel();
-                var modelGroup = this.FindName("ModelGroup") as HelixToolkit.WinUI.GroupModel3D;
-                if (modelGroup != null && modelGroup.Items != null)
+                       var presenter = this.FindName("ModelPresenter") as HelixToolkit.WinUI.Element3DPresenter;
+                       if (presenter != null)
                 {
-                    modelGroup.Items.Clear();
+                           presenter.Content = null;
                 }
             }
             catch { }

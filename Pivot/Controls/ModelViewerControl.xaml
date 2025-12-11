@@ -15,7 +15,7 @@
             <hx:Viewport3DX.Items>
                 <hx:DirectionalLight3D x:Name="DirectionalLight" Color="White"/>
                 <hx:AmbientLight3D Color="#404040"/>
-                <hx:GroupModel3D x:Name="ModelGroup"/>
+                    <hx:Element3DPresenter x:Name="ModelPresenter"/>
             </hx:Viewport3DX.Items>
         </hx:Viewport3DX>
         
