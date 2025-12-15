@@ -44,7 +44,7 @@ namespace Pivot.CodeModule.Services
             if (snippet == null) return;
 
             // Update SelectedSnippet immediately
-            snippet.Content = newContent;
+            snippet.Content = newContent ?? string.Empty;
             if (_viewModel != null)
             {
                 _viewModel.IsDirty = true;
@@ -56,7 +56,7 @@ namespace Pivot.CodeModule.Services
 #if DEBUG
                     System.Diagnostics.Debug.WriteLine($"[DEBUG] SnippetSyncService.UpdateContentImmediate: updating snippetInCollection, sameInstance={ReferenceEquals(snippetInCollection, snippet)}");
 #endif
-                    snippetInCollection.Content = newContent;
+                    snippetInCollection.Content = newContent ?? string.Empty;
                 }
                 else
                 {

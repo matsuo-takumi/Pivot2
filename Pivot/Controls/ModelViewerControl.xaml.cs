@@ -60,6 +60,19 @@ namespace Pivot.Controls
             {
                 directionalLight.Direction = new SharpDX.Vector3(0, 0, -1);
             }
+
+            // Cameraを設定
+            if (viewport != null)
+            {
+                viewport.Camera = new HelixToolkit.WinUI.PerspectiveCamera
+                {
+                    Position = new SharpDX.Vector3(0, 10, 20),
+                    LookDirection = new SharpDX.Vector3(0, -10, -20),
+                    UpDirection = new SharpDX.Vector3(0, 1, 0),
+                    FarPlaneDistance = 5000,
+                    NearPlaneDistance = 0.1
+                };
+            }
         }
 
         private static void OnViewerBackgroundChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -187,7 +200,9 @@ namespace Pivot.Controls
                         // AssimpImporterで読み込んだシーンを追加
                         if (assimpScene?.Root != null)
                         {
-                                   presenter.Content = assimpScene.Root;
+                                   var group = new HelixToolkit.WinUI.SceneNodeGroupModel3D();
+                                   group.AddNode(assimpScene.Root);
+                                   presenter.Content = group;
                             modelLoaded = true;
                                    LogDebug("H6", "Set presenter content", new
                             {

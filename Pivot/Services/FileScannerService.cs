@@ -137,7 +137,16 @@ namespace Pivot.Services
 				_fileOpenSemaphore = new SemaphoreSlim(DefaultMaxOpenFiles);
 				_hashSemaphore = new SemaphoreSlim(hashDop);
 
-				var allFiles = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories).ToList();
+				var allFiles = new List<string>();
+				try
+				{
+					allFiles = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories).ToList();
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "Failed to enumerate files in ScanAsync for root: {rootPath}", rootPath);
+				}
+				
 				int total = allFiles.Count;
 
 				int processed = 0;
@@ -653,7 +662,16 @@ namespace Pivot.Services
 				_fileOpenSemaphore = new SemaphoreSlim(DefaultMaxOpenFiles);
 				_hashSemaphore = new SemaphoreSlim(hashDop);
 
-				var allFiles = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories).ToList();
+				var allFiles = new List<string>();
+				try
+				{
+				    allFiles = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories).ToList();
+				}
+				catch (Exception ex)
+				{
+				    _logger.LogWarning(ex, "Failed to enumerate files for root: {rootPath}", rootPath);
+				}
+				
 				int total = allFiles.Count;
 				int processed = 0;
 				int changedCount = 0;
@@ -895,16 +913,44 @@ namespace Pivot.Services
 		// Probe throughput (MB/s) by reading a small chunk of a representative file
 		private static async Task<double> ProbeThroughputMbPerSecAsync(string rootPath, CancellationToken ct)
 		{
-			var file = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories).FirstOrDefault(f => new FileInfo(f).Length >= 65536);
+			// Avoid full recursive enumeration just to find one file.
+			var file = FindCandidateFile(rootPath);
 			if (file == null) return 0;
-			var readBytes = 256 * 1024; // 256KB
-			var sw = Stopwatch.StartNew();
-			await using var s = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-			var buffer = new byte[readBytes];
-			int got = await s.ReadAsync(buffer.AsMemory(0, readBytes), ct);
-			sw.Stop();
-			if (got == 0) return 0;
-			return (got / 1024.0 / 1024.0) / Math.Max(0.0001, sw.Elapsed.TotalSeconds);
+			
+			try
+			{
+				var readBytes = 256 * 1024; // 256KB
+				var sw = Stopwatch.StartNew();
+				await using var s = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+				var buffer = new byte[readBytes];
+				int got = await s.ReadAsync(buffer.AsMemory(0, readBytes), ct);
+				sw.Stop();
+				if (got == 0) return 0;
+				return (got / 1024.0 / 1024.0) / Math.Max(0.0001, sw.Elapsed.TotalSeconds);
+			}
+			catch { return 0; }
+		}
+
+		private static string? FindCandidateFile(string rootPath)
+		{
+			try
+			{
+				// Try top level first
+				foreach (var f in Directory.EnumerateFiles(rootPath))
+				{
+					if (new FileInfo(f).Length >= 65536) return f;
+				}
+				// Try one level deeper if needed, but don't go full recursive
+				foreach (var d in Directory.EnumerateDirectories(rootPath))
+				{
+					foreach (var f in Directory.EnumerateFiles(d))
+					{
+						if (new FileInfo(f).Length >= 65536) return f;
+					}
+				}
+			}
+			catch { }
+			return null;
 		}
 
 		private static void ConfigureForRoot(double mbps, out int scanDop, out int hashDop)

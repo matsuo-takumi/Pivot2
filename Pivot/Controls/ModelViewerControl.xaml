@@ -14,6 +14,7 @@
                        Background="#1E1E1E">
             <hx:Viewport3DX.Items>
                 <hx:DirectionalLight3D x:Name="DirectionalLight" Color="White"/>
+                <hx:GridLinesVisual3D Width="100" Length="100" MinorDistance="1" MajorDistance="10" Thickness="0.05" Fill="#404040"/>
                 <hx:AmbientLight3D Color="#404040"/>
                     <hx:Element3DPresenter x:Name="ModelPresenter"/>
             </hx:Viewport3DX.Items>
