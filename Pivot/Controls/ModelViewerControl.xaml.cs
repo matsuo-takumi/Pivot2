@@ -52,6 +52,9 @@ namespace Pivot.Controls
             if (viewport != null)
             {
                 viewport.Background = ViewerBackground;
+                
+                // EffectsManagerを設定（レンダリングに必須）
+                viewport.EffectsManager = new HelixToolkit.SharpDX.Core.DefaultEffectsManager();
             }
             
             // DirectionalLightのDirectionをコードビハインドで設定
@@ -73,6 +76,62 @@ namespace Pivot.Controls
                     NearPlaneDistance = 0.1
                 };
             }
+
+            // グリッドを作成
+            CreateGrid();
+        }
+
+        private void CreateGrid()
+        {
+            var gridPresenter = this.FindName("GridPresenter") as HelixToolkit.WinUI.Element3DPresenter;
+            if (gridPresenter == null) return;
+
+            var lineBuilder = new HelixToolkit.SharpDX.Core.LineBuilder();
+            
+            float gridSize = 50f;
+            float majorStep = 10f;
+            float minorStep = 1f;
+
+            // Minor grid lines (lighter)
+            for (float i = -gridSize; i <= gridSize; i += minorStep)
+            {
+                if (Math.Abs(i % majorStep) > 0.001f) // Skip major lines
+                {
+                    lineBuilder.AddLine(new Vector3(i, 0, -gridSize), new Vector3(i, 0, gridSize));
+                    lineBuilder.AddLine(new Vector3(-gridSize, 0, i), new Vector3(gridSize, 0, i));
+                }
+            }
+
+            var minorGridGeometry = lineBuilder.ToLineGeometry3D();
+            var minorGridModel = new HelixToolkit.WinUI.LineGeometryModel3D
+            {
+                Geometry = minorGridGeometry,
+                Color = Windows.UI.Color.FromArgb(255, 77, 77, 77),
+                Thickness = 0.5
+            };
+
+            // Major grid lines (brighter)
+            var majorLineBuilder = new HelixToolkit.SharpDX.Core.LineBuilder();
+            for (float i = -gridSize; i <= gridSize; i += majorStep)
+            {
+                majorLineBuilder.AddLine(new Vector3(i, 0, -gridSize), new Vector3(i, 0, gridSize));
+                majorLineBuilder.AddLine(new Vector3(-gridSize, 0, i), new Vector3(gridSize, 0, i));
+            }
+
+            var majorGridGeometry = majorLineBuilder.ToLineGeometry3D();
+            var majorGridModel = new HelixToolkit.WinUI.LineGeometryModel3D
+            {
+                Geometry = majorGridGeometry,
+                Color = Windows.UI.Color.FromArgb(255, 128, 128, 128),
+                Thickness = 1.0
+            };
+
+            // GroupModel3Dでまとめる
+            var gridGroup = new HelixToolkit.WinUI.GroupModel3D();
+            gridGroup.Children.Add(minorGridModel);
+            gridGroup.Children.Add(majorGridModel);
+
+            gridPresenter.Content = gridGroup;
         }
 
         private static void OnViewerBackgroundChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -204,18 +263,46 @@ namespace Pivot.Controls
                                    group.AddNode(assimpScene.Root);
                                    presenter.Content = group;
                             modelLoaded = true;
+                            
+                            // 詳細なデバッグ情報を出力
+                            System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Root node type: {assimpScene.Root.GetType().Name}");
+                            System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Root node Name: {assimpScene.Root.Name}");
+                            System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Has Animations: {assimpScene.HasAnimation}, Animation Count: {assimpScene.Animations?.Count ?? 0}");
+                            
+                            // 子ノードの数を確認
+                            int nodeCount = CountNodes(assimpScene.Root);
+                            System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Total node count: {nodeCount}");
+                            System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Group SceneNode count: {group.GroupNode?.Items?.Count ?? 0}");
                                    LogDebug("H6", "Set presenter content", new
                             {
                                        hasContent = presenter.Content != null,
-                                       rootType = assimpScene.Root.GetType().Name
+                                       rootType = assimpScene.Root.GetType().Name,
+                                nodeCount
                             });
                         }
 
                         if (modelLoaded)
                         {
+                            System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Model loaded successfully. Calling ZoomExtents.");
                             if (viewport.Camera != null)
                             {
-                                viewport.Camera.ZoomExtents(viewport, 0);
+                                // ZoomExtentsを少し遅延して呼び出す（モデルがシーンに追加された後に実行）
+                                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                                {
+                                    try
+                                    {
+                                        viewport.Camera.ZoomExtents(viewport, 500);
+                                        System.Diagnostics.Debug.WriteLine($"ModelViewerControl: ZoomExtents called. Camera Position: {viewport.Camera.Position}");
+                                    }
+                                    catch (Exception zoomEx)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"ModelViewerControl: ZoomExtents failed: {zoomEx.Message}");
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"ModelViewerControl: Camera is null, cannot call ZoomExtents.");
                             }
                             ShowError(false, null);
                         }
@@ -327,6 +414,20 @@ namespace Pivot.Controls
                 }
             }
             catch { }
+        }
+
+        private static int CountNodes(HelixToolkit.SharpDX.Core.Model.Scene.SceneNode node)
+        {
+            if (node == null) return 0;
+            int count = 1;
+            if (node.Items != null)
+            {
+                foreach (var child in node.Items)
+                {
+                    count += CountNodes(child);
+                }
+            }
+            return count;
         }
     }
 }

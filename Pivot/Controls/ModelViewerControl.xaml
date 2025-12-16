@@ -6,17 +6,35 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:hx="using:HelixToolkit.WinUI"
     mc:Ignorable="d">
+    
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="ViewportMicaBackgroundBrush" Color="#F3F3F3"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="ViewportMicaBackgroundBrush" Color="#202020"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    
     <Grid>
         <hx:Viewport3DX x:Name="Viewport3D"
                        CameraRotationMode="Trackball"
                        ShowCoordinateSystem="True"
                        ShowViewCube="True"
-                       Background="#1E1E1E">
+                       Background="{ThemeResource ViewportMicaBackgroundBrush}"
+                       HorizontalAlignment="Stretch"
+                       VerticalAlignment="Stretch"
+                       MinWidth="100"
+                       MinHeight="100">
             <hx:Viewport3DX.Items>
                 <hx:DirectionalLight3D x:Name="DirectionalLight" Color="White"/>
-                <hx:GridLinesVisual3D Width="100" Length="100" MinorDistance="1" MajorDistance="10" Thickness="0.05" Fill="#404040"/>
                 <hx:AmbientLight3D Color="#404040"/>
-                    <hx:Element3DPresenter x:Name="ModelPresenter"/>
+                <hx:Element3DPresenter x:Name="GridPresenter"/>
+                <hx:Element3DPresenter x:Name="ModelPresenter"/>
             </hx:Viewport3DX.Items>
         </hx:Viewport3DX>
         
