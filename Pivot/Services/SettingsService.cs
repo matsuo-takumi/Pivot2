@@ -22,6 +22,8 @@ namespace Pivot.Services
         private readonly MetadataService _metadataService;
         private readonly IMessenger _messenger;
         private readonly ISettingsStore _settingsStore;
+        private readonly DirectorySettingsService _directorySettings;
+        private readonly ThemeSettingsService _themeSettings;
 
         // In-memory cache to avoid sync-over-async and improve UI responsiveness
         private UserSettings _cache; // Settingsをメモリにキャッシュ
@@ -29,12 +31,16 @@ namespace Pivot.Services
         public SettingsService(
             ILogger<SettingsService> logger,
             MetadataService metadataService,
-            IMessenger messenger, // コンストラクタに IMessenger を追加
+            IMessenger messenger, 
+            DirectorySettingsService directorySettings,
+            ThemeSettingsService themeSettings,
             ISettingsStore? settingsStore = null)
         {
             _logger = logger;
             _metadataService = metadataService;
-            _messenger = messenger; // 初期化
+            _messenger = messenger;
+            _directorySettings = directorySettings;
+            _themeSettings = themeSettings;
             _settingsStore = settingsStore ?? new JsonSettingsStore();
             _cache = new UserSettings(); // 初期キャッシュ
         }
@@ -45,62 +51,72 @@ namespace Pivot.Services
         {
             _logger.LogInformation("SettingsService: Initializing...");
             await _settingsStore.InitializeAsync();
+            // Initialize sub-services
+            await _directorySettings.LoadAsync();
+            await _themeSettings.LoadAsync();
+            
             await LoadSettingsFromStoreAsync();
-            _logger.LogInformation("SettingsService: Initialization complete. AssetDirectories count: {AssetCount}", _cache.AssetDirectories.Count);
+            
+            // Sync initial state to cache
+            SyncDirectoriesFromService();
+            SyncThemeFromService();
+            
+            _logger.LogInformation("SettingsService: Initialization complete.");
+        }
+
+        private void SyncDirectoriesFromService()
+        {
+            _cache.AssetDirectories = _directorySettings.AssetDirectories.ToList();
+            _cache.ImageDirectories = _directorySettings.ImageDirectories.ToList();
+            _cache.ProjectDirectories = _directorySettings.ProjectDirectories.ToList();
+            _cache.CodeDirectories = _directorySettings.CodeDirectories.ToList();
+            _cache.CodeSaveOutputDirectory = _directorySettings.CodeSaveOutputDirectory;
+        }
+
+        private void SyncThemeFromService()
+        {
+            _cache.AppTheme = _themeSettings.AppTheme;
+            _cache.AppBackdropType = _themeSettings.AppBackdropType;
+            _cache.OverlayTintColor = _themeSettings.OverlayTintColor;
+            _cache.OverlayTintOpacity = _themeSettings.OverlayTintOpacity;
+            _cache.OverlayTintLuminosityOpacity = _themeSettings.OverlayTintLuminosityOpacity;
+            _cache.OverlayTintTransitionDurationMs = _themeSettings.OverlayTintTransitionDurationMs;
+            
+            _cache.PreferredTextColorTemplate = _themeSettings.PreferredTextColorTemplate;
+            _cache.DominantColor = _themeSettings.DominantColor;
+            _cache.DominantVariation = _themeSettings.DominantVariation;
+            _cache.DominantGenerateAccent = _themeSettings.DominantGenerateAccent;
+            _cache.DominantAccentStrength = _themeSettings.DominantAccentStrength;
+            
+            _cache.RandomSeed = _themeSettings.RandomSeed;
+            _cache.RandomnessLevel = _themeSettings.RandomnessLevel;
+            _cache.RandomSaturationMin = _themeSettings.RandomSaturationMin;
+            _cache.RandomSaturationMax = _themeSettings.RandomSaturationMax;
+            _cache.RandomBrightnessMin = _themeSettings.RandomBrightnessMin;
+            _cache.RandomBrightnessMax = _themeSettings.RandomBrightnessMax;
+            _cache.RandomAllowExtreme = _themeSettings.RandomAllowExtreme;
+            
+            _cache.TextColorOverrides = new Dictionary<string, string>(_themeSettings.TextColorOverrides);
+            _cache.IsTextColorCustomizationEnabled = _themeSettings.IsTextColorCustomizationEnabled;
+            
+            _cache.ImageSelectionColor = _themeSettings.ImageSelectionColor;
+            _cache.ImageSelectionOpacity = _themeSettings.ImageSelectionOpacity;
+            _cache.ImageSelectionBorderThickness = _themeSettings.ImageSelectionBorderThickness;
+            _cache.ImageDragSelectionColor = _themeSettings.ImageDragSelectionColor;
+            _cache.ImageDragSelectionOpacity = _themeSettings.ImageDragSelectionOpacity;
         }
 
         private async Task LoadSettingsFromStoreAsync()
         {
             _logger.LogInformation("SettingsService: Loading settings from JSON store...");
 
-            // AssetDirectories
-            var assetPref = await _settingsStore.GetAsync("AssetDirectories");
-            _cache.AssetDirectories = ParseDirectoriesValue(assetPref);
-            _logger.LogInformation("SettingsService: Loaded AssetDirectories count (parsed): {Count}", _cache.AssetDirectories.Count);
-            await NormalizeAndPersistIfNeededAsync("AssetDirectories", assetPref, _cache.AssetDirectories);
+            // AssetDirectories, ImageDirectories, ProjectDirectories, CodeDirectories, OutputDirectory, CodeFormat
+            // are now handled by DirectorySettingsService and initialized in InitializeAsync.
+            // SyncDirectoriesFromService() ensures _cache is populated.
 
-            // ImageDirectories
-            var imagePref = await _settingsStore.GetAsync("ImageDirectories");
-            _cache.ImageDirectories = ParseDirectoriesValue(imagePref);
-            _logger.LogInformation("SettingsService: Loaded ImageDirectories count (parsed): {Count}", _cache.ImageDirectories.Count);
-            await NormalizeAndPersistIfNeededAsync("ImageDirectories", imagePref, _cache.ImageDirectories);
-
-            // ProjectDirectories
-            var projectPref = await _settingsStore.GetAsync("ProjectDirectories");
-            _cache.ProjectDirectories = ParseDirectoriesValue(projectPref);
-            _logger.LogInformation("SettingsService: Loaded ProjectDirectories count (parsed): {Count}", _cache.ProjectDirectories.Count);
-            await NormalizeAndPersistIfNeededAsync("ProjectDirectories", projectPref, _cache.ProjectDirectories);
-
-            // CodeDirectories
-            var codePref = await _settingsStore.GetAsync("CodeDirectories");
-            _cache.CodeDirectories = ParseDirectoriesValue(codePref);
-            _logger.LogInformation("SettingsService: Loaded CodeDirectories count (parsed): {Count}", _cache.CodeDirectories.Count);
-            await NormalizeAndPersistIfNeededAsync("CodeDirectories", codePref, _cache.CodeDirectories);
-
-            // Code save output directory (migrated from Export.OutputDirectory)
-            try
-            {
-                // Prefer new key used by Preferences Code > Save
-                var codeSaveDir = await _settingsStore.GetAsync("Code.Save.OutputDirectory");
-                if (string.IsNullOrWhiteSpace(codeSaveDir))
-                {
-                    // Fallback to legacy Export key for migration
-                    codeSaveDir = await _settingsStore.GetAsync("Export.OutputDirectory");
-                    if (!string.IsNullOrWhiteSpace(codeSaveDir))
-                    {
-                        // Persist into new key for future reads
-                        try { await _settingsStore.UpsertAsync("Code.Save.OutputDirectory", codeSaveDir); } catch { }
-                    }
-                }
-                _cache.CodeSaveOutputDirectory = codeSaveDir ?? string.Empty;
-                _logger.LogInformation("SettingsService: Loaded Code.Save.OutputDirectory: {Dir}", _cache.CodeSaveOutputDirectory);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Code.Save.OutputDirectory. Using empty string.");
-                _cache.CodeSaveOutputDirectory = string.Empty;
-            }
-
+            // Code save output directory
+            CodeSaveOutputDirectoryLogic_Migrated_To_Service();
+            
             // Code export format (migrated from Export.CodeFormat)
             try
             {
@@ -124,213 +140,12 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "SettingsService: Failed to load Code.Save.Format. Using default Json.");
                 _cache.CodeExportFormat = "Json";
             }
-            // Overlay tint preferences
-            try
-            {
-                var overlayColor = await _settingsStore.GetAsync("Color.OverlayTintColor");
-                if (!string.IsNullOrWhiteSpace(overlayColor))
-                {
-                    _cache.OverlayTintColor = overlayColor;
-                }
-                _logger.LogInformation("SettingsService: Loaded Color.OverlayTintColor: {Color}", _cache.OverlayTintColor);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintColor. Using default.");
-            }
+            // Overlay, TextColor, and Theme settings are now loaded by ThemeSettingsService
+            // and synced via SyncThemeFromService().
 
-            try
-            {
-                var overlayOpacity = await _settingsStore.GetAsync("Color.OverlayTintOpacity");
-                if (!string.IsNullOrWhiteSpace(overlayOpacity) &&
-                    double.TryParse(overlayOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var opacity) &&
-                    opacity >= 0 && opacity <= 1)
-                {
-                    _cache.OverlayTintOpacity = opacity;
-                }
-                _logger.LogInformation("SettingsService: Loaded Color.OverlayTintOpacity: {Opacity}", _cache.OverlayTintOpacity);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintOpacity. Using default.");
-            }
 
-            try
-            {
-                var overlayLuminosity = await _settingsStore.GetAsync("Color.OverlayTintLuminosityOpacity");
-                if (!string.IsNullOrWhiteSpace(overlayLuminosity) &&
-                    double.TryParse(overlayLuminosity, NumberStyles.Float, CultureInfo.InvariantCulture, out var luminosity) &&
-                    luminosity >= 0 && luminosity <= 1)
-                {
-                    _cache.OverlayTintLuminosityOpacity = luminosity;
-                }
-                _logger.LogInformation("SettingsService: Loaded Color.OverlayTintLuminosityOpacity: {Luminosity}", _cache.OverlayTintLuminosityOpacity);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintLuminosityOpacity. Using default.");
-            }
 
-            try
-            {
-                var transitionMs = await _settingsStore.GetAsync("Color.OverlayTintTransitionMs");
-                if (!string.IsNullOrWhiteSpace(transitionMs) &&
-                    int.TryParse(transitionMs, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedMs) &&
-                    parsedMs >= 0)
-                {
-                    _cache.OverlayTintTransitionDurationMs = parsedMs;
-                }
-                _logger.LogInformation("SettingsService: Loaded Color.OverlayTintTransitionMs: {Ms}", _cache.OverlayTintTransitionDurationMs);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Color.OverlayTintTransitionMs. Using default.");
-            }
 
-            // Text color customization enabled flag
-            try
-            {
-                var customizationEnabled = await _settingsStore.GetAsync("Color.TextCustomizationEnabled");
-                if (bool.TryParse(customizationEnabled, out var parsed))
-                {
-                    _cache.IsTextColorCustomizationEnabled = parsed;
-                }
-                else
-                {
-                    _cache.IsTextColorCustomizationEnabled = false; // Default to false (use theme colors)
-                }
-                _logger.LogInformation("SettingsService: Loaded Color.TextCustomizationEnabled: {Enabled}", _cache.IsTextColorCustomizationEnabled);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Color.TextCustomizationEnabled. Using default (false).");
-                _cache.IsTextColorCustomizationEnabled = false;
-            }
-
-            // Text color overrides (light/dark roles that can be customized in Preferences > Color > Text)
-            try
-            {
-                var textOverridesJson = await _settingsStore.GetAsync("Color.TextOverrides");
-                if (!string.IsNullOrWhiteSpace(textOverridesJson) && LooksLikeJsonObject(textOverridesJson))
-                {
-                    var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(textOverridesJson);
-                    if (parsed != null)
-                    {
-                        _cache.TextColorOverrides = parsed;
-                    }
-                    else
-                    {
-                        _cache.TextColorOverrides = new Dictionary<string, string>();
-                    }
-                }
-                else
-                {
-                    _cache.TextColorOverrides = new Dictionary<string, string>();
-                }
-                _logger.LogInformation("SettingsService: Loaded Color.TextOverrides entries: {Count}", _cache.TextColorOverrides.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Color.TextOverrides. Using defaults.");
-                _cache.TextColorOverrides = new Dictionary<string, string>();
-            }
-
-            // Text template preferences
-            try
-            {
-                var templateValue = await _settingsStore.GetAsync("Color.TextTemplate");
-                if (!string.IsNullOrWhiteSpace(templateValue) &&
-                    Enum.TryParse<TextColorTemplate>(templateValue, true, out var parsed))
-                {
-                    _cache.PreferredTextColorTemplate = parsed;
-                }
-                _logger.LogInformation("SettingsService: Loaded Color.TextTemplate: {Template}", _cache.PreferredTextColorTemplate);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Color.TextTemplate. Using default.");
-            }
-
-            await LoadDominantTemplateSettingsAsync();
-            await LoadRandomTemplateSettingsAsync();
-
-            // Image selection highlight settings
-            try
-            {
-                var imageSelectionColor = await _settingsStore.GetAsync("Image.SelectionColor");
-                if (!string.IsNullOrWhiteSpace(imageSelectionColor))
-                {
-                    _cache.ImageSelectionColor = imageSelectionColor;
-                }
-                _logger.LogInformation("SettingsService: Loaded Image.SelectionColor: {Color}", _cache.ImageSelectionColor);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Image.SelectionColor. Using default.");
-            }
-
-            try
-            {
-                var imageSelectionOpacity = await _settingsStore.GetAsync("Image.SelectionOpacity");
-                if (!string.IsNullOrWhiteSpace(imageSelectionOpacity) &&
-                    double.TryParse(imageSelectionOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var opacity) &&
-                    opacity >= 0 && opacity <= 1)
-                {
-                    _cache.ImageSelectionOpacity = opacity;
-                }
-                _logger.LogInformation("SettingsService: Loaded Image.SelectionOpacity: {Opacity}", _cache.ImageSelectionOpacity);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Image.SelectionOpacity. Using default.");
-            }
-
-            try
-            {
-                var imageSelectionBorderThickness = await _settingsStore.GetAsync("Image.SelectionBorderThickness");
-                if (!string.IsNullOrWhiteSpace(imageSelectionBorderThickness) &&
-                    double.TryParse(imageSelectionBorderThickness, NumberStyles.Float, CultureInfo.InvariantCulture, out var thickness) &&
-                    thickness >= 0)
-                {
-                    _cache.ImageSelectionBorderThickness = thickness;
-                }
-                _logger.LogInformation("SettingsService: Loaded Image.SelectionBorderThickness: {Thickness}", _cache.ImageSelectionBorderThickness);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Image.SelectionBorderThickness. Using default.");
-            }
-
-            // Image drag selection highlight settings
-            try
-            {
-                var imageDragSelectionColor = await _settingsStore.GetAsync("Image.DragSelectionColor");
-                if (!string.IsNullOrWhiteSpace(imageDragSelectionColor))
-                {
-                    _cache.ImageDragSelectionColor = imageDragSelectionColor;
-                }
-                _logger.LogInformation("SettingsService: Loaded Image.DragSelectionColor: {Color}", _cache.ImageDragSelectionColor);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Image.DragSelectionColor. Using default.");
-            }
-
-            try
-            {
-                var imageDragSelectionOpacity = await _settingsStore.GetAsync("Image.DragSelectionOpacity");
-                if (!string.IsNullOrWhiteSpace(imageDragSelectionOpacity) &&
-                    double.TryParse(imageDragSelectionOpacity, NumberStyles.Float, CultureInfo.InvariantCulture, out var opacity) &&
-                    opacity >= 0 && opacity <= 1)
-                {
-                    _cache.ImageDragSelectionOpacity = opacity;
-                }
-                _logger.LogInformation("SettingsService: Loaded Image.DragSelectionOpacity: {Opacity}", _cache.ImageDragSelectionOpacity);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Image.DragSelectionOpacity. Using default.");
-            }
 
             // Last selected snippet id
             try
@@ -347,25 +162,7 @@ namespace Pivot.Services
             }
             catch { _cache.LastSelectedSnippetId = Guid.Empty; }
 
-            if (Enum.TryParse<ElementTheme>(await _settingsStore.GetAsync("AppTheme"), out var theme))
-            {
-                _cache.AppTheme = theme;
-            }
-            else
-            {
-                _cache.AppTheme = ElementTheme.Default;
-            }
-            _logger.LogInformation("SettingsService: Loaded AppTheme: {Theme}", _cache.AppTheme);
 
-            if (Enum.TryParse<BackdropType>(await _settingsStore.GetAsync("AppBackdropType"), out var backdrop))
-            {
-                _cache.AppBackdropType = backdrop;
-            }
-            else
-            {
-                _cache.AppBackdropType = BackdropType.Mica;
-            }
-            _logger.LogInformation("SettingsService: Loaded AppBackdropType: {BackdropType}", _cache.AppBackdropType);
 
             // Asset 表示モード
             try
@@ -652,97 +449,19 @@ namespace Pivot.Services
             return v.Length > 0 && v[0] == '{';
         }
 
-        private List<string> ParseDirectoriesValue(string? storedValue)
+        private void CodeSaveOutputDirectoryLogic_Migrated_To_Service()
         {
-            var result = new List<string>();
-            if (string.IsNullOrWhiteSpace(storedValue)) return result;
-
-            try
-            {
-                var value = storedValue.Trim();
-                if (LooksLikeJsonArray(value))
-                {
-                    AddFromJson(value, result, 0);
-                }
-                else
-                {
-                    // Legacy '|' delimited string
-                    result = value
-                        .Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(s => s.Trim())
-                        .Where(s => !string.IsNullOrWhiteSpace(s))
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to parse directories value. Falling back to '|' split.");
-                result = (storedValue ?? string.Empty)
-                    .Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(s => s.Trim())
-                    .Where(s => !string.IsNullOrWhiteSpace(s))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            }
-
-            // Final cleanup: drop empty and obvious garbage tokens
-            result = result
-                .Where(s => !string.IsNullOrWhiteSpace(s) && s != "[]")
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            return result;
-        }
-
-        private void AddFromJson(string json, List<string> dest, int depth)
-        {
-            if (depth > 6) return; // avoid endless unwrap
-            try
-            {
-                var arr = JsonSerializer.Deserialize<List<string>>(json);
-                if (arr == null) return;
-
-                foreach (var item in arr)
-                {
-                    if (string.IsNullOrWhiteSpace(item)) continue;
-                    var t = item.Trim();
-                    if (LooksLikeJsonArray(t))
-                    {
-                        AddFromJson(t, dest, depth + 1);
-                    }
-                    else
-                    {
-                        dest.Add(t);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: JSON parse error at depth {Depth}", depth);
-            }
-        }
-
-        private async Task NormalizeAndPersistIfNeededAsync(string key, string? originalStoredValue, List<string> directories)
-        {
-            try
-            {
-                var normalized = JsonSerializer.Serialize(directories);
-                if (!string.Equals((originalStoredValue ?? string.Empty).Trim(), normalized, StringComparison.Ordinal))
-                {
-                    _logger.LogInformation("SettingsService: Normalizing and persisting {Key}. Old='{Old}', New='{New}'", key, originalStoredValue, normalized);
-                    await _settingsStore.UpsertAsync(key, normalized);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to normalize/persist {Key}", key);
-            }
+             // Placeholder to indicate separation
         }
 
         // Synchronous getters now use in-memory cache
         public UserSettings GetUserSettings()
         {
+            // Ensure latest directory state is reflected in cache
+            // (Note: This creates new lists every call, which is safer but might be slightly slower. 
+            // Given low frequency, it's acceptable.)
+            SyncDirectoriesFromService();
+            SyncThemeFromService();
             _logger.LogDebug("SettingsService: GetUserSettings called. Current AssetDirectories count: {Count}", _cache.AssetDirectories.Count);
             return _cache;
         }
@@ -751,16 +470,16 @@ namespace Pivot.Services
 
         public async Task SetTheme(ElementTheme theme)
         {
-            _cache.AppTheme = theme;
-            await _settingsStore.UpsertAsync("AppTheme", theme.ToString());
+            await _themeSettings.SetThemeAsync(theme);
+            SyncThemeFromService();
         }
 
         public BackdropType GetBackdropType() => _cache.AppBackdropType;
 
         public async Task SetBackdropType(BackdropType type)
         {
-            _cache.AppBackdropType = type;
-            await _settingsStore.UpsertAsync("AppBackdropType", type.ToString());
+            await _themeSettings.SetBackdropTypeAsync(type);
+            SyncThemeFromService();
         }
 
         // Export output directory accessors
@@ -770,15 +489,9 @@ namespace Pivot.Services
         // Persist the code save output directory under the new key used by Preferences > Code > Save.
         public async Task SetExportOutputDirectoryAsync(string path)
         {
-            _cache.CodeSaveOutputDirectory = path ?? string.Empty;
-            try
-            {
-                await _settingsStore.UpsertAsync("Code.Save.OutputDirectory", _cache.CodeSaveOutputDirectory);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Code.Save.OutputDirectory.");
-            }
+             // Delegate to new service
+             await _directorySettings.SetCodeSaveOutputDirectoryAsync(path);
+             SyncDirectoriesFromService();
         }
 
         public Pivot.Models.CodeExportFormat GetCodeExportFormat()
@@ -851,93 +564,14 @@ namespace Pivot.Services
 
         public async Task AddDirectoryAsync(DirectoryCategory category, string path)
         {
-            if (string.IsNullOrWhiteSpace(path)) return;
-
-            string key = category switch
-            {
-                DirectoryCategory.Asset => "AssetDirectories",
-                DirectoryCategory.Image => "ImageDirectories",
-                DirectoryCategory.Project => "ProjectDirectories",
-                DirectoryCategory.Code => "CodeDirectories",
-                _ => throw new ArgumentOutOfRangeException(nameof(category))
-            };
-
-            var list = category switch
-            {
-                DirectoryCategory.Asset => _cache.AssetDirectories,
-                DirectoryCategory.Image => _cache.ImageDirectories,
-                DirectoryCategory.Project => _cache.ProjectDirectories,
-                DirectoryCategory.Code => _cache.CodeDirectories,
-                _ => throw new ArgumentOutOfRangeException(nameof(category))
-            };
-
-            _logger.LogDebug("[SettingsService] AddDirectoryAsync: Category={Category}, Path='{Path}', Key='{Key}'", category, path, key);
-            _logger.LogDebug("[SettingsService] AddDirectoryAsync: Current cache list for {Key}: {List}", key, string.Join(", ", list));
-
-            if (!list.Contains(path))
-            {
-                list.Add(path);
-                string serializedList = JsonSerializer.Serialize(list);
-                _logger.LogDebug("[SettingsService] AddDirectoryAsync: New serialized list for {Key}: {SerializedList}", key, serializedList);
-                await _settingsStore.UpsertAsync(key, serializedList);
-                _logger.LogDebug("[SettingsService] AddDirectoryAsync: Successfully upserted for {Key}.", key);
-                // ディレクトリ追加メッセージを送信
-                _messenger.Send(new DirectoryChangedMessage(new DirectoryChangedMessageData
-                {
-                    Category = category,
-                    Path = path,
-                    Type = DirectoryChangedMessageData.ChangeType.Added
-                }));
-            }
-            else
-            {
-                _logger.LogDebug("[SettingsService] AddDirectoryAsync: Path '{Path}' already exists in cache for {Key}.", path, key);
-            }
+            await _directorySettings.AddDirectoryAsync(category, path);
+            SyncDirectoriesFromService();
         }
-
+        
         public async Task RemoveDirectoryAsync(DirectoryCategory category, string path)
         {
-            if (string.IsNullOrWhiteSpace(path)) return;
-
-            string key = category switch
-            {
-                DirectoryCategory.Asset => "AssetDirectories",
-                DirectoryCategory.Image => "ImageDirectories",
-                DirectoryCategory.Project => "ProjectDirectories",
-                DirectoryCategory.Code => "CodeDirectories",
-                _ => throw new ArgumentOutOfRangeException(nameof(category))
-            };
-
-            var list = category switch
-            {
-                DirectoryCategory.Asset => _cache.AssetDirectories,
-                DirectoryCategory.Image => _cache.ImageDirectories,
-                DirectoryCategory.Project => _cache.ProjectDirectories,
-                DirectoryCategory.Code => _cache.CodeDirectories,
-                _ => throw new ArgumentOutOfRangeException(nameof(category))
-            };
-
-            _logger.LogDebug("[SettingsService] RemoveDirectoryAsync: Category={Category}, Path='{Path}', Key='{Key}'", category, path, key);
-            _logger.LogDebug("[SettingsService] RemoveDirectoryAsync: Current cache list for {Key}: {List}", key, string.Join(", ", list));
-
-            if (list.Remove(path))
-            {
-                string serializedList = JsonSerializer.Serialize(list);
-                _logger.LogDebug("[SettingsService] RemoveDirectoryAsync: New serialized list for {Key}: {SerializedList}", key, serializedList);
-                await _settingsStore.UpsertAsync(key, serializedList);
-                _logger.LogDebug("[SettingsService] RemoveDirectoryAsync: Successfully upserted after removal for {Key}.", key);
-                // ディレクトリ削除メッセージを送信
-                _messenger.Send(new DirectoryChangedMessage(new DirectoryChangedMessageData
-                {
-                    Category = category,
-                    Path = path,
-                    Type = DirectoryChangedMessageData.ChangeType.Removed
-                }));
-            }
-            else
-            {
-                _logger.LogDebug("[SettingsService] RemoveDirectoryAsync: Path '{Path}' not found in cache for {Key}.", path, key);
-            }
+            await _directorySettings.RemoveDirectoryAsync(category, path);
+            SyncDirectoriesFromService();
         }
 
         public MenuDisplayMode GetMenuDisplayMode() => _cache.MenuDisplayMode;
@@ -1198,194 +832,102 @@ namespace Pivot.Services
             }
         }
 
-        private async Task LoadDominantTemplateSettingsAsync()
-        {
-            try
-            {
-                var color = await _settingsStore.GetAsync("Color.Dominant.Color");
-                if (!string.IsNullOrWhiteSpace(color))
-                {
-                    _cache.DominantColor = color;
-                }
-                var variation = await _settingsStore.GetAsync("Color.Dominant.Variation");
-                if (!string.IsNullOrWhiteSpace(variation) &&
-                    double.TryParse(variation, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedVariation))
-                {
-                    _cache.DominantVariation = Math.Clamp(parsedVariation, 0.0, 1.0);
-                }
-                var autoAccent = await _settingsStore.GetAsync("Color.Dominant.GenerateAccent");
-                if (bool.TryParse(autoAccent, out var parsedAccent))
-                {
-                    _cache.DominantGenerateAccent = parsedAccent;
-                }
-                var accentStrength = await _settingsStore.GetAsync("Color.Dominant.AccentStrength");
-                if (!string.IsNullOrWhiteSpace(accentStrength) &&
-                    double.TryParse(accentStrength, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedStrength))
-                {
-                    _cache.DominantAccentStrength = Math.Clamp(parsedStrength, 0.0, 1.0);
-                }
-                _logger.LogInformation("SettingsService: Loaded Dominant template settings.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Dominant template settings.");
-            }
-        }
 
-        private async Task LoadRandomTemplateSettingsAsync()
-        {
-            try
-            {
-                var seed = await _settingsStore.GetAsync("Color.Random.Seed");
-                if (!string.IsNullOrWhiteSpace(seed) && int.TryParse(seed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSeed))
-                {
-                    _cache.RandomSeed = parsedSeed;
-                }
-                var randomness = await _settingsStore.GetAsync("Color.Random.Randomness");
-                if (!string.IsNullOrWhiteSpace(randomness) &&
-                    double.TryParse(randomness, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedRandomness))
-                {
-                    _cache.RandomnessLevel = Math.Clamp(parsedRandomness, 0.0, 1.0);
-                }
-                var satMin = await _settingsStore.GetAsync("Color.Random.SaturationMin");
-                if (!string.IsNullOrWhiteSpace(satMin) &&
-                    double.TryParse(satMin, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedSatMin))
-                {
-                    _cache.RandomSaturationMin = Math.Clamp(parsedSatMin, 0.0, 1.0);
-                }
-                var satMax = await _settingsStore.GetAsync("Color.Random.SaturationMax");
-                if (!string.IsNullOrWhiteSpace(satMax) &&
-                    double.TryParse(satMax, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedSatMax))
-                {
-                    _cache.RandomSaturationMax = Math.Clamp(parsedSatMax, 0.0, 1.0);
-                }
-                var brightnessMin = await _settingsStore.GetAsync("Color.Random.BrightnessMin");
-                if (!string.IsNullOrWhiteSpace(brightnessMin) &&
-                    double.TryParse(brightnessMin, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedBrightnessMin))
-                {
-                    _cache.RandomBrightnessMin = Math.Clamp(parsedBrightnessMin, 0.0, 1.0);
-                }
-                var brightnessMax = await _settingsStore.GetAsync("Color.Random.BrightnessMax");
-                if (!string.IsNullOrWhiteSpace(brightnessMax) &&
-                    double.TryParse(brightnessMax, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedBrightnessMax))
-                {
-                    _cache.RandomBrightnessMax = Math.Clamp(parsedBrightnessMax, 0.0, 1.0);
-                }
-                var allowExtreme = await _settingsStore.GetAsync("Color.Random.AllowExtreme");
-                if (bool.TryParse(allowExtreme, out var parsedExtreme))
-                {
-                    _cache.RandomAllowExtreme = parsedExtreme;
-                }
-                _logger.LogInformation("SettingsService: Loaded Random template settings.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Random template settings.");
-            }
-        }
 
         public TextColorTemplate GetTextColorTemplate() => _cache.PreferredTextColorTemplate;
 
         public async Task SetTextColorTemplateAsync(TextColorTemplate template)
         {
-            _cache.PreferredTextColorTemplate = template;
-            await PersistSettingAsync("Color.TextTemplate", template.ToString());
+            await _themeSettings.SetTextColorTemplateAsync(template);
+            SyncThemeFromService();
         }
 
         public string GetDominantColor() => _cache.DominantColor;
 
         public async Task SetDominantColorAsync(string hex)
         {
-            if (string.IsNullOrWhiteSpace(hex)) return;
-            _cache.DominantColor = hex;
-            await PersistSettingAsync("Color.Dominant.Color", hex);
+            await _themeSettings.SetDominantColorAsync(hex);
+            SyncThemeFromService();
         }
 
         public double GetDominantVariation() => _cache.DominantVariation;
 
         public async Task SetDominantVariationAsync(double value)
         {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.DominantVariation = clamped;
-            await PersistSettingAsync("Color.Dominant.Variation", clamped.ToString(CultureInfo.InvariantCulture));
+            await _themeSettings.SetDominantVariationAsync(value);
+            SyncThemeFromService();
         }
 
         public bool GetDominantGenerateAccent() => _cache.DominantGenerateAccent;
 
         public async Task SetDominantGenerateAccentAsync(bool value)
         {
-            _cache.DominantGenerateAccent = value;
-            await PersistSettingAsync("Color.Dominant.GenerateAccent", value.ToString());
+            await _themeSettings.SetDominantGenerateAccentAsync(value);
+            SyncThemeFromService();
         }
 
         public double GetDominantAccentStrength() => _cache.DominantAccentStrength;
 
         public async Task SetDominantAccentStrengthAsync(double value)
         {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.DominantAccentStrength = clamped;
-            await PersistSettingAsync("Color.Dominant.AccentStrength", clamped.ToString(CultureInfo.InvariantCulture));
+            await _themeSettings.SetDominantAccentStrengthAsync(value);
+            SyncThemeFromService();
         }
 
         public int GetRandomSeed() => _cache.RandomSeed;
 
         public async Task SetRandomSeedAsync(int value)
         {
-            _cache.RandomSeed = value;
-            await PersistSettingAsync("Color.Random.Seed", value.ToString(CultureInfo.InvariantCulture));
+            await _themeSettings.SetRandomSeedAsync(value);
+            SyncThemeFromService();
         }
 
         public double GetRandomnessLevel() => _cache.RandomnessLevel;
 
         public async Task SetRandomnessLevelAsync(double value)
         {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.RandomnessLevel = clamped;
-            await PersistSettingAsync("Color.Random.Randomness", clamped.ToString(CultureInfo.InvariantCulture));
+            await _themeSettings.SetRandomnessLevelAsync(value);
+            SyncThemeFromService();
         }
 
         public double GetRandomSaturationMin() => _cache.RandomSaturationMin;
 
         public async Task SetRandomSaturationMinAsync(double value)
         {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.RandomSaturationMin = clamped;
-            await PersistSettingAsync("Color.Random.SaturationMin", clamped.ToString(CultureInfo.InvariantCulture));
+            await _themeSettings.SetRandomSaturationMinAsync(value);
+            SyncThemeFromService();
         }
 
         public double GetRandomSaturationMax() => _cache.RandomSaturationMax;
 
         public async Task SetRandomSaturationMaxAsync(double value)
         {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.RandomSaturationMax = clamped;
-            await PersistSettingAsync("Color.Random.SaturationMax", clamped.ToString(CultureInfo.InvariantCulture));
+            await _themeSettings.SetRandomSaturationMaxAsync(value);
+            SyncThemeFromService();
         }
 
         public double GetRandomBrightnessMin() => _cache.RandomBrightnessMin;
 
         public async Task SetRandomBrightnessMinAsync(double value)
         {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.RandomBrightnessMin = clamped;
-            await PersistSettingAsync("Color.Random.BrightnessMin", clamped.ToString(CultureInfo.InvariantCulture));
+            await _themeSettings.SetRandomBrightnessMinAsync(value);
+            SyncThemeFromService();
         }
 
         public double GetRandomBrightnessMax() => _cache.RandomBrightnessMax;
 
         public async Task SetRandomBrightnessMaxAsync(double value)
         {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.RandomBrightnessMax = clamped;
-            await PersistSettingAsync("Color.Random.BrightnessMax", clamped.ToString(CultureInfo.InvariantCulture));
+            await _themeSettings.SetRandomBrightnessMaxAsync(value);
+            SyncThemeFromService();
         }
 
         public bool GetRandomAllowExtreme() => _cache.RandomAllowExtreme;
 
         public async Task SetRandomAllowExtremeAsync(bool value)
         {
-            _cache.RandomAllowExtreme = value;
-            await PersistSettingAsync("Color.Random.AllowExtreme", value.ToString());
+            await _themeSettings.SetRandomAllowExtremeAsync(value);
+            SyncThemeFromService();
         }
 
         private async Task PersistSettingAsync(string key, string value)
@@ -1414,133 +956,58 @@ namespace Pivot.Services
 
         public async Task SetTextColorOverrideAsync(string key, string hex)
         {
-            if (string.IsNullOrWhiteSpace(key)) return;
-            if (_cache.TextColorOverrides == null)
-            {
-                _cache.TextColorOverrides = new Dictionary<string, string>();
-            }
-            _cache.TextColorOverrides[key] = hex ?? string.Empty;
-            try
-            {
-                await _settingsStore.UpsertAsync("Color.TextOverrides", JsonSerializer.Serialize(_cache.TextColorOverrides));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.TextOverrides.");
-            }
+            await _themeSettings.SetTextColorOverrideAsync(key, hex);
+            SyncThemeFromService();
         }
 
         public async Task ClearAllTextColorOverridesAsync()
         {
-            _cache.TextColorOverrides = new Dictionary<string, string>();
-            try
-            {
-                await _settingsStore.UpsertAsync("Color.TextOverrides", JsonSerializer.Serialize(_cache.TextColorOverrides));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to clear Color.TextOverrides.");
-            }
+            await _themeSettings.ClearAllTextColorOverridesAsync();
+            SyncThemeFromService();
         }
 
         public bool IsTextColorCustomizationEnabled() => _cache.IsTextColorCustomizationEnabled;
 
         public async Task SetTextColorCustomizationEnabledAsync(bool enabled)
         {
-            _cache.IsTextColorCustomizationEnabled = enabled;
-            try
-            {
-                await _settingsStore.UpsertAsync("Color.TextCustomizationEnabled", enabled.ToString());
-                _logger.LogInformation("SettingsService: Set Color.TextCustomizationEnabled to {Enabled}", enabled);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.TextCustomizationEnabled.");
-            }
+            await _themeSettings.SetTextColorCustomizationEnabledAsync(enabled);
+            SyncThemeFromService();
         }
 
         // Image selection highlight settings
         public string GetImageSelectionColor() => _cache.ImageSelectionColor;
         public async Task SetImageSelectionColorAsync(string color)
         {
-            _cache.ImageSelectionColor = color ?? "#0078D4";
-            try
-            {
-                await _settingsStore.UpsertAsync("Image.SelectionColor", _cache.ImageSelectionColor);
-                _logger.LogInformation("SettingsService: Set Image.SelectionColor to {Color}", _cache.ImageSelectionColor);
-                _messenger.Send(new Messages.SettingsChangedMessage("ImageSelectionColor"));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SelectionColor.");
-            }
+            await _themeSettings.SetImageSelectionColorAsync(color);
+            SyncThemeFromService();
         }
 
         public double GetImageSelectionOpacity() => _cache.ImageSelectionOpacity;
         public async Task SetImageSelectionOpacityAsync(double opacity)
         {
-            var clamped = Math.Clamp(opacity, 0.0, 1.0);
-            _cache.ImageSelectionOpacity = clamped;
-            try
-            {
-                await _settingsStore.UpsertAsync("Image.SelectionOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
-                _logger.LogInformation("SettingsService: Set Image.SelectionOpacity to {Opacity}", clamped);
-                _messenger.Send(new Messages.SettingsChangedMessage("ImageSelectionOpacity"));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SelectionOpacity.");
-            }
+            await _themeSettings.SetImageSelectionOpacityAsync(opacity);
+            SyncThemeFromService();
         }
 
         public double GetImageSelectionBorderThickness() => _cache.ImageSelectionBorderThickness;
         public async Task SetImageSelectionBorderThicknessAsync(double thickness)
         {
-            var clamped = Math.Max(0.0, thickness);
-            _cache.ImageSelectionBorderThickness = clamped;
-            try
-            {
-                await _settingsStore.UpsertAsync("Image.SelectionBorderThickness", clamped.ToString("G", CultureInfo.InvariantCulture));
-                _logger.LogInformation("SettingsService: Set Image.SelectionBorderThickness to {Thickness}", clamped);
-                _messenger.Send(new Messages.SettingsChangedMessage("ImageSelectionBorderThickness"));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SelectionBorderThickness.");
-            }
+            await _themeSettings.SetImageSelectionBorderThicknessAsync(thickness);
+            SyncThemeFromService();
         }
 
         public string GetImageDragSelectionColor() => _cache.ImageDragSelectionColor;
         public async Task SetImageDragSelectionColorAsync(string color)
         {
-            _cache.ImageDragSelectionColor = color ?? "#0078D4";
-            try
-            {
-                await _settingsStore.UpsertAsync("Image.DragSelectionColor", _cache.ImageDragSelectionColor);
-                _logger.LogInformation("SettingsService: Set Image.DragSelectionColor to {Color}", _cache.ImageDragSelectionColor);
-                _messenger.Send(new Messages.SettingsChangedMessage("ImageDragSelectionColor"));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.DragSelectionColor.");
-            }
+            await _themeSettings.SetImageDragSelectionColorAsync(color);
+            SyncThemeFromService();
         }
 
         public double GetImageDragSelectionOpacity() => _cache.ImageDragSelectionOpacity;
         public async Task SetImageDragSelectionOpacityAsync(double opacity)
         {
-            var clamped = Math.Clamp(opacity, 0.0, 1.0);
-            _cache.ImageDragSelectionOpacity = clamped;
-            try
-            {
-                await _settingsStore.UpsertAsync("Image.DragSelectionOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
-                _logger.LogInformation("SettingsService: Set Image.DragSelectionOpacity to {Opacity}", clamped);
-                _messenger.Send(new Messages.SettingsChangedMessage("ImageDragSelectionOpacity"));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.DragSelectionOpacity.");
-            }
+            await _themeSettings.SetImageDragSelectionOpacityAsync(opacity);
+            SyncThemeFromService();
         }
 
     }
