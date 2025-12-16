@@ -12,6 +12,7 @@ namespace Pivot.ViewModels
     {
         private readonly HashSet<T> _selectedItems = new();
         private T? _lastSelectedItem;
+        public T? LastSelectedItem => _lastSelectedItem;
 
         public ObservableCollection<T> SelectedItems { get; } = new();
 

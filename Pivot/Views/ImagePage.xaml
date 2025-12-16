@@ -7,6 +7,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:conv="using:Pivot.Converters"
+    xmlns:controls="using:Pivot.Controls"
     mc:Ignorable="d"
     x:Name="ImagePageRoot"
     Background="Transparent">
@@ -151,57 +152,7 @@
                 </ScrollViewer>
 
                 <!-- 画像プレビューオーバーレイ -->
-                <Grid x:Name="ImagePreviewOverlay" 
-                      Visibility="Collapsed" 
-                      Background="#CC000000" 
-                      IsHitTestVisible="True" 
-                      PointerPressed="ImagePreviewOverlay_PointerPressed"
-                      PointerWheelChanged="ImagePreviewOverlay_PointerWheelChanged">
-                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Padding="48">
-                        <Border x:Name="ImagePreviewContainer" 
-                                Background="Transparent"
-                                PointerPressed="ImagePreviewContainer_PointerPressed"
-                                PointerMoved="ImagePreviewContainer_PointerMoved"
-                                PointerReleased="ImagePreviewContainer_PointerReleased">
-                            <ScrollViewer x:Name="ImagePreviewScrollViewer"
-                                        ZoomMode="Enabled"
-                                        MinZoomFactor="0.1"
-                                        MaxZoomFactor="10.0"
-                                        HorizontalScrollBarVisibility="Auto"
-                                        VerticalScrollBarVisibility="Auto"
-                                        HorizontalScrollMode="Enabled"
-                                        VerticalScrollMode="Enabled"
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"
-                                        Background="Transparent">
-                                <Grid HorizontalAlignment="Center" 
-                                      VerticalAlignment="Center"
-                                      Background="Transparent"
-                                      PointerPressed="ImagePreviewBackground_PointerPressed">
-                                    <Image x:Name="ImagePreviewImage" 
-                                           Stretch="Uniform"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                                </Grid>
-                            </ScrollViewer>
-                        </Border>
-                        <!-- 閉じるボタン -->
-                        <Button x:Name="ImagePreviewCloseButton"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Top"
-                                Margin="16"
-                                Width="40"
-                                Height="40"
-                                Background="#CC000000"
-                                BorderThickness="0"
-                                CornerRadius="20"
-                                Click="ImagePreviewCloseButton_Click">
-                            <Button.Content>
-                                <FontIcon Glyph="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="20"/>
-                            </Button.Content>
-                        </Button>
-                    </Grid>
-                </Grid>
+                <controls:ImagePreviewControl x:Name="PreviewControl" Grid.RowSpan="2" />
             </Grid>
         </Border>
     </Grid>

@@ -251,6 +251,41 @@ namespace Pivot.ViewModels
             try { _loadCts?.Cancel(); } catch { }
         }
 
+        public void HandleSelection(TemplateItem item, bool isCtrl, bool isShift)
+        {
+            if (item == null) return;
+
+            // Shift+Click: 範囲選択
+            if (isShift && SelectionManager.LastSelectedItem != null)
+            {
+                var start = Images.IndexOf(SelectionManager.LastSelectedItem);
+                var end = Images.IndexOf(item);
+
+                if (start >= 0 && end >= 0)
+                {
+                    var range = new List<TemplateItem>();
+                    int low = Math.Min(start, end);
+                    int high = Math.Max(start, end);
+
+                    // 範囲内のアイテムを取得
+                    for (int i = low; i <= high; i++)
+                    {
+                        if (i < Images.Count)
+                        {
+                            range.Add(Images[i]);
+                        }
+                    }
+
+                    // 範囲選択を実行（既存の選択に追加）
+                    SelectionManager.SelectRange(range);
+                    return;
+                }
+            }
+
+            // 通常のクリックまたはCtrl+Click
+            SelectionManager.SelectItem(item, isCtrl, isShift);
+        }
+
         private static int EstimateHeightFromUrl(string? url)
         {
             if (string.IsNullOrEmpty(url)) return 180;

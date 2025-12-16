@@ -1468,6 +1468,7 @@ namespace Pivot.Services
             {
                 await _settingsStore.UpsertAsync("Image.SelectionColor", _cache.ImageSelectionColor);
                 _logger.LogInformation("SettingsService: Set Image.SelectionColor to {Color}", _cache.ImageSelectionColor);
+                _messenger.Send(new Messages.SettingsChangedMessage("ImageSelectionColor"));
             }
             catch (Exception ex)
             {
@@ -1484,6 +1485,7 @@ namespace Pivot.Services
             {
                 await _settingsStore.UpsertAsync("Image.SelectionOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
                 _logger.LogInformation("SettingsService: Set Image.SelectionOpacity to {Opacity}", clamped);
+                _messenger.Send(new Messages.SettingsChangedMessage("ImageSelectionOpacity"));
             }
             catch (Exception ex)
             {
@@ -1500,6 +1502,7 @@ namespace Pivot.Services
             {
                 await _settingsStore.UpsertAsync("Image.SelectionBorderThickness", clamped.ToString("G", CultureInfo.InvariantCulture));
                 _logger.LogInformation("SettingsService: Set Image.SelectionBorderThickness to {Thickness}", clamped);
+                _messenger.Send(new Messages.SettingsChangedMessage("ImageSelectionBorderThickness"));
             }
             catch (Exception ex)
             {
@@ -1515,6 +1518,7 @@ namespace Pivot.Services
             {
                 await _settingsStore.UpsertAsync("Image.DragSelectionColor", _cache.ImageDragSelectionColor);
                 _logger.LogInformation("SettingsService: Set Image.DragSelectionColor to {Color}", _cache.ImageDragSelectionColor);
+                _messenger.Send(new Messages.SettingsChangedMessage("ImageDragSelectionColor"));
             }
             catch (Exception ex)
             {
@@ -1531,6 +1535,7 @@ namespace Pivot.Services
             {
                 await _settingsStore.UpsertAsync("Image.DragSelectionOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
                 _logger.LogInformation("SettingsService: Set Image.DragSelectionOpacity to {Opacity}", clamped);
+                _messenger.Send(new Messages.SettingsChangedMessage("ImageDragSelectionOpacity"));
             }
             catch (Exception ex)
             {

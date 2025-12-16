@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Xaml.Controls;
+using CommunityToolkit.Mvvm.Messaging;
+using Pivot.Messages;
 using Pivot.ViewModels;
 using System.ComponentModel;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -16,12 +18,12 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace Pivot.Views
 {
-    public sealed partial class ModelPage : Page
+    public sealed partial class ModelPage : Page, IRecipient<SettingsChangedMessage>
     {
         public ModelViewModel ViewModel { get; set; }
 
         private TemplateItem? _lastSelectedItemForRange;
-        private System.Threading.CancellationTokenSource? _borderThicknessUpdateCts;
+
 
         public ModelPage()
         {
@@ -58,22 +60,18 @@ namespace Pivot.Views
 
             this.Unloaded += ModelPage_Unloaded;
             
-            UpdateBorderThicknessPeriodically();
+
+            // Register for messages
+            WeakReferenceMessenger.Default.Register<SettingsChangedMessage>(this);
         }
-        
-        private async void UpdateBorderThicknessPeriodically()
+
+        public void Receive(SettingsChangedMessage message)
         {
-            _borderThicknessUpdateCts = new System.Threading.CancellationTokenSource();
-            var ct = _borderThicknessUpdateCts.Token;
-            
-            while (!ct.IsCancellationRequested)
+            if (message.Value == "ImageSelectionBorderThickness" && ViewModel != null)
             {
-                try
+                DispatcherQueue.TryEnqueue(() =>
                 {
-                    await System.Threading.Tasks.Task.Delay(500, ct);
-                    if (ct.IsCancellationRequested) break;
-                    
-                    if (ViewModel != null)
+                    try
                     {
                         var settings = App.Current.Services.GetService<SettingsService>();
                         if (settings != null)
@@ -85,16 +83,18 @@ namespace Pivot.Views
                             }
                         }
                     }
-                }
-                catch (System.OperationCanceledException) { break; }
-                catch { }
+                    catch { }
+                });
             }
         }
+        
+
 
         private void ModelPage_Unloaded(object sender, RoutedEventArgs e)
         {
             try { ViewModel?.CancelLoads(); } catch { }
-            try { _borderThicknessUpdateCts?.Cancel(); } catch { }
+            // Clean up message registration
+            try { WeakReferenceMessenger.Default.UnregisterAll(this); } catch { }
         }
 
         private void ModelItem_PointerPressed(object sender, PointerRoutedEventArgs e)
