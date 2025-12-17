@@ -9,8 +9,11 @@
 
     <Grid x:Name="ImagePreviewOverlay" 
           Visibility="Collapsed" 
-          Background="{ThemeResource SystemControlPageBackgroundChromeLowBrush}"
           PointerPressed="ImagePreviewOverlay_PointerPressed">
+        
+        <Grid.Background>
+            <AcrylicBrush TintColor="Black" TintOpacity="0.4" FallbackColor="#99000000"/>
+        </Grid.Background>
 
         <Border x:Name="ImagePreviewContainer"
                 HorizontalAlignment="Center" 
@@ -22,13 +25,20 @@
                           ZoomMode="Enabled"
                           MinZoomFactor="0.1"
                           MaxZoomFactor="5.0"
+                          PointerPressed="ImagePreviewScrollViewer_PointerPressed"
+                          PointerMoved="ImagePreviewScrollViewer_PointerMoved"
+                          PointerReleased="ImagePreviewScrollViewer_PointerReleased"
+                          PointerCanceled="ImagePreviewScrollViewer_PointerReleased"
+                          PointerWheelChanged="ImagePreviewScrollViewer_PointerWheelChanged"
+
                           HorizontalAlignment="Stretch" 
                           VerticalAlignment="Stretch">
                 
                 <Image x:Name="ImagePreviewImage" 
                        Stretch="Uniform"
                        HorizontalAlignment="Center" 
-                       VerticalAlignment="Center"/>
+                       VerticalAlignment="Center"
+                       DoubleTapped="ImagePreviewImage_DoubleTapped"/>
             </ScrollViewer>
         </Border>
 
