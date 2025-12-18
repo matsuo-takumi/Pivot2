@@ -28,6 +28,7 @@
                        Background="{ThemeResource ViewportMicaBackgroundBrush}"
                        HorizontalAlignment="Stretch"
                        VerticalAlignment="Stretch"
+                       IsInertiaEnabled="True"
                        MinWidth="100"
                        MinHeight="100">
             <hx:Viewport3DX.Items>
