@@ -39,14 +39,8 @@ namespace Pivot.Views
 
         private static List<CustomFilter> GetDefaultAssetFilters()
         {
-            return new List<CustomFilter>
-            {
-                new CustomFilter { Name = "3D", AllowedExtensions = new List<string>{ ".obj",".fbx",".gltf",".glb",".dae" }, IsBuiltIn=true },
-                new CustomFilter { Name = "Images", AllowedExtensions = new List<string>{ ".png",".jpg",".jpeg",".bmp",".gif",".webp",".tga",".tif",".tiff" }, IsBuiltIn=true },
-                new CustomFilter { Name = "Video", AllowedExtensions = new List<string>{ ".mp4",".mov",".avi",".mkv",".webm" }, IsBuiltIn=true },
-                new CustomFilter { Name = "Audio", AllowedExtensions = new List<string>{ ".mp3",".wav",".ogg",".flac",".aac" }, IsBuiltIn=true },
-                new CustomFilter { Name = "Other", AllowedExtensions = new List<string>(), IsBuiltIn=true }
-            };
+            // デフォルトタグなし - ユーザーが自分で作成
+            return new List<CustomFilter>();
         }
     }
 }

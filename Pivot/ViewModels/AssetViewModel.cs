@@ -70,6 +70,9 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private double _selectionBorderThickness = 2.0;
 
+        [ObservableProperty]
+        private TemplateItem? _selectedAsset;
+
         public SelectionManagerViewModel<TemplateItem> SelectionManager { get; }
 
         [RelayCommand]
@@ -195,8 +198,8 @@ namespace Pivot.ViewModels
         public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
         {
             if (directories == null) return;
-            // var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
-            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tga", ".tif", ".tiff", ".mp4", ".mov", ".avi", ".mkv", ".webm", ".obj", ".fbx", ".glb", ".mp3", ".wav", ".ogg", ".flac", ".aac" };
+            
+            // 3Dモデルファイルのみを読み込み対象とする
             var files = new List<string>();
             await Task.Run(() =>
             {
@@ -207,7 +210,8 @@ namespace Pivot.ViewModels
                         if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
                         foreach (var f in Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
                         {
-                            if (exts.Contains(Path.GetExtension(f)))
+                            // FileTypeHelperでModel判定されるファイルのみ追加
+                            if (FileTypeHelper.GetKindByExtension(f) == AssetKind.Model)
                             {
                                 files.Add(f);
                                 if (files.Count >= maxFiles) return;
@@ -239,16 +243,9 @@ namespace Pivot.ViewModels
 
             foreach (var f in files)
             {
-                var ext = Path.GetExtension(f);
-                AssetKind kind = AssetKind.Other;
-                if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".obj",".fbx",".glb" }.Contains(ext)) kind = AssetKind.Model;
-                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png",".jpg",".jpeg",".bmp",".gif",".webp",".tga",".tif",".tiff" }.Contains(ext)) kind = AssetKind.Image;
-                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp4",".mov",".avi",".mkv",".webm" }.Contains(ext)) kind = AssetKind.Video;
-                else if (new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".mp3",".wav",".ogg",".flac",".aac" }.Contains(ext)) kind = AssetKind.Audio;
-
                 var item = new TemplateItem
                 {
-                    Kind = kind,
+                    Kind = AssetKind.Model,
                     Path = f,
                     Name = Path.GetFileName(f)
                 };

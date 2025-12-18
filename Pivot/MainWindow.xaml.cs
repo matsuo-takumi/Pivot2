@@ -85,7 +85,6 @@ namespace Pivot
             // 初期ナビゲーション（ViewModelからの要求でも遷移可能）
             NavigateTo(NavigationRegion.Asset);
             NavigateTo(NavigationRegion.Image);
-            NavigateTo(NavigationRegion.Model);
             NavigateTo(NavigationRegion.Project);
             NavigateTo(NavigationRegion.Code);
             NavigateTo(NavigationRegion.Preference);
@@ -470,9 +469,6 @@ namespace Pivot
                     case "Image":
                         NavigateTo(NavigationRegion.Image);
                         break;
-                    case "Model":
-                        NavigateTo(NavigationRegion.Model);
-                        break;
                     case "Project":
                         NavigateTo(NavigationRegion.Project);
                         break;
@@ -504,13 +500,6 @@ namespace Pivot
                     if (ImageFrame.Content?.GetType() != typeof(Views.ImagePage))
                     {
                         ImageFrame.Navigate(typeof(Views.ImagePage), null, transition);
-                    }
-                    break;
-                case NavigationRegion.Model:
-                    // 既にModelPageが表示されている場合は再ナビゲートしない
-                    if (ModelFrame.Content?.GetType() != typeof(Views.ModelPage))
-                    {
-                        ModelFrame.Navigate(typeof(Views.ModelPage), null, transition);
                     }
                     break;
                 case NavigationRegion.Project:

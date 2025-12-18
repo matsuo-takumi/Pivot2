@@ -64,10 +64,56 @@ namespace Pivot.Controls
                 };
             }
 
-            CreateGrid();
+            CreateGrid(false); // Default Y-Up
         }
 
-        private void CreateGrid()
+        private void UpAxisComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var isZUp = (sender as ComboBox)?.SelectedIndex == 1;
+            UpdateCameraOrientation(isZUp);
+            CreateGrid(isZUp);
+            
+            // モデルが表示されている場合はフィットさせる
+            var viewport = this.FindName("Viewport3D") as HelixToolkit.WinUI.Viewport3DX;
+            if (viewport?.Camera != null)
+            {
+                // 少し遅延させてカメラ更新を反映
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    try { viewport.Camera.ZoomExtents(viewport, 500); } catch { }
+                });
+            }
+        }
+
+        private void UpdateCameraOrientation(bool isZUp)
+        {
+            var viewport = this.FindName("Viewport3D") as HelixToolkit.WinUI.Viewport3DX;
+            if (viewport?.Camera is HelixToolkit.WinUI.PerspectiveCamera camera)
+            {
+                if (isZUp)
+                {
+                    // Z-Up: Camera at (20, -20, 10) looking at (0, 0, 0)
+                    camera.UpDirection = new SharpDX.Vector3(0, 0, 1);
+                    camera.Position = new SharpDX.Vector3(20, -20, 10);
+                    camera.LookDirection = new SharpDX.Vector3(-20, 20, -10);
+                }
+                else
+                {
+                    // Y-Up: Camera at (20, 10, 20) looking at (0, 0, 0)
+                    camera.UpDirection = new SharpDX.Vector3(0, 1, 0);
+                    camera.Position = new SharpDX.Vector3(20, 10, 20);
+                    camera.LookDirection = new SharpDX.Vector3(-20, -10, -20);
+                }
+            }
+            
+            var dirLight = this.FindName("DirectionalLight") as HelixToolkit.WinUI.DirectionalLight3D;
+            if (dirLight != null)
+            {
+                dirLight.Direction = isZUp ? new SharpDX.Vector3(-1, 1, -1) : new SharpDX.Vector3(-1, -1, -1);
+            }
+        }
+
+        private void CreateGrid(bool isZUp)
         {
             var gridPresenter = this.FindName("GridPresenter") as HelixToolkit.WinUI.Element3DPresenter;
             if (gridPresenter == null) return;
@@ -82,8 +128,18 @@ namespace Pivot.Controls
             {
                 if (Math.Abs(i % majorStep) > 0.001f)
                 {
-                    lineBuilder.AddLine(new Vector3(i, 0, -gridSize), new Vector3(i, 0, gridSize));
-                    lineBuilder.AddLine(new Vector3(-gridSize, 0, i), new Vector3(gridSize, 0, i));
+                    if (isZUp)
+                    {
+                        // XY plane (Z=0)
+                        lineBuilder.AddLine(new Vector3(i, -gridSize, 0), new Vector3(i, gridSize, 0));
+                        lineBuilder.AddLine(new Vector3(-gridSize, i, 0), new Vector3(gridSize, i, 0));
+                    }
+                    else
+                    {
+                        // XZ plane (Y=0)
+                        lineBuilder.AddLine(new Vector3(i, 0, -gridSize), new Vector3(i, 0, gridSize));
+                        lineBuilder.AddLine(new Vector3(-gridSize, 0, i), new Vector3(gridSize, 0, i));
+                    }
                 }
             }
 
@@ -98,8 +154,18 @@ namespace Pivot.Controls
             var majorLineBuilder = new HelixToolkit.SharpDX.Core.LineBuilder();
             for (float i = -gridSize; i <= gridSize; i += majorStep)
             {
-                majorLineBuilder.AddLine(new Vector3(i, 0, -gridSize), new Vector3(i, 0, gridSize));
-                majorLineBuilder.AddLine(new Vector3(-gridSize, 0, i), new Vector3(gridSize, 0, i));
+                if (isZUp)
+                {
+                    // XY plane (Z=0)
+                    majorLineBuilder.AddLine(new Vector3(i, -gridSize, 0), new Vector3(i, gridSize, 0));
+                    majorLineBuilder.AddLine(new Vector3(-gridSize, i, 0), new Vector3(gridSize, i, 0));
+                }
+                else
+                {
+                    // XZ plane (Y=0)
+                    majorLineBuilder.AddLine(new Vector3(i, 0, -gridSize), new Vector3(i, 0, gridSize));
+                    majorLineBuilder.AddLine(new Vector3(-gridSize, 0, i), new Vector3(gridSize, 0, i));
+                }
             }
 
             var majorGridGeometry = majorLineBuilder.ToLineGeometry3D();
@@ -177,21 +243,15 @@ namespace Pivot.Controls
                     {
                         if (ct.IsCancellationRequested) return;
 
-                        if (ext == ".fbx" || ext == ".glb" || ext == ".obj")
+                        // 全てのファイルをAssimpで読み込み試行（対応フォーマットはAssimp側で判断）
+                        try
                         {
-                            try
-                            {
-                                var importer = new Importer();
-                                assimpScene = importer.Load(filePath);
-                            }
-                            catch (Exception assimpEx)
-                            {
-                                errorMessage = $"モデルの読み込みに失敗しました: {assimpEx.Message}";
-                            }
+                            var importer = new Importer();
+                            assimpScene = importer.Load(filePath);
                         }
-                        else
+                        catch (Exception assimpEx)
                         {
-                            errorMessage = $"サポートされていない形式: {ext}";
+                            errorMessage = $"モデルの読み込みに失敗しました: {assimpEx.Message}";
                         }
                     }
                     catch (Exception ex)

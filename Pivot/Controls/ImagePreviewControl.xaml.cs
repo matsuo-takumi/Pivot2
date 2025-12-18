@@ -404,8 +404,12 @@ namespace Pivot.Controls
             var overlay = sender as FrameworkElement;
             if (overlay == null) return;
 
+            // 閉じるボタン自体のクリックは無視（ボタンのClickイベントで処理）
             if (IsOrDescendant(e.OriginalSource as DependencyObject, ImagePreviewCloseButton)) return;
-            if (IsPointInsideElement(e.GetCurrentPoint(overlay).Position, ImagePreviewImage, overlay)) return;
+            
+            // ズーム後も正しく動作するように、ImagePreviewContainer（Border）の領域でチェック
+            // ImagePreviewImageだとズーム時に座標変換が正しく機能しない場合がある
+            if (IsPointInsideElement(e.GetCurrentPoint(overlay).Position, ImagePreviewContainer, overlay)) return;
 
             Close();
             e.Handled = true;

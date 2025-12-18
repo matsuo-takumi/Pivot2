@@ -34,9 +34,6 @@
                 <PivotItem Header="Image">
                     <Frame x:Name="ImageFrame" Background="Transparent"/>
                 </PivotItem>
-                <PivotItem Header="Model">
-                    <Frame x:Name="ModelFrame" Background="Transparent"/>
-                </PivotItem>
                 <PivotItem Header="Project">
                     <Frame x:Name="ProjectFrame" Background="Transparent"/>
                 </PivotItem>

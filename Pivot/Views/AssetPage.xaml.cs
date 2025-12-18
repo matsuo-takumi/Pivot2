@@ -142,6 +142,11 @@ namespace Pivot.Views
                         if (!isCtrlPressed)
                         {
                             _lastSelectedItemForRange = item;
+                            // 3Dファイルのみビューワーに表示（画像やその他は表示しない）
+                            if (item.Kind == AssetKind.Model)
+                            {
+                                ViewModel.SelectedAsset = item;
+                            }
                         }
                     }
 

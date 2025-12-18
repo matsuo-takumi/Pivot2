@@ -584,14 +584,8 @@ namespace Pivot.Services
 
         private List<Pivot.Models.CustomFilter> GetDefaultAssetFilters()
         {
-            return new List<Pivot.Models.CustomFilter>
-            {
-                new Pivot.Models.CustomFilter { Name = "3D", AllowedExtensions = new List<string> { ".obj", ".fbx", ".gltf", ".glb", ".dae" }, IsBuiltIn = true, SortOrder = 0 },
-                new Pivot.Models.CustomFilter { Name = "Images", AllowedExtensions = new List<string> { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tga", ".tif", ".tiff" }, IsBuiltIn = true, SortOrder = 1 },
-                new Pivot.Models.CustomFilter { Name = "Video", AllowedExtensions = new List<string> { ".mp4", ".mov", ".avi", ".mkv", ".webm" }, IsBuiltIn = true, SortOrder = 2 },
-                new Pivot.Models.CustomFilter { Name = "Audio", AllowedExtensions = new List<string> { ".mp3", ".wav", ".ogg", ".flac", ".aac" }, IsBuiltIn = true, SortOrder = 3 },
-                new Pivot.Models.CustomFilter { Name = "Other", AllowedExtensions = new List<string>(), IsBuiltIn = true, SortOrder = 4 }
-            };
+            // デフォルトタグなし - ユーザーが自分で作成
+            return new List<Pivot.Models.CustomFilter>();
         }
 
         private List<Pivot.Models.CustomFilter> GetDefaultCodeFilters()

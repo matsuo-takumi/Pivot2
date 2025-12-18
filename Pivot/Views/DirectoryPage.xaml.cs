@@ -1,7 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
-using System;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.ViewModels;
 
@@ -16,45 +15,28 @@ namespace Pivot.Views
             this.InitializeComponent();
             ViewModel = App.Current.Services.GetRequiredService<DirectoryViewModel>();
             this.DataContext = ViewModel;
-            try
+            
+            // マウスホイールによる横スクロールを有効化
+            if (DirectoriesScrollViewer != null)
             {
-                // Ensure mouse wheel scrolls horizontally
-                var scroller = this.FindName("DirectoriesScrollViewer") as ScrollViewer;
-                if (scroller != null)
-                {
-                    scroller.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(DirectoriesScrollViewer_PointerWheelChanged), true);
-                }
+                DirectoriesScrollViewer.AddHandler(
+                    UIElement.PointerWheelChangedEvent, 
+                    new PointerEventHandler(OnPointerWheelChanged), 
+                    handledEventsToo: true);
             }
-            catch { }
         }
 
-        private void DirectoriesScrollViewer_PointerWheelChanged(object? sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
-            try
-            {
-                var scroller = this.FindName("DirectoriesScrollViewer") as ScrollViewer;
-                if (scroller == null) return;
-                
-                var pt = e.GetCurrentPoint(scroller);
-                var delta = pt.Properties.MouseWheelDelta; // typically +-120 units
-                if (delta == 0) return;
+            var delta = e.GetCurrentPoint(DirectoriesScrollViewer).Properties.MouseWheelDelta;
+            if (delta == 0) return;
 
-                // Convert mouse wheel delta to horizontal scroll offset
-                // WinUI3's ChangeView with animation=false uses native smooth scrolling at optimal frame rate
-                double scrollStep = delta * -2.0; // adjust multiplier for desired scroll distance
-                var desiredOffset = scroller.HorizontalOffset + scrollStep;
-                var maxOffset = scroller.ScrollableWidth;
-                var newOffset = Math.Min(Math.Max(desiredOffset, 0), maxOffset);
-
-                // Use WinUI3's native smooth scrolling (false = enable smooth animation)
-                // The system automatically handles frame rate optimization
-                scroller.ChangeView(newOffset, null, null, false);
-                
-                try { e.Handled = true; } catch { }
-            }
-            catch { }
+            // スムーズな横スクロール（アニメーション有効）
+            var newOffset = DirectoriesScrollViewer.HorizontalOffset - delta * 1.5;
+            newOffset = System.Math.Clamp(newOffset, 0, DirectoriesScrollViewer.ScrollableWidth);
+            DirectoriesScrollViewer.ChangeView(newOffset, null, null, disableAnimation: false);
+            
+            e.Handled = true;
         }
     }
 }
-
-

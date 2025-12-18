@@ -14,7 +14,18 @@ namespace Pivot.Services
 
 		private static readonly HashSet<string> ModelExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 		{
-			".fbx", ".obj", ".glb"
+			// 標準フォーマット
+			".fbx", ".obj", ".glb", ".gltf", ".dae",
+			// 業界標準
+			".3ds", ".blend", ".stl", ".ply", ".x",
+			// CAD/製造
+			".dxf", ".ifc", ".3mf",
+			// ゲーム向け
+			".md2", ".md3", ".md5mesh", ".mdl", ".smd",
+			// その他
+			".lwo", ".lxo", ".ase", ".ac", ".b3d", ".ogex",
+			// 追加フォーマット
+			".ms3d", ".cob", ".scn", ".bvh", ".irrmesh", ".nff", ".off", ".raw", ".ter"
 		};
 
 		private static readonly HashSet<string> ScriptExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

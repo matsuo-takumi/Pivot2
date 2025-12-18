@@ -37,6 +37,14 @@
                 <hx:Element3DPresenter x:Name="ModelPresenter"/>
             </hx:Viewport3DX.Items>
         </hx:Viewport3DX>
+
+        <!-- Controls Overlay -->
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Spacing="8" Orientation="Horizontal">
+            <ComboBox x:Name="UpAxisComboBox" SelectedIndex="0" SelectionChanged="UpAxisComboBox_SelectionChanged" MinWidth="100" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <ComboBoxItem Content="Y-Up"/>
+                <ComboBoxItem Content="Z-Up"/>
+            </ComboBox>
+        </StackPanel>
         
         <Border x:Name="ErrorMessageBorder"
                 Background="#CC000000"
