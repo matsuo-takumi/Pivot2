@@ -5,6 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:hx="using:HelixToolkit.WinUI"
+    xmlns:local="using:Pivot.Controls"
     mc:Ignorable="d">
     
     <UserControl.Resources>
@@ -21,22 +22,9 @@
     </UserControl.Resources>
     
     <Grid>
-        <hx:Viewport3DX x:Name="Viewport3D"
-                       CameraRotationMode="Trackball"
-                       ShowCoordinateSystem="True"
-                       ShowViewCube="True"
-                       Background="{ThemeResource ViewportMicaBackgroundBrush}"
-                       HorizontalAlignment="Stretch"
-                       VerticalAlignment="Stretch"
-                       MinWidth="100"
-                       MinHeight="100">
-            <hx:Viewport3DX.Items>
-                <hx:DirectionalLight3D x:Name="DirectionalLight" Color="White"/>
-                <hx:AmbientLight3D Color="#404040"/>
-                <hx:Element3DPresenter x:Name="GridPresenter"/>
-                <hx:Element3DPresenter x:Name="ModelPresenter"/>
-            </hx:Viewport3DX.Items>
-        </hx:Viewport3DX>
+        <local:VulkanSwapChainPanel x:Name="VulkanPanel"
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Stretch"/>
 
         <!-- Controls Overlay -->
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Spacing="8" Orientation="Horizontal">

@@ -9,6 +9,7 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Build only for x64 in Debug mode to speed up builds -->
     <Platforms Condition="'$(Configuration)' == 'Debug'">x64</Platforms>
     <Platforms Condition="'$(Configuration)' != 'Debug'">x86;x64;ARM64</Platforms>
@@ -84,25 +85,22 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.250916003" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.6584" />
-    
     <!-- Image processing libraries -->
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="13.6.0" />
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
-    
-    <!-- 3D model viewer -->
-    <PackageReference Include="HelixToolkit.WinUI" Version="2.25.0" />
-    <PackageReference Include="HelixToolkit.SharpDX.Assimp" Version="2.25.0" />
-  </ItemGroup>
 
-  <!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
-    Explorer "Package and Publish" context menu entry to be enabled for this project even if
-    the Windows App SDK Nuget package has not yet been restored.
-  -->
-  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
-  </PropertyGroup>
+    <!-- 3D model viewer (Silk.NET & Vulkan Interop) -->
+    <PackageReference Include="Silk.NET.Core" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.Maths" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.Vulkan" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.21.0" />
+    <PackageReference Include="Silk.NET.Assimp" Version="2.21.0" />
+    
+    <!-- COM Interop for SwapChainPanel -->
+    <PackageReference Include="Vortice.DXGI" Version="3.5.0" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.5.0" />
+  </ItemGroup>
 
   <!-- Publish Properties -->
   <PropertyGroup>
