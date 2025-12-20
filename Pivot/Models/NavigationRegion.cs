@@ -6,7 +6,8 @@ namespace Pivot.Models
         Image,
         Project,
         Code,
-        Preference
+        Preference,
+        VulkanTest
     }
 }
 

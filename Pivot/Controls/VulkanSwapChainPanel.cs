@@ -10,6 +10,7 @@ namespace Pivot.Controls
     {
         private VulkanInteropRenderer? _renderer;
         private bool _initialized = false;
+        private readonly OrbitCamera _camera = new();
 
         public VulkanSwapChainPanel()
         {
@@ -93,7 +94,7 @@ namespace Pivot.Controls
         {
             if (_initialized && _renderer != null)
             {
-                _renderer.Render();
+                _renderer.Render(_camera);
             }
         }
 

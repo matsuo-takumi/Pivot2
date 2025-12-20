@@ -1,13 +1,30 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Silk.NET.Core;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
+using DxgiFormat = Vortice.DXGI.Format;
+using VkFormat = Silk.NET.Vulkan.Format;
+using DxgiSharedResourceFlags = Vortice.DXGI.SharedResourceFlags;
+using System.IO;
 
 namespace Pivot.Utilities
 {
+    /// <summary>
+    /// Custom ISwapChainPanelNative COM interface for WinUI 3 interop
+    /// </summary>
+    [ComImport]
+    [Guid("63aad0b8-7c24-40ff-85a8-640d944cc325")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface ISwapChainPanelNative
+    {
+        void SetSwapChain(IntPtr swapChain);  // Use IntPtr to avoid ComVisible issues with Vortice wrappers
+    }
+
     public unsafe class VulkanInteropRenderer : IDisposable
     {
         private bool _disposed;
@@ -25,7 +42,6 @@ namespace Pivot.Utilities
         private PhysicalDevice _physicalDevice;
         private Device _device;
         private Queue _graphicsQueue;
-        private SurfaceKHR _surface; // Not used in Interop mode usually, but good to have if we switch
         
         // Vulkan Extensions
         private KhrExternalMemoryWin32? _khrExternalMemoryWin32;
@@ -40,7 +56,90 @@ namespace Pivot.Utilities
         private CommandPool _vkCommandPool;
         private CommandBuffer _vkCommandBuffer;
         private Fence _vkFence;
-        private Semaphore _vkSemaphore;
+        
+        // Pipeline Resources
+        private PipelineLayout _vkPipelineLayout;
+        private Pipeline _vkPipeline;
+        private ShaderModule _vkVertShaderModule;
+        private ShaderModule _vkFragShaderModule;
+        
+        // Vertex Buffer
+        private Silk.NET.Vulkan.Buffer _vkVertexBuffer;
+        private DeviceMemory _vkVertexBufferMemory;
+        private Silk.NET.Vulkan.Buffer _vkIndexBuffer;
+        private DeviceMemory _vkIndexBufferMemory;
+
+        // Depth Buffer
+        private Image _vkDepthImage;
+        private DeviceMemory _vkDepthImageMemory;
+        private ImageView _vkDepthImageView;
+
+        // Uniform Buffers
+        private Silk.NET.Vulkan.Buffer _vkUniformBuffer;
+        private DeviceMemory _vkUniformBufferMemory;
+        private void* _vkUniformBufferMapped;
+
+        // Descriptors
+        private DescriptorSetLayout _vkDescriptorSetLayout;
+        private DescriptorPool _vkDescriptorPool;
+        private DescriptorSet _vkDescriptorSet;
+        
+        private int _currentWidth;
+        private int _currentHeight;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Vertex
+    {
+        public System.Numerics.Vector3 Position;
+        public System.Numerics.Vector3 Normal;
+        public System.Numerics.Vector2 TexCoord;
+
+        public static VertexInputBindingDescription GetBindingDescription()
+        {
+            return new VertexInputBindingDescription
+            {
+                Binding = 0,
+                Stride = (uint)Marshal.SizeOf<Vertex>(),
+                InputRate = VertexInputRate.Vertex
+            };
+        }
+
+        public static VertexInputAttributeDescription[] GetAttributeDescriptions()
+        {
+            return new[]
+            {
+                new VertexInputAttributeDescription
+                {
+                    Binding = 0,
+                    Location = 0,
+                    Format = VkFormat.R32G32B32Sfloat,
+                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(Position))
+                },
+                new VertexInputAttributeDescription
+                {
+                    Binding = 0,
+                    Location = 1,
+                    Format = VkFormat.R32G32B32Sfloat, // Normal
+                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(Normal))
+                },
+                new VertexInputAttributeDescription
+                {
+                    Binding = 0,
+                    Location = 2,
+                    Format = VkFormat.R32G32Sfloat, // TexCoord
+                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(TexCoord))
+                }
+            };
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct UniformBufferObject
+    {
+        public System.Numerics.Matrix4x4 Model;
+        public System.Numerics.Matrix4x4 View;
+        public System.Numerics.Matrix4x4 Proj;
+    }
 
         public VulkanInteropRenderer()
         {
@@ -55,10 +154,98 @@ namespace Pivot.Utilities
             InitializeDirectX(panel, width, height);
             InitializeVulkan();
             ImportSharedTexture(width, height);
+            
+            CreateDescriptorSetLayout();
+            CreateUniformBuffers();
+            CreateDescriptorPool();
+            CreateDescriptorSets();
+            
             CreateRenderPass();
+            CreatePipeline();
+            
+            CreateDepthResources();
             CreateFramebuffer(width, height);
+            
+            CreateVertexBuffer();
+            
             CreateCommandBuffers();
             CreateSyncObjects();
+        }
+
+        // ... InitializeDirectX ...
+        // ... InitializeVulkan ...
+        // ... ImportSharedTexture ...
+
+        private void CreateRenderPass()
+        {
+            var colorAttachment = new AttachmentDescription
+            {
+                Format = VkFormat.B8G8R8A8Unorm,
+                Samples = SampleCountFlags.Count1Bit,
+                LoadOp = AttachmentLoadOp.Clear,
+                StoreOp = AttachmentStoreOp.Store,
+                StencilLoadOp = AttachmentLoadOp.DontCare,
+                StencilStoreOp = AttachmentStoreOp.DontCare,
+                InitialLayout = ImageLayout.Undefined,
+                FinalLayout = ImageLayout.PresentSrcKhr
+            };
+
+            var colorAttachmentRef = new AttachmentReference
+            {
+                Attachment = 0,
+                Layout = ImageLayout.ColorAttachmentOptimal
+            };
+
+            var depthAttachment = new AttachmentDescription
+            {
+                Format = FindDepthFormat(),
+                Samples = SampleCountFlags.Count1Bit,
+                LoadOp = AttachmentLoadOp.Clear,
+                StoreOp = AttachmentStoreOp.DontCare,
+                StencilLoadOp = AttachmentLoadOp.DontCare,
+                StencilStoreOp = AttachmentStoreOp.DontCare,
+                InitialLayout = ImageLayout.Undefined,
+                FinalLayout = ImageLayout.DepthStencilAttachmentOptimal
+            };
+
+            var depthAttachmentRef = new AttachmentReference
+            {
+                Attachment = 1,
+                Layout = ImageLayout.DepthStencilAttachmentOptimal
+            };
+
+            var subpass = new SubpassDescription
+            {
+                PipelineBindPoint = PipelineBindPoint.Graphics,
+                ColorAttachmentCount = 1,
+                PColorAttachments = &colorAttachmentRef,
+                PDepthStencilAttachment = &depthAttachmentRef
+            };
+
+            var dependency = new SubpassDependency
+            {
+                SrcSubpass = Vk.SubpassExternal,
+                DstSubpass = 0,
+                SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
+                SrcAccessMask = 0,
+                DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
+                DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit
+            };
+
+            var attachments = stackalloc AttachmentDescription[] { colorAttachment, depthAttachment };
+
+            var renderPassInfo = new RenderPassCreateInfo
+            {
+                SType = StructureType.RenderPassCreateInfo,
+                AttachmentCount = 2,
+                PAttachments = attachments,
+                SubpassCount = 1,
+                PSubpasses = &subpass,
+                DependencyCount = 1,
+                PDependencies = &dependency
+            };
+
+            CheckVkResult(_vk.CreateRenderPass(_device, in renderPassInfo, null, out _vkRenderPass));
         }
 
         private void InitializeDirectX(Microsoft.UI.Xaml.Controls.SwapChainPanel panel, int width, int height)
@@ -73,14 +260,12 @@ namespace Pivot.Utilities
             D3D11.D3D11CreateDevice(
                 null,
                 Vortice.Direct3D.DriverType.Hardware,
-                D3D11.DeviceCreationFlags.BgraSupport, // Important for Direct2D/WinUI interop
+                Vortice.Direct3D11.DeviceCreationFlags.BgraSupport,
                 featureLevels,
                 out _d3dDevice,
                 out _d3dContext).CheckError();
 
             // 2. Create SwapChain for WinUI
-            // WinUI requires DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL or FLIP_DISCARD
-            // and DXGI_SCALING_STRETCH
             var dxgiDevice = _d3dDevice!.QueryInterface<IDXGIDevice>();
             var dxgiAdapter = dxgiDevice.GetAdapter();
             var dxgiFactory = dxgiAdapter.GetParent<IDXGIFactory2>();
@@ -89,47 +274,44 @@ namespace Pivot.Utilities
             {
                 Width = width,
                 Height = height,
-                Format = Format.B8G8R8A8_UNorm, // WinUI usually expects B8G8R8A8
+                Format = DxgiFormat.B8G8R8A8_UNorm,
                 Stereo = false,
                 SampleDescription = new SampleDescription(1, 0),
-                Usage = Usage.RenderTargetOutput | Usage.BackBuffer,
+                BufferUsage = Vortice.DXGI.Usage.RenderTargetOutput,
                 BufferCount = 2,
                 Scaling = Scaling.Stretch,
                 SwapEffect = SwapEffect.FlipSequential,
-                AlphaMode = AlphaMode.Premultiplied,
+                AlphaMode = Vortice.DXGI.AlphaMode.Premultiplied,
                 Flags = SwapChainFlags.None
             };
 
             _swapChain = dxgiFactory.CreateSwapChainForComposition(dxgiDevice, swapChainDesc);
 
             // 3. Associate SwapChain with SwapChainPanel
-            // We need to cast the SwapChainPanel to IInspectable (object in C# is effectively IInspectable/IUnknown for COM)
-            // and then query for ISwapChainPanelNative.
-            // In .NET 5+, we can use ComWrappers or simple casting if the interface is defined with ComImport.
-            var panelNative = panel.As<ISwapChainPanelNative>();
-            panelNative.SetSwapChain(_swapChain);
+            var panelNative = GetSwapChainPanelNative(panel);
+            // Use Vortice's NativePointer property which returns the correct COM pointer
+            panelNative.SetSwapChain(_swapChain.NativePointer);
 
             // 4. Create Shared Texture (The bridge between Vulkan and DX11)
-            // This texture will be written by Vulkan and read by DX11 (copied to SwapChain backbuffer)
             var texDesc = new Texture2DDescription
             {
                 Width = width,
                 Height = height,
                 MipLevels = 1,
                 ArraySize = 1,
-                Format = Format.B8G8R8A8_UNorm, // Must match SwapChain or be compatible
+                Format = DxgiFormat.B8G8R8A8_UNorm,
                 SampleDescription = new SampleDescription(1, 0),
-                Usage = ResourceUsage.Default,
-                BindFlags = BindFlags.ShaderResource | BindFlags.RenderTarget,
-                CpuAccessFlags = CpuAccessFlags.None,
-                MiscFlags = ResourceOptionFlags.SharedNthandle | ResourceOptionFlags.SharedKeyedmutex
+                Usage = Vortice.Direct3D11.ResourceUsage.Default,
+                BindFlags = Vortice.Direct3D11.BindFlags.ShaderResource | Vortice.Direct3D11.BindFlags.RenderTarget,
+                CPUAccessFlags = Vortice.Direct3D11.CpuAccessFlags.None,
+                MiscFlags = Vortice.Direct3D11.ResourceOptionFlags.SharedNTHandle | Vortice.Direct3D11.ResourceOptionFlags.SharedKeyedMutex
             };
 
             _sharedTexture = _d3dDevice.CreateTexture2D(texDesc);
 
             // 5. Get Shared Handle (NT Handle)
             var resource = _sharedTexture.QueryInterface<IDXGIResource1>();
-            _sharedHandle = resource.CreateSharedHandle(null, DXGI.DXGI_SHARED_RESOURCE_READ | DXGI.DXGI_SHARED_RESOURCE_WRITE, null);
+            _sharedHandle = resource.CreateSharedHandle(null, DxgiSharedResourceFlags.Read | DxgiSharedResourceFlags.Write, null);
             
             resource.Dispose();
             dxgiFactory.Dispose();
@@ -137,14 +319,42 @@ namespace Pivot.Utilities
             dxgiDevice.Dispose();
         }
 
+        private static ISwapChainPanelNative GetSwapChainPanelNative(Microsoft.UI.Xaml.Controls.SwapChainPanel panel)
+        {
+            // Get IUnknown pointer from the WinRT object
+            IntPtr pointer = Marshal.GetIUnknownForObject(panel);
+            if (pointer == IntPtr.Zero)
+                throw new InvalidOperationException("Failed to get IUnknown from SwapChainPanel");
+
+            try
+            {
+                // Query for ISwapChainPanelNative interface
+                Guid guid = new Guid("63aad0b8-7c24-40ff-85a8-640d944cc325");
+                int hr = Marshal.QueryInterface(pointer, ref guid, out IntPtr nativePtr);
+                if (hr != 0 || nativePtr == IntPtr.Zero)
+                    throw new InvalidOperationException($"Failed to query ISwapChainPanelNative. HRESULT: 0x{hr:X8}");
+
+                // Create RCW for the native interface
+                return (ISwapChainPanelNative)Marshal.GetObjectForIUnknown(nativePtr);
+            }
+            finally
+            {
+                Marshal.Release(pointer);
+            }
+        }
+
         private void InitializeVulkan()
         {
             // 1. Create Instance
+            var appNamePtr = (byte*)Marshal.StringToHGlobalAnsi("Pivot");
+            var engineNamePtr = (byte*)Marshal.StringToHGlobalAnsi("No Engine");
+            
             var appInfo = new ApplicationInfo
             {
-                PApplicationName = (byte*)Marshal.StringToHGlobalAnsi("Pivot"),
+                SType = StructureType.ApplicationInfo,
+                PApplicationName = appNamePtr,
                 ApplicationVersion = new Version32(1, 0, 0),
-                PEngineName = (byte*)Marshal.StringToHGlobalAnsi("No Engine"),
+                PEngineName = engineNamePtr,
                 EngineVersion = new Version32(1, 0, 0),
                 ApiVersion = Vk.Version12
             };
@@ -153,7 +363,7 @@ namespace Pivot.Utilities
             {
                 KhrExternalMemoryCapabilities.ExtensionName,
                 KhrGetPhysicalDeviceProperties2.ExtensionName,
-                KhrWin32Surface.ExtensionName, // Optional but good for compatibility
+                KhrWin32Surface.ExtensionName,
                 "VK_KHR_surface"
             };
 
@@ -167,9 +377,10 @@ namespace Pivot.Utilities
                 PpEnabledExtensionNames = ppExtensions,
             };
 
-            _vk.CreateInstance(in instanceCreateInfo, null, out _instance).CheckError();
-            SilkMarshal.Free((nint)appInfo.PApplicationName);
-            SilkMarshal.Free((nint)appInfo.PEngineName);
+            CheckVkResult(_vk.CreateInstance(in instanceCreateInfo, null, out _instance));
+            
+            Marshal.FreeHGlobal((IntPtr)appNamePtr);
+            Marshal.FreeHGlobal((IntPtr)engineNamePtr);
             SilkMarshal.Free((nint)ppExtensions);
 
             // Load Instance Extensions
@@ -191,15 +402,10 @@ namespace Pivot.Utilities
             // 3. Create Logical Device
             var deviceExtensions = new List<string>
             {
-                KhrExternalMemory.ExtensionName,
+                "VK_KHR_external_memory",
                 KhrExternalMemoryWin32.ExtensionName,
-                // KhrWin32KeyedMutex.ExtensionName // If we use KeyedMutex
+                "VK_KHR_win32_keyed_mutex"
             };
-            // Note: KeyedMutex extension might be needed if we strictly use KeyedMutex, 
-            // but ExternalMemoryWin32 often implies it for D3D11 interop. 
-            // Let's add it if Silk.NET has it, otherwise assume it's covered.
-            // Silk.NET usually has "VK_KHR_win32_keyed_mutex" as KhrWin32KeyedMutex.
-            deviceExtensions.Add("VK_KHR_win32_keyed_mutex");
 
             var ppDeviceExtensions = (byte**)SilkMarshal.StringArrayToPtr(deviceExtensions.ToArray());
 
@@ -221,7 +427,7 @@ namespace Pivot.Utilities
                 PpEnabledExtensionNames = ppDeviceExtensions
             };
 
-            _vk.CreateDevice(_physicalDevice, in deviceCreateInfo, null, out _device).CheckError();
+            CheckVkResult(_vk.CreateDevice(_physicalDevice, in deviceCreateInfo, null, out _device));
             SilkMarshal.Free((nint)ppDeviceExtensions);
 
             _vk.GetDeviceQueue(_device, 0, 0, out _graphicsQueue);
@@ -239,22 +445,15 @@ namespace Pivot.Utilities
             var memoryImportInfo = new ImportMemoryWin32HandleInfoKHR
             {
                 SType = StructureType.ImportMemoryWin32HandleInfoKhr,
-                HandleType = ExternalMemoryHandleTypeFlagsKHR.D3D11TextureBitKhr,
+                HandleType = ExternalMemoryHandleTypeFlags.D3D11TextureBit,
                 Handle = _sharedHandle
             };
 
-            // We need to create an Image that binds to this memory.
-            // But first we need to know the memory requirements and find a suitable memory type.
-            // However, for external memory, we often allocate the memory *from* the handle.
-            
-            // Actually, for D3D11 interop, the memory is already allocated by D3D11.
-            // We need to create a VkImage and then Bind it to the imported memory.
-            
             var imageCreateInfo = new ImageCreateInfo
             {
                 SType = StructureType.ImageCreateInfo,
                 ImageType = ImageType.Type2D,
-                Format = Format.B8G8R8A8Unorm, // Match DX11
+                Format = VkFormat.B8G8R8A8Unorm,
                 Extent = new Extent3D((uint)width, (uint)height, 1),
                 MipLevels = 1,
                 ArrayLayers = 1,
@@ -269,11 +468,11 @@ namespace Pivot.Utilities
             var externalMemoryImageCreateInfo = new ExternalMemoryImageCreateInfo
             {
                 SType = StructureType.ExternalMemoryImageCreateInfo,
-                HandleTypes = ExternalMemoryHandleTypeFlagsKHR.D3D11TextureBitKhr
+                HandleTypes = ExternalMemoryHandleTypeFlags.D3D11TextureBit
             };
             imageCreateInfo.PNext = &externalMemoryImageCreateInfo;
 
-            _vk.CreateImage(_device, in imageCreateInfo, null, out _vkImage).CheckError();
+            CheckVkResult(_vk.CreateImage(_device, in imageCreateInfo, null, out _vkImage));
 
             // Get Memory Requirements
             _vk.GetImageMemoryRequirements(_device, _vkImage, out var memReqs);
@@ -287,12 +486,11 @@ namespace Pivot.Utilities
             };
             
             // We need to find a memory type index that supports the D3D11 memory.
-            // Usually we check `GetMemoryWin32HandlePropertiesKHR` to find the compatible type.
             var handleProps = new MemoryWin32HandlePropertiesKHR
             {
                 SType = StructureType.MemoryWin32HandlePropertiesKhr
             };
-            _khrExternalMemoryWin32!.GetMemoryWin32HandleProperties(_device, ExternalMemoryHandleTypeFlagsKHR.D3D11TextureBitKhr, _sharedHandle, out handleProps);
+            _khrExternalMemoryWin32!.GetMemoryWin32HandleProperties(_device, ExternalMemoryHandleTypeFlags.D3D11TextureBit, _sharedHandle, out handleProps);
 
             // Find index
             uint memoryTypeIndex = 0;
@@ -311,8 +509,8 @@ namespace Pivot.Utilities
 
             allocInfo.MemoryTypeIndex = memoryTypeIndex;
 
-            _vk.AllocateMemory(_device, in allocInfo, null, out _vkDeviceMemory).CheckError();
-            _vk.BindImageMemory(_device, _vkImage, _vkDeviceMemory, 0).CheckError();
+            CheckVkResult(_vk.AllocateMemory(_device, in allocInfo, null, out _vkDeviceMemory));
+            CheckVkResult(_vk.BindImageMemory(_device, _vkImage, _vkDeviceMemory, 0));
 
             // Create ImageView
             var viewInfo = new ImageViewCreateInfo
@@ -320,70 +518,241 @@ namespace Pivot.Utilities
                 SType = StructureType.ImageViewCreateInfo,
                 Image = _vkImage,
                 ViewType = ImageViewType.Type2D,
-                Format = Format.B8G8R8A8Unorm,
+                Format = VkFormat.B8G8R8A8Unorm,
                 Components = new ComponentMapping(ComponentSwizzle.Identity, ComponentSwizzle.Identity, ComponentSwizzle.Identity, ComponentSwizzle.Identity),
                 SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1)
             };
 
-            _vk.CreateImageView(_device, in viewInfo, null, out _vkImageView).CheckError();
-        }
-
-        private void CreateRenderPass()
-        {
-            var colorAttachment = new AttachmentDescription
-            {
-                Format = Format.B8G8R8A8Unorm,
-                Samples = SampleCountFlags.Count1Bit,
-                LoadOp = AttachmentLoadOp.Clear,
-                StoreOp = AttachmentStoreOp.Store,
-                StencilLoadOp = AttachmentLoadOp.DontCare,
-                StencilStoreOp = AttachmentStoreOp.DontCare,
-                InitialLayout = ImageLayout.Undefined,
-                FinalLayout = ImageLayout.ColorAttachmentOptimal // We will transition to this
-            };
-
-            var colorAttachmentRef = new AttachmentReference
-            {
-                Attachment = 0,
-                Layout = ImageLayout.ColorAttachmentOptimal
-            };
-
-            var subpass = new SubpassDescription
-            {
-                PipelineBindPoint = PipelineBindPoint.Graphics,
-                ColorAttachmentCount = 1,
-                PColorAttachments = &colorAttachmentRef
-            };
-
-            var renderPassInfo = new RenderPassCreateInfo
-            {
-                SType = StructureType.RenderPassCreateInfo,
-                AttachmentCount = 1,
-                PAttachments = &colorAttachment,
-                SubpassCount = 1,
-                PSubpasses = &subpass
-            };
-
-            _vk.CreateRenderPass(_device, in renderPassInfo, null, out _vkRenderPass).CheckError();
+            CheckVkResult(_vk.CreateImageView(_device, in viewInfo, null, out _vkImageView));
         }
 
         private void CreateFramebuffer(int width, int height)
         {
-            fixed (ImageView* pImageViews = &_vkImageView)
+            var attachments = stackalloc ImageView[] { _vkImageView, _vkDepthImageView };
+            
+            var framebufferInfo = new FramebufferCreateInfo
             {
-                var framebufferInfo = new FramebufferCreateInfo
+                SType = StructureType.FramebufferCreateInfo,
+                RenderPass = _vkRenderPass,
+                AttachmentCount = 2,
+                PAttachments = attachments,
+                Width = (uint)width,
+                Height = (uint)height,
+                Layers = 1
+            };
+
+
+            CheckVkResult(_vk.CreateFramebuffer(_device, in framebufferInfo, null, out _vkFramebuffer));
+        }
+
+        private void CreatePipeline()
+        {
+            // Load SPIR-V from disk (Note: filenames changed to shader.vert.spv/shader.frag.spv)
+            var vertBytes = File.ReadAllBytes(@"d:\Repositry\Product\Pivot2\Pivot\Shaders\vert.spv"); 
+            var fragBytes = File.ReadAllBytes(@"d:\Repositry\Product\Pivot2\Pivot\Shaders\frag.spv");
+
+            // Create shader modules
+            fixed (byte* vertCode = vertBytes)
+            fixed (byte* fragCode = fragBytes)
+            {
+                var vertCreateInfo = new ShaderModuleCreateInfo
                 {
-                    SType = StructureType.FramebufferCreateInfo,
-                    RenderPass = _vkRenderPass,
-                    AttachmentCount = 1,
-                    PAttachments = pImageViews,
-                    Width = (uint)width,
-                    Height = (uint)height,
-                    Layers = 1
+                    SType = StructureType.ShaderModuleCreateInfo,
+                    CodeSize = (nuint)vertBytes.Length,
+                    PCode = (uint*)vertCode
+                };
+                CheckVkResult(_vk.CreateShaderModule(_device, in vertCreateInfo, null, out _vkVertShaderModule));
+
+                var fragCreateInfo = new ShaderModuleCreateInfo
+                {
+                    SType = StructureType.ShaderModuleCreateInfo,
+                    CodeSize = (nuint)fragBytes.Length,
+                    PCode = (uint*)fragCode
+                };
+                CheckVkResult(_vk.CreateShaderModule(_device, in fragCreateInfo, null, out _vkFragShaderModule));
+            }
+
+            // Shader stages
+            var mainName = (byte*)Marshal.StringToHGlobalAnsi("main");
+            
+            var shaderStages = stackalloc PipelineShaderStageCreateInfo[2];
+            shaderStages[0] = new PipelineShaderStageCreateInfo
+            {
+                SType = StructureType.PipelineShaderStageCreateInfo,
+                Stage = ShaderStageFlags.VertexBit,
+                Module = _vkVertShaderModule,
+                PName = mainName
+            };
+            shaderStages[1] = new PipelineShaderStageCreateInfo
+            {
+                SType = StructureType.PipelineShaderStageCreateInfo,
+                Stage = ShaderStageFlags.FragmentBit,
+                Module = _vkFragShaderModule,
+                PName = mainName
+            };
+
+            // Vertex input: Use Vertex struct
+            var bindingDescription = Vertex.GetBindingDescription();
+            var attributeDescriptions = Vertex.GetAttributeDescriptions();
+
+            fixed (VertexInputAttributeDescription* pAttributeDescriptions = attributeDescriptions)
+            {
+                var vertexInputInfo = new PipelineVertexInputStateCreateInfo
+                {
+                    SType = StructureType.PipelineVertexInputStateCreateInfo,
+                    VertexBindingDescriptionCount = 1,
+                    PVertexBindingDescriptions = &bindingDescription,
+                    VertexAttributeDescriptionCount = (uint)attributeDescriptions.Length,
+                    PVertexAttributeDescriptions = pAttributeDescriptions
                 };
 
-                _vk.CreateFramebuffer(_device, in framebufferInfo, null, out _vkFramebuffer).CheckError();
+                var inputAssembly = new PipelineInputAssemblyStateCreateInfo
+                {
+                    SType = StructureType.PipelineInputAssemblyStateCreateInfo,
+                    Topology = PrimitiveTopology.TriangleList,
+                    PrimitiveRestartEnable = false
+                };
+
+                var viewport = new Viewport(0, 0, _currentWidth, _currentHeight, 0, 1);
+                var scissor = new Rect2D(new Offset2D(0, 0), new Extent2D((uint)_currentWidth, (uint)_currentHeight));
+
+                var viewportState = new PipelineViewportStateCreateInfo
+                {
+                    SType = StructureType.PipelineViewportStateCreateInfo,
+                    ViewportCount = 1,
+                    PViewports = &viewport,
+                    ScissorCount = 1,
+                    PScissors = &scissor
+                };
+
+                var rasterizer = new PipelineRasterizationStateCreateInfo
+                {
+                    SType = StructureType.PipelineRasterizationStateCreateInfo,
+                    DepthClampEnable = false,
+                    RasterizerDiscardEnable = false,
+                    PolygonMode = PolygonMode.Fill,
+                    LineWidth = 1.0f,
+                    CullMode = CullModeFlags.BackBit,
+                    FrontFace = FrontFace.CounterClockwise,
+                    DepthBiasEnable = false
+                };
+
+                var multisampling = new PipelineMultisampleStateCreateInfo
+                {
+                    SType = StructureType.PipelineMultisampleStateCreateInfo,
+                    SampleShadingEnable = false,
+                    RasterizationSamples = SampleCountFlags.Count1Bit
+                };
+
+                var depthStencil = new PipelineDepthStencilStateCreateInfo
+                {
+                    SType = StructureType.PipelineDepthStencilStateCreateInfo,
+                    DepthTestEnable = true,
+                    DepthWriteEnable = true,
+                    DepthCompareOp = CompareOp.Less,
+                    DepthBoundsTestEnable = false,
+                    StencilTestEnable = false
+                };
+
+                var colorBlendAttachment = new PipelineColorBlendAttachmentState
+                {
+                    ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit | ColorComponentFlags.ABit,
+                    BlendEnable = false
+                };
+
+                var colorBlending = new PipelineColorBlendStateCreateInfo
+                {
+                    SType = StructureType.PipelineColorBlendStateCreateInfo,
+                    LogicOpEnable = false,
+                    AttachmentCount = 1,
+                    PAttachments = &colorBlendAttachment
+                };
+
+                var dynamicStates = stackalloc DynamicState[2] { DynamicState.Viewport, DynamicState.Scissor };
+                var dynamicState = new PipelineDynamicStateCreateInfo
+                {
+                    SType = StructureType.PipelineDynamicStateCreateInfo,
+                    DynamicStateCount = 2,
+                    PDynamicStates = dynamicStates
+                };
+
+                // Pipeline Layout with Descriptor Set Layout
+                fixed (DescriptorSetLayout* pSetLayouts = &_vkDescriptorSetLayout)
+                {
+                    var pipelineLayoutInfo = new PipelineLayoutCreateInfo
+                    {
+                        SType = StructureType.PipelineLayoutCreateInfo,
+                        SetLayoutCount = 1,
+                        PSetLayouts = pSetLayouts,
+                        PushConstantRangeCount = 0
+                    };
+                    CheckVkResult(_vk.CreatePipelineLayout(_device, in pipelineLayoutInfo, null, out _vkPipelineLayout));
+                }
+
+                var pipelineInfo = new GraphicsPipelineCreateInfo
+                {
+                    SType = StructureType.GraphicsPipelineCreateInfo,
+                    StageCount = 2,
+                    PStages = shaderStages,
+                    PVertexInputState = &vertexInputInfo,
+                    PInputAssemblyState = &inputAssembly,
+                    PViewportState = &viewportState,
+                    PRasterizationState = &rasterizer,
+                    PMultisampleState = &multisampling,
+                    PDepthStencilState = &depthStencil,
+                    PColorBlendState = &colorBlending,
+                    PDynamicState = &dynamicState,
+                    Layout = _vkPipelineLayout,
+                    RenderPass = _vkRenderPass,
+                    Subpass = 0
+                };
+
+                CheckVkResult(_vk.CreateGraphicsPipelines(_device, default, 1, in pipelineInfo, null, out _vkPipeline));
             }
+
+            Marshal.FreeHGlobal((IntPtr)mainName);
+        }
+        private void CreateVertexBuffer()
+        {
+            var vertices = new[]
+            {
+                new Vertex { Position = new System.Numerics.Vector3(-0.5f, -0.5f, 0.0f), Normal = new System.Numerics.Vector3(0.0f, 0.0f, 1.0f), TexCoord = new System.Numerics.Vector2(1.0f, 0.0f) },
+                new Vertex { Position = new System.Numerics.Vector3( 0.5f, -0.5f, 0.0f), Normal = new System.Numerics.Vector3(0.0f, 0.0f, 1.0f), TexCoord = new System.Numerics.Vector2(0.0f, 0.0f) },
+                new Vertex { Position = new System.Numerics.Vector3( 0.5f,  0.5f, 0.0f), Normal = new System.Numerics.Vector3(0.0f, 0.0f, 1.0f), TexCoord = new System.Numerics.Vector2(0.0f, 1.0f) },
+                new Vertex { Position = new System.Numerics.Vector3(-0.5f,  0.5f, 0.0f), Normal = new System.Numerics.Vector3(0.0f, 0.0f, 1.0f), TexCoord = new System.Numerics.Vector2(1.0f, 1.0f) },
+            };
+            
+            // For now, let's just draw the first triangle (3 vertices) to verify
+            // Later we will implement Index Buffer.
+            var triangleVertices = new[] { vertices[0], vertices[1], vertices[2] };
+
+            ulong bufferSize = (ulong)(triangleVertices.Length * Marshal.SizeOf<Vertex>());
+
+            CreateBuffer(bufferSize, BufferUsageFlags.VertexBufferBit, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vkVertexBuffer, out _vkVertexBufferMemory);
+
+            void* data;
+            CheckVkResult(_vk.MapMemory(_device, _vkVertexBufferMemory, 0, bufferSize, 0, &data));
+            fixed (Vertex* ptr = triangleVertices)
+            {
+                System.Buffer.MemoryCopy(ptr, data, bufferSize, bufferSize);
+            }
+            _vk.UnmapMemory(_device, _vkVertexBufferMemory);
+        }
+
+        private uint FindMemoryType(uint typeFilter, MemoryPropertyFlags properties)
+        {
+            _vk.GetPhysicalDeviceMemoryProperties(_physicalDevice, out var memProperties);
+
+            for (uint i = 0; i < memProperties.MemoryTypeCount; i++)
+            {
+                if ((typeFilter & (1 << (int)i)) != 0 &&
+                    (memProperties.MemoryTypes[(int)i].PropertyFlags & properties) == properties)
+                {
+                    return i;
+                }
+            }
+
+            throw new Exception("Failed to find suitable memory type!");
         }
 
         private void CreateCommandBuffers()
@@ -395,7 +764,7 @@ namespace Pivot.Utilities
                 Flags = CommandPoolCreateFlags.ResetCommandBufferBit
             };
 
-            _vk.CreateCommandPool(_device, in poolInfo, null, out _vkCommandPool).CheckError();
+            CheckVkResult(_vk.CreateCommandPool(_device, in poolInfo, null, out _vkCommandPool));
 
             var allocInfo = new CommandBufferAllocateInfo
             {
@@ -405,7 +774,7 @@ namespace Pivot.Utilities
                 CommandBufferCount = 1
             };
 
-            _vk.AllocateCommandBuffers(_device, in allocInfo, out _vkCommandBuffer).CheckError();
+            CheckVkResult(_vk.AllocateCommandBuffers(_device, in allocInfo, out _vkCommandBuffer));
         }
 
         private void CreateSyncObjects()
@@ -416,10 +785,10 @@ namespace Pivot.Utilities
                 Flags = FenceCreateFlags.SignaledBit
             };
 
-            _vk.CreateFence(_device, in fenceInfo, null, out _vkFence).CheckError();
+            CheckVkResult(_vk.CreateFence(_device, in fenceInfo, null, out _vkFence));
         }
 
-        public void Render()
+        public void Render(OrbitCamera camera)
         {
             if (_disposed) return;
 
@@ -427,76 +796,106 @@ namespace Pivot.Utilities
             _vk.WaitForFences(_device, 1, in _vkFence, true, ulong.MaxValue);
             _vk.ResetFences(_device, 1, in _vkFence);
 
+            // 1. Update UBO
+            UpdateUniformBuffer((float)_currentWidth / _currentHeight, camera);
+
             // 2. Record Command Buffer
+            _vk.ResetCommandBuffer(_vkCommandBuffer, 0);
+
             var beginInfo = new CommandBufferBeginInfo
             {
                 SType = StructureType.CommandBufferBeginInfo,
                 Flags = CommandBufferUsageFlags.OneTimeSubmitBit
             };
 
-            _vk.BeginCommandBuffer(_vkCommandBuffer, in beginInfo).CheckError();
+            CheckVkResult(_vk.BeginCommandBuffer(_vkCommandBuffer, in beginInfo));
 
-            var clearColor = new ClearValue
-            {
-                Color = new ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f) // Black Clear
-            };
+            var clearValues = stackalloc ClearValue[2];
+            clearValues[0].Color = new ClearColorValue { Float32_0 = 0.2f, Float32_1 = 0.6f, Float32_2 = 0.8f, Float32_3 = 1.0f };
+            clearValues[1].DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 };
 
             var renderPassInfo = new RenderPassBeginInfo
             {
                 SType = StructureType.RenderPassBeginInfo,
                 RenderPass = _vkRenderPass,
                 Framebuffer = _vkFramebuffer,
-                RenderArea = new Rect2D { Offset = new Offset2D(0, 0), Extent = new Extent2D(800, 600) }, // TODO: Update Extent dynamically
-                ClearValueCount = 1,
-                PClearValues = &clearColor
+                RenderArea =
+                {
+                    Offset = { X = 0, Y = 0 },
+                    Extent = { Width = (uint)_currentWidth, Height = (uint)_currentHeight }
+                },
+                ClearValueCount = 2,
+                PClearValues = clearValues
             };
-            
-            // Need to update RenderArea extent to match current size
-            // We can store width/height in class or query image
-            // For now let's assume we update it in Resize or pass it here.
-            // Let's query the framebuffer size from the image extent we created? 
-            // Or simpler: just use a stored size.
-            // For now, hardcoded 800x600 is bad. Let's fix in Resize.
 
             _vk.CmdBeginRenderPass(_vkCommandBuffer, in renderPassInfo, SubpassContents.Inline);
+            
+            // Bind the graphics pipeline
+            _vk.CmdBindPipeline(_vkCommandBuffer, PipelineBindPoint.Graphics, _vkPipeline);
+            
+            // Set dynamic viewport and scissor
+            var viewport = new Viewport(0, 0, _currentWidth, _currentHeight, 0, 1);
+            _vk.CmdSetViewport(_vkCommandBuffer, 0, 1, in viewport);
+            
+            var scissor = new Rect2D(new Offset2D(0, 0), new Extent2D((uint)_currentWidth, (uint)_currentHeight));
+            _vk.CmdSetScissor(_vkCommandBuffer, 0, 1, in scissor);
+            
+            // Bind descriptor sets
+            fixed (DescriptorSet* pDescriptorSets = &_vkDescriptorSet)
+            {
+                _vk.CmdBindDescriptorSets(_vkCommandBuffer, PipelineBindPoint.Graphics, _vkPipelineLayout, 0, 1, pDescriptorSets, 0, null);
+            }
+
+            // Bind vertex buffer
+            var offset = 0ul;
+            var vertexBuffer = _vkVertexBuffer;
+            _vk.CmdBindVertexBuffers(_vkCommandBuffer, 0, 1, in vertexBuffer, in offset);
+            
+            // Draw the triangle (3 vertices)
+            _vk.CmdDraw(_vkCommandBuffer, 3, 1, 0, 0);
+            
             _vk.CmdEndRenderPass(_vkCommandBuffer);
-            _vk.EndCommandBuffer(_vkCommandBuffer).CheckError();
+            CheckVkResult(_vk.EndCommandBuffer(_vkCommandBuffer));
 
             // 3. Submit with Keyed Mutex
             // Vulkan: Acquire Key 0, Release Key 1
             
-            // We need the device memory handle for Keyed Mutex?
-            // Actually, we need to pass the memory object(s) involved.
+            // Allocate memory for mutex arrays
+            var acquireKeys = stackalloc ulong[1];
+            var acquireTimeouts = stackalloc uint[1];
+            var releaseKeys = stackalloc ulong[1];
             
-            var mutexInfo = new Win32KeyedMutexAcquireReleaseInfoKHR
+            acquireKeys[0] = 0;
+            acquireTimeouts[0] = uint.MaxValue; // INFINITE
+            releaseKeys[0] = 1;
+            
+            fixed (DeviceMemory* pDeviceMemory = &_vkDeviceMemory)
             {
-                SType = StructureType.Win32KeyedMutexAcquireReleaseInfoKhr,
-                AcquireCount = 1,
-                PAcquireSyncs = &_vkDeviceMemory,
-                PAcquireKeys = (ulong*)SilkMarshal.Allocate((nint)(sizeof(ulong) * 1)), // 0
-                PAcquireTimeoutMilliseconds = (uint*)SilkMarshal.Allocate((nint)(sizeof(uint) * 1)), // Infinite?
-                ReleaseCount = 1,
-                PReleaseSyncs = &_vkDeviceMemory,
-                PReleaseKeys = (ulong*)SilkMarshal.Allocate((nint)(sizeof(ulong) * 1)) // 1
-            };
-            
-            *(ulong*)mutexInfo.PAcquireKeys = 0;
-            *(uint*)mutexInfo.PAcquireTimeoutMilliseconds = 0xFFFFFFFF; // INFINITE
-            *(ulong*)mutexInfo.PReleaseKeys = 1;
+                var mutexInfo = new Win32KeyedMutexAcquireReleaseInfoKHR
+                {
+                    SType = StructureType.Win32KeyedMutexAcquireReleaseInfoKhr,
+                    AcquireCount = 1,
+                    PAcquireSyncs = pDeviceMemory,
+                    PAcquireKeys = acquireKeys,
+                    PAcquireTimeouts = acquireTimeouts,
+                    ReleaseCount = 1,
+                    PReleaseSyncs = pDeviceMemory,
+                    PReleaseKeys = releaseKeys
+                };
 
-            var submitInfo = new SubmitInfo
-            {
-                SType = StructureType.SubmitInfo,
-                CommandBufferCount = 1,
-                PCommandBuffers = &_vkCommandBuffer,
-                PNext = &mutexInfo
-            };
+                fixed (CommandBuffer* pCommandBuffer = &_vkCommandBuffer)
+                {
+                    var submitInfo = new SubmitInfo
+                    {
+                        SType = StructureType.SubmitInfo,
+                        CommandBufferCount = 1,
+                        PCommandBuffers = pCommandBuffer,
+                        PNext = &mutexInfo
+                    };
 
-            _vk.QueueSubmit(_graphicsQueue, 1, in submitInfo, _vkFence).CheckError();
-            
-            SilkMarshal.Free((nint)mutexInfo.PAcquireKeys);
-            SilkMarshal.Free((nint)mutexInfo.PAcquireTimeoutMilliseconds);
-            SilkMarshal.Free((nint)mutexInfo.PReleaseKeys);
+                    CheckVkResult(_vk.QueueSubmit(_graphicsQueue, 1, in submitInfo, _vkFence));
+                }
+            }
 
             // 4. DX11 Present
             // DX11: Acquire Key 1, Copy, Release Key 0
@@ -523,53 +922,301 @@ namespace Pivot.Utilities
             // Wait for GPU
             _vk.DeviceWaitIdle(_device);
 
-            // Dispose old resources
+            // Dispose old Vulkan resources
             _vk.DestroyFramebuffer(_device, _vkFramebuffer, null);
             _vk.DestroyImageView(_device, _vkImageView, null);
             _vk.FreeMemory(_device, _vkDeviceMemory, null);
             _vk.DestroyImage(_device, _vkImage, null);
             
+            // Dispose old depth resources
+            _vk.DestroyImageView(_device, _vkDepthImageView, null);
+            _vk.FreeMemory(_device, _vkDepthImageMemory, null);
+            _vk.DestroyImage(_device, _vkDepthImage, null);
+            
             _sharedTexture?.Dispose();
-            _swapChain?.ResizeBuffers(2, width, height, Format.B8G8R8A8_UNorm, SwapChainFlags.None);
+            _swapChain?.ResizeBuffers(2, width, height, DxgiFormat.B8G8R8A8_UNorm, SwapChainFlags.None);
             
             // Re-create Shared Texture
-             var texDesc = new Texture2DDescription
+            var texDesc = new Texture2DDescription
             {
                 Width = width,
                 Height = height,
                 MipLevels = 1,
                 ArraySize = 1,
-                Format = Format.B8G8R8A8_UNorm,
+                Format = DxgiFormat.B8G8R8A8_UNorm,
                 SampleDescription = new SampleDescription(1, 0),
-                Usage = ResourceUsage.Default,
-                BindFlags = BindFlags.ShaderResource | BindFlags.RenderTarget,
-                CpuAccessFlags = CpuAccessFlags.None,
-                MiscFlags = ResourceOptionFlags.SharedNthandle | ResourceOptionFlags.SharedKeyedmutex
+                Usage = Vortice.Direct3D11.ResourceUsage.Default,
+                BindFlags = Vortice.Direct3D11.BindFlags.ShaderResource | Vortice.Direct3D11.BindFlags.RenderTarget,
+                CPUAccessFlags = Vortice.Direct3D11.CpuAccessFlags.None,
+                MiscFlags = Vortice.Direct3D11.ResourceOptionFlags.SharedNTHandle | Vortice.Direct3D11.ResourceOptionFlags.SharedKeyedMutex
             };
             _sharedTexture = _d3dDevice!.CreateTexture2D(texDesc);
             
             // Re-get Handle
             var resource = _sharedTexture.QueryInterface<IDXGIResource1>();
-            _sharedHandle = resource.CreateSharedHandle(null, DXGI.DXGI_SHARED_RESOURCE_READ | DXGI.DXGI_SHARED_RESOURCE_WRITE, null);
+            _sharedHandle = resource.CreateSharedHandle(null, DxgiSharedResourceFlags.Read | DxgiSharedResourceFlags.Write, null);
             resource.Dispose();
+
+            // Update dimensions before recreating resources
+            _currentWidth = width;
+            _currentHeight = height;
 
             // Re-import to Vulkan
             ImportSharedTexture(width, height);
-            CreateFramebuffer(width, height);
             
-            // Update RenderArea in Render() - we need to store width/height
-            _currentWidth = width;
-            _currentHeight = height;
+            // Recreate depth buffer at new size
+            CreateDepthResources();
+            
+            CreateFramebuffer(width, height);
+        }
+
+        private void CreateDepthResources()
+        {
+            var depthFormat = FindDepthFormat();
+            
+            CreateImage((uint)_currentWidth, (uint)_currentHeight, depthFormat, ImageTiling.Optimal, 
+                ImageUsageFlags.DepthStencilAttachmentBit, MemoryPropertyFlags.DeviceLocalBit, 
+                out _vkDepthImage, out _vkDepthImageMemory);
+
+            _vkDepthImageView = CreateImageView(_vkDepthImage, depthFormat, ImageAspectFlags.DepthBit);
+        }
+
+        private VkFormat FindDepthFormat()
+        {
+            return FindSupportedFormat(
+                new[] { VkFormat.D32Sfloat, VkFormat.D32SfloatS8Uint, VkFormat.D24UnormS8Uint },
+                ImageTiling.Optimal,
+                FormatFeatureFlags.DepthStencilAttachmentBit
+            );
+        }
+
+        private VkFormat FindSupportedFormat(IEnumerable<VkFormat> candidates, ImageTiling tiling, FormatFeatureFlags features)
+        {
+            foreach (var format in candidates)
+            {
+                _vk.GetPhysicalDeviceFormatProperties(_physicalDevice, format, out var props);
+
+                if (tiling == ImageTiling.Linear && (props.LinearTilingFeatures & features) == features)
+                {
+                    return format;
+                }
+                else if (tiling == ImageTiling.Optimal && (props.OptimalTilingFeatures & features) == features)
+                {
+                    return format;
+                }
+            }
+
+            throw new Exception("Failed to find supported format!");
+        }
+
+        private void CreateImage(uint width, uint height, VkFormat format, ImageTiling tiling, ImageUsageFlags usage, MemoryPropertyFlags properties, out Image image, out DeviceMemory imageMemory)
+        {
+            var imageInfo = new ImageCreateInfo
+            {
+                SType = StructureType.ImageCreateInfo,
+                ImageType = ImageType.Type2D,
+                Extent = new Extent3D { Width = width, Height = height, Depth = 1 },
+                MipLevels = 1,
+                ArrayLayers = 1,
+                Format = format,
+                Tiling = tiling,
+                InitialLayout = ImageLayout.Undefined,
+                Usage = usage,
+                SharingMode = SharingMode.Exclusive,
+                Samples = SampleCountFlags.Count1Bit,
+                Flags = 0 // Optional
+            };
+
+            CheckVkResult(_vk.CreateImage(_device, in imageInfo, null, out image));
+
+            _vk.GetImageMemoryRequirements(_device, image, out var memRequirements);
+
+            var allocInfo = new MemoryAllocateInfo
+            {
+                SType = StructureType.MemoryAllocateInfo,
+                AllocationSize = memRequirements.Size,
+                MemoryTypeIndex = FindMemoryType(memRequirements.MemoryTypeBits, properties)
+            };
+
+            CheckVkResult(_vk.AllocateMemory(_device, in allocInfo, null, out imageMemory));
+            CheckVkResult(_vk.BindImageMemory(_device, image, imageMemory, 0));
         }
         
-        private int _currentWidth;
-        private int _currentHeight;
+        private ImageView CreateImageView(Image image, VkFormat format, ImageAspectFlags aspectFlags)
+        {
+            var createInfo = new ImageViewCreateInfo
+            {
+                SType = StructureType.ImageViewCreateInfo,
+                Image = image,
+                ViewType = ImageViewType.Type2D,
+                Format = format,
+                SubresourceRange = new ImageSubresourceRange
+                {
+                    AspectMask = aspectFlags,
+                    BaseMipLevel = 0,
+                    LevelCount = 1,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1
+                }
+            };
+
+            CheckVkResult(_vk.CreateImageView(_device, in createInfo, null, out var imageView));
+            return imageView;
+        }
+
+        private void CreateDescriptorSetLayout()
+        {
+            var uboLayoutBinding = new DescriptorSetLayoutBinding
+            {
+                Binding = 0,
+                DescriptorType = DescriptorType.UniformBuffer,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.VertexBit,
+                PImmutableSamplers = null
+            };
+
+            var layoutInfo = new DescriptorSetLayoutCreateInfo
+            {
+                SType = StructureType.DescriptorSetLayoutCreateInfo,
+                BindingCount = 1,
+                PBindings = &uboLayoutBinding
+            };
+
+            CheckVkResult(_vk.CreateDescriptorSetLayout(_device, in layoutInfo, null, out _vkDescriptorSetLayout));
+        }
+
+        private void CreateUniformBuffers()
+        {
+            ulong bufferSize = (ulong)Marshal.SizeOf<UniformBufferObject>();
+            
+            CreateBuffer(bufferSize, BufferUsageFlags.UniformBufferBit, 
+                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, 
+                out _vkUniformBuffer, out _vkUniformBufferMemory);
+
+            CheckVkResult(_vk.MapMemory(_device, _vkUniformBufferMemory, 0, bufferSize, 0, ref _vkUniformBufferMapped));
+        }
+
+        private void CreateDescriptorPool()
+        {
+            var poolSize = new DescriptorPoolSize
+            {
+                Type = DescriptorType.UniformBuffer,
+                DescriptorCount = 1
+            };
+
+            var poolInfo = new DescriptorPoolCreateInfo
+            {
+                SType = StructureType.DescriptorPoolCreateInfo,
+                PoolSizeCount = 1,
+                PPoolSizes = &poolSize,
+                MaxSets = 1
+            };
+
+            CheckVkResult(_vk.CreateDescriptorPool(_device, in poolInfo, null, out _vkDescriptorPool));
+        }
+
+        private void CreateDescriptorSets()
+        {
+            var layout = _vkDescriptorSetLayout;
+            var allocInfo = new DescriptorSetAllocateInfo
+            {
+                SType = StructureType.DescriptorSetAllocateInfo,
+                DescriptorPool = _vkDescriptorPool,
+                DescriptorSetCount = 1,
+                PSetLayouts = &layout
+            };
+
+            CheckVkResult(_vk.AllocateDescriptorSets(_device, in allocInfo, out _vkDescriptorSet));
+
+            var bufferInfo = new DescriptorBufferInfo
+            {
+                Buffer = _vkUniformBuffer,
+                Offset = 0,
+                Range = (ulong)Marshal.SizeOf<UniformBufferObject>()
+            };
+
+            var descriptorWrite = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = _vkDescriptorSet,
+                DstBinding = 0,
+                DstArrayElement = 0,
+                DescriptorType = DescriptorType.UniformBuffer,
+                DescriptorCount = 1,
+                PBufferInfo = &bufferInfo
+            };
+
+            _vk.UpdateDescriptorSets(_device, 1, in descriptorWrite, 0, null);
+        }
+
+        public void UpdateUniformBuffer(float aspectRatio, OrbitCamera camera)
+        {
+            var ubo = new UniformBufferObject
+            {
+                Model = System.Numerics.Matrix4x4.Identity,
+                View = camera.GetViewMatrix(),
+                Proj = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfView((float)Math.PI / 4.0f, aspectRatio, 0.1f, 100.0f)
+            };
+            
+            // Vulkan's Y coordinate is inverted comparing to OpenGL
+            ubo.Proj.M22 *= -1;
+
+            System.Buffer.MemoryCopy(&ubo, _vkUniformBufferMapped, (ulong)Marshal.SizeOf<UniformBufferObject>(), (ulong)Marshal.SizeOf<UniformBufferObject>());
+        }
+
+        private void CreateBuffer(ulong size, BufferUsageFlags usage, MemoryPropertyFlags properties, out Silk.NET.Vulkan.Buffer buffer, out DeviceMemory bufferMemory)
+        {
+            var bufferInfo = new BufferCreateInfo
+            {
+                SType = StructureType.BufferCreateInfo,
+                Size = size,
+                Usage = usage,
+                SharingMode = SharingMode.Exclusive
+            };
+
+            CheckVkResult(_vk.CreateBuffer(_device, in bufferInfo, null, out buffer));
+
+            _vk.GetBufferMemoryRequirements(_device, buffer, out var memRequirements);
+
+            var allocInfo = new MemoryAllocateInfo
+            {
+                SType = StructureType.MemoryAllocateInfo,
+                AllocationSize = memRequirements.Size,
+                MemoryTypeIndex = FindMemoryType(memRequirements.MemoryTypeBits, properties)
+            };
+
+            CheckVkResult(_vk.AllocateMemory(_device, in allocInfo, null, out bufferMemory));
+            CheckVkResult(_vk.BindBufferMemory(_device, buffer, bufferMemory, 0));
+        }
 
         public void Dispose()
         {
             if (_disposed) return;
             
             _vk.DeviceWaitIdle(_device);
+            
+            // Pipeline resources
+            _vk.DestroyPipeline(_device, _vkPipeline, null);
+            _vk.DestroyPipelineLayout(_device, _vkPipelineLayout, null);
+            _vk.DestroyShaderModule(_device, _vkVertShaderModule, null);
+            _vk.DestroyShaderModule(_device, _vkFragShaderModule, null);
+            
+            // Vertex buffer
+            _vk.DestroyBuffer(_device, _vkVertexBuffer, null);
+            _vk.FreeMemory(_device, _vkVertexBufferMemory, null);
+
+            // Uniform buffer
+            _vk.DestroyBuffer(_device, _vkUniformBuffer, null);
+            _vk.FreeMemory(_device, _vkUniformBufferMemory, null);
+
+            // Depth Resources
+            _vk.DestroyImageView(_device, _vkDepthImageView, null);
+            _vk.FreeMemory(_device, _vkDepthImageMemory, null);
+            _vk.DestroyImage(_device, _vkDepthImage, null);
+
+            // Descriptors
+            _vk.DestroyDescriptorPool(_device, _vkDescriptorPool, null);
+            _vk.DestroyDescriptorSetLayout(_device, _vkDescriptorSetLayout, null);
             
             _vk.DestroyFence(_device, _vkFence, null);
             _vk.DestroyCommandPool(_device, _vkCommandPool, null);
@@ -588,6 +1235,17 @@ namespace Pivot.Utilities
             _d3dDevice?.Dispose();
             
             _disposed = true;
+        }
+        
+        /// <summary>
+        /// Helper method to check Vulkan Result and throw if not successful
+        /// </summary>
+        private static void CheckVkResult(Result result)
+        {
+            if (result != Result.Success)
+            {
+                throw new Exception($"Vulkan error: {result}");
+            }
         }
     }
 }
