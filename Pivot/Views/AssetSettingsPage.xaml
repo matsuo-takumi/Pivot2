@@ -19,6 +19,114 @@
                 <local:FilterSettingsView x:Name="FilterSettingsView" />
             </PivotItem>
 
+            <PivotItem Header="Viewport">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12,16">
+                    <StackPanel Spacing="28" MaxWidth="600">
+                        
+                        <!-- Camera Section -->
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Camera" FontSize="18" FontWeight="SemiBold"/>
+                            
+                            <!-- Navigation Preset -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Navigation Style" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="GesturePresetComboBox" Grid.Column="1"
+                                          MinWidth="160" 
+                                          SelectionChanged="GesturePresetComboBox_SelectionChanged">
+                                    <ComboBoxItem Tag="Maya" Content="Maya"/>
+                                    <ComboBoxItem Tag="Houdini" Content="Houdini"/>
+                                    <ComboBoxItem Tag="Blender" Content="Blender"/>
+                                </ComboBox>
+                            </Grid>
+                            
+                            <!-- Gesture Reference -->
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                                    CornerRadius="6" Padding="12">
+                                <Grid ColumnSpacing="24" RowSpacing="4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="60"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/><RowDefinition/>
+                                        <RowDefinition/><RowDefinition/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Rotate" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" x:Name="RotateGestureText" Text="Alt + Left Click"/>
+                                    
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Pan" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PanGestureText" Text="Alt + Middle Click"/>
+                                    
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Zoom" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ZoomGestureText" Text="Alt + Right Click"/>
+                                    
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Scroll" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Zoom In/Out"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                        
+                        <!-- Grid Section -->
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Grid" FontSize="18" FontWeight="SemiBold"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Show Grid" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowGridToggle" Grid.Column="1" 
+                                             Toggled="ShowGridToggle_Toggled"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Grid Size" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="GridSizeBox" Grid.Column="1" 
+                                          Value="10" Minimum="1" Maximum="100" SpinButtonPlacementMode="Compact"
+                                          ValueChanged="GridSizeBox_ValueChanged"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Grid Spacing" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="GridSpacingBox" Grid.Column="1" 
+                                          Value="1" Minimum="0.1" Maximum="10" SpinButtonPlacementMode="Compact"
+                                          ValueChanged="GridSpacingBox_ValueChanged"/>
+                            </Grid>
+                        </StackPanel>
+                        
+                        <!-- Display Section -->
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Display" FontSize="18" FontWeight="SemiBold"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Show Axis Gizmo" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowAxisGizmoToggle" Grid.Column="1" 
+                                             Toggled="ShowAxisGizmoToggle_Toggled"/>
+                            </Grid>
+                        </StackPanel>
+                        
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
             <PivotItem Header="General">
                 <Grid Padding="12">
                     <TextBlock Text="General Asset settings (placeholder)" Foreground="{ThemeResource AppTextCaptionBrush}" />

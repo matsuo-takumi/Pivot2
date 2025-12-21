@@ -244,6 +244,26 @@ namespace Pivot.Services
                 _cache.MenuDisplayMode = MenuDisplayMode.Compact;
             }
 
+            // Viewport camera gesture preset
+            try
+            {
+                var gestureStr = await _settingsStore.GetAsync("Viewport.CameraGesture");
+                if (Enum.TryParse<CameraGesturePreset>(gestureStr, out var gesture))
+                {
+                    _cache.ViewportCameraGesture = gesture;
+                }
+                else
+                {
+                    _cache.ViewportCameraGesture = CameraGesturePreset.Maya;
+                }
+                _logger.LogInformation("SettingsService: Loaded ViewportCameraGesture: {Gesture}", _cache.ViewportCameraGesture);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load ViewportCameraGesture. Using default (Maya).");
+                _cache.ViewportCameraGesture = CameraGesturePreset.Maya;
+            }
+
             // Asset Filters (customizable filter groups)
             try
             {
@@ -1002,6 +1022,22 @@ namespace Pivot.Services
         {
             await _themeSettings.SetImageDragSelectionOpacityAsync(opacity);
             SyncThemeFromService();
+        }
+
+        // Viewport settings
+        public CameraGesturePreset GetViewportCameraGesture() => _cache.ViewportCameraGesture;
+        
+        public async Task SetViewportCameraGestureAsync(CameraGesturePreset preset)
+        {
+            _cache.ViewportCameraGesture = preset;
+            try
+            {
+                await _settingsStore.UpsertAsync("Viewport.CameraGesture", preset.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Viewport.CameraGesture.");
+            }
         }
 
     }

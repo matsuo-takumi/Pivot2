@@ -1,0 +1,96 @@
+<Page
+    x:Class="Pivot.Views.ViewportSettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Pivot.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,16">
+        <StackPanel Spacing="24" MaxWidth="600">
+            <!-- Header -->
+            <TextBlock Text="Viewport" FontSize="24" FontWeight="Bold"/>
+            
+            <!-- Camera Navigation Preset -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Camera Navigation Style" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Select a preset based on your preferred DCC application" 
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                           TextWrapping="Wrap"/>
+                
+                <ComboBox x:Name="GesturePresetComboBox" 
+                          MinWidth="200" 
+                          SelectionChanged="GesturePresetComboBox_SelectionChanged">
+                    <ComboBoxItem Tag="Maya" Content="Maya">
+                        <ToolTipService.ToolTip>
+                            <TextBlock>
+                                <Run FontWeight="Bold">Maya Style</Run><LineBreak/>
+                                Alt + Left Click: Rotate<LineBreak/>
+                                Alt + Middle Click: Pan<LineBreak/>
+                                Alt + Right Click: Zoom<LineBreak/>
+                                Scroll Wheel: Zoom
+                            </TextBlock>
+                        </ToolTipService.ToolTip>
+                    </ComboBoxItem>
+                    <ComboBoxItem Tag="Houdini" Content="Houdini">
+                        <ToolTipService.ToolTip>
+                            <TextBlock>
+                                <Run FontWeight="Bold">Houdini Style</Run><LineBreak/>
+                                Left Click: Rotate<LineBreak/>
+                                Middle Click: Pan<LineBreak/>
+                                Right Click: Zoom<LineBreak/>
+                                Scroll Wheel: Zoom
+                            </TextBlock>
+                        </ToolTipService.ToolTip>
+                    </ComboBoxItem>
+                    <ComboBoxItem Tag="Blender" Content="Blender">
+                        <ToolTipService.ToolTip>
+                            <TextBlock>
+                                <Run FontWeight="Bold">Blender Style</Run><LineBreak/>
+                                Middle Click: Rotate<LineBreak/>
+                                Shift + Middle Click: Pan<LineBreak/>
+                                Ctrl + Middle Click: Zoom<LineBreak/>
+                                Scroll Wheel: Zoom
+                            </TextBlock>
+                        </ToolTipService.ToolTip>
+                    </ComboBoxItem>
+                </ComboBox>
+            </StackPanel>
+            
+            <!-- Gesture Reference Card -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                    CornerRadius="8" 
+                    Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Current Gesture Mapping" FontWeight="SemiBold"/>
+                    <Grid ColumnSpacing="16" RowSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition/>
+                            <RowDefinition/>
+                            <RowDefinition/>
+                            <RowDefinition/>
+                        </Grid.RowDefinitions>
+                        
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Rotate:" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="RotateGestureText" Text="Alt + Left Click"/>
+                        
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Pan:" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PanGestureText" Text="Alt + Middle Click"/>
+                        
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Zoom:" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ZoomGestureText" Text="Alt + Right Click"/>
+                        
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Scroll:" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="Zoom In/Out"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -79,5 +79,13 @@ namespace Pivot.Models
         public double ImageSelectionBorderThickness { get; set; } = 1.0; // Default 1px border
         public string ImageDragSelectionColor { get; set; } = "#0078D4"; // Default accent blue for drag selection
         public double ImageDragSelectionOpacity { get; set; } = 0.3; // Default 30% opacity for drag selection
+        
+        // Viewport settings
+        public CameraGesturePreset ViewportCameraGesture { get; set; } = CameraGesturePreset.Maya;
+        public bool ViewportShowGrid { get; set; } = true;
+        public float ViewportGridSize { get; set; } = 10f;
+        public float ViewportGridSpacing { get; set; } = 1f;
+        public string ViewportGridColor { get; set; } = "#404040";
+        public bool ViewportShowAxisGizmo { get; set; } = true;
     }
 }

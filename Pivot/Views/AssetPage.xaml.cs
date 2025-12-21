@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml.Controls;
 using Pivot.ViewModels;
 using System.ComponentModel;
@@ -7,6 +8,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
 using Pivot.Models;
+using Pivot.Messages;
 using System;
 using System.Linq;
 using Microsoft.UI.Xaml.Input;
@@ -60,6 +62,39 @@ namespace Pivot.Views
             
             // 設定変更を監視
             UpdateBorderThicknessPeriodically();
+            
+            // ディレクトリ変更を購読して即座に反映
+            WeakReferenceMessenger.Default.Register<DirectoryChangedMessage>(this, OnDirectoryChanged);
+        }
+
+        private void OnDirectoryChanged(object recipient, DirectoryChangedMessage message)
+        {
+            // Asset カテゴリの変更のみ処理
+            if (message.Value.Category != DirectoryCategory.Asset)
+                return;
+            
+            System.Diagnostics.Debug.WriteLine($"[AssetPage] Directory changed: {message.Value.Type} - {message.Value.Path}");
+            
+            // ディレクトリリストを再読み込み
+            DispatcherQueue.TryEnqueue(async () =>
+            {
+                try
+                {
+                    var settings = App.Current.Services.GetService<SettingsService>();
+                    if (settings != null)
+                    {
+                        var dirs = settings.GetUserSettings().AssetDirectories;
+                        if (dirs != null)
+                        {
+                            await ViewModel.LoadFromDirectoriesAsync(dirs, 300);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AssetPage] Reload error: {ex.Message}");
+                }
+            });
         }
         
         private async void UpdateBorderThicknessPeriodically()

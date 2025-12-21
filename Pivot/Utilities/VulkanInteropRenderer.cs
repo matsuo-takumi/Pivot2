@@ -87,60 +87,6 @@ namespace Pivot.Utilities
         private int _currentWidth;
         private int _currentHeight;
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct Vertex
-    {
-        public System.Numerics.Vector3 Position;
-        public System.Numerics.Vector3 Normal;
-        public System.Numerics.Vector2 TexCoord;
-
-        public static VertexInputBindingDescription GetBindingDescription()
-        {
-            return new VertexInputBindingDescription
-            {
-                Binding = 0,
-                Stride = (uint)Marshal.SizeOf<Vertex>(),
-                InputRate = VertexInputRate.Vertex
-            };
-        }
-
-        public static VertexInputAttributeDescription[] GetAttributeDescriptions()
-        {
-            return new[]
-            {
-                new VertexInputAttributeDescription
-                {
-                    Binding = 0,
-                    Location = 0,
-                    Format = VkFormat.R32G32B32Sfloat,
-                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(Position))
-                },
-                new VertexInputAttributeDescription
-                {
-                    Binding = 0,
-                    Location = 1,
-                    Format = VkFormat.R32G32B32Sfloat, // Normal
-                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(Normal))
-                },
-                new VertexInputAttributeDescription
-                {
-                    Binding = 0,
-                    Location = 2,
-                    Format = VkFormat.R32G32Sfloat, // TexCoord
-                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(TexCoord))
-                }
-            };
-        }
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct UniformBufferObject
-    {
-        public System.Numerics.Matrix4x4 Model;
-        public System.Numerics.Matrix4x4 View;
-        public System.Numerics.Matrix4x4 Proj;
-    }
-
         public VulkanInteropRenderer()
         {
             _vk = Vk.GetApi();
@@ -712,31 +658,103 @@ namespace Pivot.Utilities
 
             Marshal.FreeHGlobal((IntPtr)mainName);
         }
+        // Mesh data
+        private uint _indexCount = 3; // Default for initial triangle
+        
         private void CreateVertexBuffer()
         {
+            // Default triangle for initial display
             var vertices = new[]
             {
                 new Vertex { Position = new System.Numerics.Vector3(-0.5f, -0.5f, 0.0f), Normal = new System.Numerics.Vector3(0.0f, 0.0f, 1.0f), TexCoord = new System.Numerics.Vector2(1.0f, 0.0f) },
                 new Vertex { Position = new System.Numerics.Vector3( 0.5f, -0.5f, 0.0f), Normal = new System.Numerics.Vector3(0.0f, 0.0f, 1.0f), TexCoord = new System.Numerics.Vector2(0.0f, 0.0f) },
                 new Vertex { Position = new System.Numerics.Vector3( 0.5f,  0.5f, 0.0f), Normal = new System.Numerics.Vector3(0.0f, 0.0f, 1.0f), TexCoord = new System.Numerics.Vector2(0.0f, 1.0f) },
-                new Vertex { Position = new System.Numerics.Vector3(-0.5f,  0.5f, 0.0f), Normal = new System.Numerics.Vector3(0.0f, 0.0f, 1.0f), TexCoord = new System.Numerics.Vector2(1.0f, 1.0f) },
             };
+            var indices = new uint[] { 0, 1, 2 };
+
+            UploadMeshData(vertices, indices);
+        }
+
+        /// <summary>
+        /// Load a 3D model from file
+        /// </summary>
+        public void LoadModel(string filePath)
+        {
+            _vk.DeviceWaitIdle(_device);
             
-            // For now, let's just draw the first triangle (3 vertices) to verify
-            // Later we will implement Index Buffer.
-            var triangleVertices = new[] { vertices[0], vertices[1], vertices[2] };
-
-            ulong bufferSize = (ulong)(triangleVertices.Length * Marshal.SizeOf<Vertex>());
-
-            CreateBuffer(bufferSize, BufferUsageFlags.VertexBufferBit, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vkVertexBuffer, out _vkVertexBufferMemory);
-
-            void* data;
-            CheckVkResult(_vk.MapMemory(_device, _vkVertexBufferMemory, 0, bufferSize, 0, &data));
-            fixed (Vertex* ptr = triangleVertices)
+            // Cleanup old buffers
+            if (_vkVertexBuffer.Handle != 0)
             {
-                System.Buffer.MemoryCopy(ptr, data, bufferSize, bufferSize);
+                _vk.DestroyBuffer(_device, _vkVertexBuffer, null);
+                _vk.FreeMemory(_device, _vkVertexBufferMemory, null);
+            }
+            if (_vkIndexBuffer.Handle != 0)
+            {
+                _vk.DestroyBuffer(_device, _vkIndexBuffer, null);
+                _vk.FreeMemory(_device, _vkIndexBufferMemory, null);
+            }
+            
+            using var loader = new ModelLoader();
+            var meshData = loader.LoadModel(filePath);
+            
+            if (meshData != null)
+            {
+                UploadMeshData(meshData.Vertices, meshData.Indices);
+            }
+        }
+
+        /// <summary>
+        /// Upload mesh data to GPU (must be called from UI thread)
+        /// </summary>
+        public void UploadMesh(Vertex[] vertices, uint[] indices)
+        {
+            if (_disposed) return;
+            
+            // Wait for GPU to finish all operations
+            _vk.DeviceWaitIdle(_device);
+            
+            // Cleanup old buffers
+            if (_vkVertexBuffer.Handle != 0)
+            {
+                _vk.DestroyBuffer(_device, _vkVertexBuffer, null);
+                _vk.FreeMemory(_device, _vkVertexBufferMemory, null);
+            }
+            if (_vkIndexBuffer.Handle != 0)
+            {
+                _vk.DestroyBuffer(_device, _vkIndexBuffer, null);
+                _vk.FreeMemory(_device, _vkIndexBufferMemory, null);
+            }
+            
+            UploadMeshData(vertices, indices);
+        }
+
+        private void UploadMeshData(Vertex[] vertices, uint[] indices)
+        {
+            _indexCount = (uint)indices.Length;
+            
+            // Vertex Buffer
+            ulong vertexBufferSize = (ulong)(vertices.Length * Marshal.SizeOf<Vertex>());
+            CreateBuffer(vertexBufferSize, BufferUsageFlags.VertexBufferBit, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vkVertexBuffer, out _vkVertexBufferMemory);
+
+            void* vertexData;
+            CheckVkResult(_vk.MapMemory(_device, _vkVertexBufferMemory, 0, vertexBufferSize, 0, &vertexData));
+            fixed (Vertex* ptr = vertices)
+            {
+                System.Buffer.MemoryCopy(ptr, vertexData, vertexBufferSize, vertexBufferSize);
             }
             _vk.UnmapMemory(_device, _vkVertexBufferMemory);
+
+            // Index Buffer
+            ulong indexBufferSize = (ulong)(indices.Length * sizeof(uint));
+            CreateBuffer(indexBufferSize, BufferUsageFlags.IndexBufferBit, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vkIndexBuffer, out _vkIndexBufferMemory);
+
+            void* indexData;
+            CheckVkResult(_vk.MapMemory(_device, _vkIndexBufferMemory, 0, indexBufferSize, 0, &indexData));
+            fixed (uint* ptr = indices)
+            {
+                System.Buffer.MemoryCopy(ptr, indexData, indexBufferSize, indexBufferSize);
+            }
+            _vk.UnmapMemory(_device, _vkIndexBufferMemory);
         }
 
         private uint FindMemoryType(uint typeFilter, MemoryPropertyFlags properties)
@@ -851,8 +869,11 @@ namespace Pivot.Utilities
             var vertexBuffer = _vkVertexBuffer;
             _vk.CmdBindVertexBuffers(_vkCommandBuffer, 0, 1, in vertexBuffer, in offset);
             
-            // Draw the triangle (3 vertices)
-            _vk.CmdDraw(_vkCommandBuffer, 3, 1, 0, 0);
+            // Bind index buffer
+            _vk.CmdBindIndexBuffer(_vkCommandBuffer, _vkIndexBuffer, 0, IndexType.Uint32);
+            
+            // Draw indexed
+            _vk.CmdDrawIndexed(_vkCommandBuffer, _indexCount, 1, 0, 0, 0);
             
             _vk.CmdEndRenderPass(_vkCommandBuffer);
             CheckVkResult(_vk.EndCommandBuffer(_vkCommandBuffer));
@@ -1204,6 +1225,10 @@ namespace Pivot.Utilities
             // Vertex buffer
             _vk.DestroyBuffer(_device, _vkVertexBuffer, null);
             _vk.FreeMemory(_device, _vkVertexBufferMemory, null);
+
+            // Index buffer
+            _vk.DestroyBuffer(_device, _vkIndexBuffer, null);
+            _vk.FreeMemory(_device, _vkIndexBufferMemory, null);
 
             // Uniform buffer
             _vk.DestroyBuffer(_device, _vkUniformBuffer, null);
