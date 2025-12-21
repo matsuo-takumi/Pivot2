@@ -86,10 +86,28 @@ namespace Pivot.Utilities
         
         private int _currentWidth;
         private int _currentHeight;
+        
+        // Rendering settings
+        private bool _backfaceCulling = true;
 
         public VulkanInteropRenderer()
         {
             _vk = Vk.GetApi();
+        }
+
+        public void SetBackfaceCulling(bool enabled)
+        {
+            if (_backfaceCulling == enabled) return;
+            _backfaceCulling = enabled;
+            
+            // Recreate pipeline with new culling mode
+            if (_vkPipeline.Handle != 0)
+            {
+                _vk.DeviceWaitIdle(_device);
+                _vk.DestroyPipeline(_device, _vkPipeline, null);
+                _vk.DestroyPipelineLayout(_device, _vkPipelineLayout, null);
+                CreatePipeline();
+            }
         }
 
         public void Initialize(Microsoft.UI.Xaml.Controls.SwapChainPanel panel, int width, int height)
@@ -578,7 +596,7 @@ namespace Pivot.Utilities
                     RasterizerDiscardEnable = false,
                     PolygonMode = PolygonMode.Fill,
                     LineWidth = 1.0f,
-                    CullMode = CullModeFlags.BackBit,
+                    CullMode = _backfaceCulling ? CullModeFlags.BackBit : CullModeFlags.None,
                     FrontFace = FrontFace.CounterClockwise,
                     DepthBiasEnable = false
                 };

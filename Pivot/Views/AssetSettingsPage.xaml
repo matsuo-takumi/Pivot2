@@ -121,6 +121,16 @@
                                 <ToggleSwitch x:Name="ShowAxisGizmoToggle" Grid.Column="1" 
                                              Toggled="ShowAxisGizmoToggle_Toggled"/>
                             </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Backface Culling" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="BackfaceCullingToggle" Grid.Column="1" 
+                                             Toggled="BackfaceCullingToggle_Toggled"/>
+                            </Grid>
                         </StackPanel>
                         
                         <!-- Model Info Section -->

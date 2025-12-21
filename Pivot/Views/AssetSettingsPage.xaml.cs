@@ -131,6 +131,7 @@ namespace Pivot.Views
             GridSizeBox.Value = userSettings.ViewportGridSize;
             GridSpacingBox.Value = userSettings.ViewportGridSpacing;
             ShowAxisGizmoToggle.IsOn = userSettings.ViewportShowAxisGizmo;
+            BackfaceCullingToggle.IsOn = _settings.GetBackfaceCulling();
             
             // Load info display toggles
             ShowPolygonCountToggle.IsOn = _settings.GetShowPolygonCount();
@@ -172,6 +173,12 @@ namespace Pivot.Views
             if (_isInitializing || _settings == null) return;
             var userSettings = _settings.GetUserSettings();
             userSettings.ViewportShowAxisGizmo = ShowAxisGizmoToggle.IsOn;
+        }
+
+        private async void BackfaceCullingToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetBackfaceCullingAsync(BackfaceCullingToggle.IsOn);
         }
 
         // Model Info toggles

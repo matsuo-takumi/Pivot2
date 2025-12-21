@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Pivot.Models;
 using Pivot.Services;
 using Pivot.Utilities;
 using System;
@@ -42,6 +43,7 @@ namespace Pivot.Controls
         
         // Settings
         private SettingsService? _settings;
+        private CameraGestureConfig _gestureConfig = CameraGestureConfig.FromPreset(CameraGesturePreset.Maya);
 
         public static readonly DependencyProperty ViewerBackgroundProperty =
             DependencyProperty.Register(nameof(ViewerBackground), typeof(Microsoft.UI.Xaml.Media.Brush),
@@ -86,7 +88,21 @@ namespace Pivot.Controls
             // Get settings
             _settings = App.Current?.Services?.GetService<SettingsService>();
             
+            // Load gesture preset
+            if (_settings != null)
+            {
+                var preset = _settings.GetViewportCameraGesture();
+                _gestureConfig = CameraGestureConfig.FromPreset(preset);
+            }
+            
             InitializeRenderer();
+            
+            // Apply backface culling setting
+            if (_settings != null && _renderer != null)
+            {
+                _renderer.SetBackfaceCulling(_settings.GetBackfaceCulling());
+            }
+            
             UpdateInfoVisibility();
             
             _fpsStopwatch.Start();
@@ -287,24 +303,51 @@ namespace Pivot.Controls
             var deltaX = (float)(currentPos.X - _lastPointerPosition.X);
             var deltaY = (float)(currentPos.Y - _lastPointerPosition.Y);
 
-            // Alt+LMB = Rotate (Maya style default)
+            // Get modifier key states
             var altState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu);
+            var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+            var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
             bool isAlt = (altState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+            bool isShift = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+            bool isCtrl = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
 
-            if (_isLeftDragging && isAlt)
+            // Check Rotate gesture
+            if (CheckGesture(_gestureConfig.RotateButton, _gestureConfig.RotateRequiresAlt, _gestureConfig.RotateRequiresShift, _gestureConfig.RotateRequiresCtrl, isAlt, isShift, isCtrl))
             {
                 _camera.Rotate(-deltaX * 0.01f, deltaY * 0.01f);
             }
-            else if (_isMiddleDragging)
+            // Check Pan gesture
+            else if (CheckGesture(_gestureConfig.PanButton, _gestureConfig.PanRequiresAlt, _gestureConfig.PanRequiresShift, _gestureConfig.PanRequiresCtrl, isAlt, isShift, isCtrl))
             {
                 _camera.Pan(-deltaX, deltaY);
             }
-            else if (_isRightDragging && isAlt)
+            // Check Zoom gesture
+            else if (CheckGesture(_gestureConfig.ZoomButton, _gestureConfig.ZoomRequiresAlt, _gestureConfig.ZoomRequiresShift, _gestureConfig.ZoomRequiresCtrl, isAlt, isShift, isCtrl))
             {
                 _camera.Zoom(-deltaY * 0.1f);
             }
 
             _lastPointerPosition = currentPos;
+        }
+
+        private bool CheckGesture(MouseButton button, bool requiresAlt, bool requiresShift, bool requiresCtrl, bool isAlt, bool isShift, bool isCtrl)
+        {
+            // Check button
+            bool buttonPressed = button switch
+            {
+                MouseButton.Left => _isLeftDragging,
+                MouseButton.Middle => _isMiddleDragging,
+                MouseButton.Right => _isRightDragging,
+                _ => false
+            };
+            if (!buttonPressed) return false;
+            
+            // Check modifiers
+            if (requiresAlt && !isAlt) return false;
+            if (requiresShift && !isShift) return false;
+            if (requiresCtrl && !isCtrl) return false;
+            
+            return true;
         }
 
         private void OnPointerReleased(object sender, PointerRoutedEventArgs e)

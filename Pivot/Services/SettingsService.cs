@@ -1069,6 +1069,10 @@ namespace Pivot.Services
         public bool GetShowCameraInfo() => GetBoolSetting("Viewport.ShowCameraInfo", false);
         public async Task SetShowCameraInfoAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowCameraInfo", value);
 
+        // Rendering settings
+        public bool GetBackfaceCulling() => GetBoolSetting("Viewport.BackfaceCulling", true);
+        public async Task SetBackfaceCullingAsync(bool value) => await SetBoolSettingAsync("Viewport.BackfaceCulling", value);
+
         // Helper methods for bool settings
         private bool GetBoolSetting(string key, bool defaultValue)
         {
