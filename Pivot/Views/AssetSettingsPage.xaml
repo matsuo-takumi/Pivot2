@@ -123,6 +123,110 @@
                             </Grid>
                         </StackPanel>
                         
+                        <!-- Model Info Section -->
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Model Info" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock Text="Show model statistics in viewport overlay" 
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,-8,0,0"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Polygon Count" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowPolygonCountToggle" Grid.Column="1" 
+                                             Toggled="ShowPolygonCountToggle_Toggled"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Vertex Count" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowVertexCountToggle" Grid.Column="1" 
+                                             Toggled="ShowVertexCountToggle_Toggled"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="UV Set Count" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowUVSetCountToggle" Grid.Column="1" 
+                                             Toggled="ShowUVSetCountToggle_Toggled"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Material Count" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowMaterialCountToggle" Grid.Column="1" 
+                                             Toggled="ShowMaterialCountToggle_Toggled"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Bounding Box" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowBoundingBoxToggle" Grid.Column="1" 
+                                             Toggled="ShowBoundingBoxToggle_Toggled"/>
+                            </Grid>
+                        </StackPanel>
+                        
+                        <!-- Viewport Stats Section -->
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Viewport Stats" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock Text="Show viewport performance and debug info" 
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" Margin="0,-8,0,0"/>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="FPS" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowFPSToggle" Grid.Column="1" 
+                                             Toggled="ShowFPSToggle_Toggled"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Resolution" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowResolutionToggle" Grid.Column="1" 
+                                             Toggled="ShowResolutionToggle_Toggled"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Viewport Size" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowViewportSizeToggle" Grid.Column="1" 
+                                             Toggled="ShowViewportSizeToggle_Toggled"/>
+                            </Grid>
+                            
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Camera Info" VerticalAlignment="Center"/>
+                                <ToggleSwitch x:Name="ShowCameraInfoToggle" Grid.Column="1" 
+                                             Toggled="ShowCameraInfoToggle_Toggled"/>
+                            </Grid>
+                        </StackPanel>
+                        
                     </StackPanel>
                 </ScrollViewer>
             </PivotItem>

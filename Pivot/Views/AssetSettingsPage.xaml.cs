@@ -131,6 +131,18 @@ namespace Pivot.Views
             GridSizeBox.Value = userSettings.ViewportGridSize;
             GridSpacingBox.Value = userSettings.ViewportGridSpacing;
             ShowAxisGizmoToggle.IsOn = userSettings.ViewportShowAxisGizmo;
+            
+            // Load info display toggles
+            ShowPolygonCountToggle.IsOn = _settings.GetShowPolygonCount();
+            ShowVertexCountToggle.IsOn = _settings.GetShowVertexCount();
+            ShowUVSetCountToggle.IsOn = _settings.GetShowUVSetCount();
+            ShowMaterialCountToggle.IsOn = _settings.GetShowMaterialCount();
+            ShowBoundingBoxToggle.IsOn = _settings.GetShowBoundingBox();
+            
+            ShowFPSToggle.IsOn = _settings.GetShowFPS();
+            ShowResolutionToggle.IsOn = _settings.GetShowResolution();
+            ShowViewportSizeToggle.IsOn = _settings.GetShowViewportSize();
+            ShowCameraInfoToggle.IsOn = _settings.GetShowCameraInfo();
         }
 
         private void ShowGridToggle_Toggled(object sender, RoutedEventArgs e)
@@ -160,6 +172,62 @@ namespace Pivot.Views
             if (_isInitializing || _settings == null) return;
             var userSettings = _settings.GetUserSettings();
             userSettings.ViewportShowAxisGizmo = ShowAxisGizmoToggle.IsOn;
+        }
+
+        // Model Info toggles
+        private async void ShowPolygonCountToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowPolygonCountAsync(ShowPolygonCountToggle.IsOn);
+        }
+
+        private async void ShowVertexCountToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowVertexCountAsync(ShowVertexCountToggle.IsOn);
+        }
+
+        private async void ShowUVSetCountToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowUVSetCountAsync(ShowUVSetCountToggle.IsOn);
+        }
+
+        private async void ShowMaterialCountToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowMaterialCountAsync(ShowMaterialCountToggle.IsOn);
+        }
+
+        private async void ShowBoundingBoxToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowBoundingBoxAsync(ShowBoundingBoxToggle.IsOn);
+        }
+
+        // Viewport Stats toggles
+        private async void ShowFPSToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowFPSAsync(ShowFPSToggle.IsOn);
+        }
+
+        private async void ShowResolutionToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowResolutionAsync(ShowResolutionToggle.IsOn);
+        }
+
+        private async void ShowViewportSizeToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowViewportSizeAsync(ShowViewportSizeToggle.IsOn);
+        }
+
+        private async void ShowCameraInfoToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            await _settings.SetShowCameraInfoAsync(ShowCameraInfoToggle.IsOn);
         }
 
         private static List<CustomFilter> GetDefaultAssetFilters()

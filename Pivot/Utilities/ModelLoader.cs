@@ -86,6 +86,22 @@ namespace Pivot.Utilities
             var vertices = new List<Vertex>();
             var indices = new List<uint>();
             
+            // Count UV sets from meshes
+            int uvSetCount = 0;
+            for (uint i = 0; i < scene->MNumMeshes; i++)
+            {
+                var mesh = scene->MMeshes[i];
+                // Count how many UV channels this mesh has
+                for (int uv = 0; uv < 8; uv++) // Assimp supports up to 8 UV channels
+                {
+                    if (mesh->MTextureCoords[uv] != null)
+                        uvSetCount = Math.Max(uvSetCount, uv + 1);
+                }
+            }
+            
+            // Get material count
+            int materialCount = (int)scene->MNumMaterials;
+            
             ProcessNode(scene->MRootNode, scene, vertices, indices);
             
             _assimp.FreeScene(scene);
@@ -108,7 +124,9 @@ namespace Pivot.Utilities
                 Vertices = vertices.ToArray(),
                 Indices = indices.ToArray(),
                 Bounds = BoundingBox.CreateFromPoints(positions),
-                OriginalUpAxis = detectedUpAxis
+                OriginalUpAxis = detectedUpAxis,
+                UVSetCount = uvSetCount,
+                MaterialCount = materialCount
             };
         }
         
@@ -308,6 +326,8 @@ namespace Pivot.Utilities
         public uint[] Indices { get; set; } = Array.Empty<uint>();
         public BoundingBox Bounds { get; set; }
         public UpAxis OriginalUpAxis { get; set; } = UpAxis.Unknown;
+        public int UVSetCount { get; set; } = 0;
+        public int MaterialCount { get; set; } = 0;
     }
 }
 

@@ -1040,5 +1040,61 @@ namespace Pivot.Services
             }
         }
 
+        // Viewport Info Display - Model Stats
+        public bool GetShowPolygonCount() => GetBoolSetting("Viewport.ShowPolygonCount", true);
+        public async Task SetShowPolygonCountAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowPolygonCount", value);
+        
+        public bool GetShowVertexCount() => GetBoolSetting("Viewport.ShowVertexCount", true);
+        public async Task SetShowVertexCountAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowVertexCount", value);
+        
+        public bool GetShowUVSetCount() => GetBoolSetting("Viewport.ShowUVSetCount", false);
+        public async Task SetShowUVSetCountAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowUVSetCount", value);
+        
+        public bool GetShowMaterialCount() => GetBoolSetting("Viewport.ShowMaterialCount", false);
+        public async Task SetShowMaterialCountAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowMaterialCount", value);
+        
+        public bool GetShowBoundingBox() => GetBoolSetting("Viewport.ShowBoundingBox", false);
+        public async Task SetShowBoundingBoxAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowBoundingBox", value);
+
+        // Viewport Info Display - Viewport Stats
+        public bool GetShowFPS() => GetBoolSetting("Viewport.ShowFPS", true);
+        public async Task SetShowFPSAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowFPS", value);
+        
+        public bool GetShowResolution() => GetBoolSetting("Viewport.ShowResolution", false);
+        public async Task SetShowResolutionAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowResolution", value);
+        
+        public bool GetShowViewportSize() => GetBoolSetting("Viewport.ShowViewportSize", false);
+        public async Task SetShowViewportSizeAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowViewportSize", value);
+        
+        public bool GetShowCameraInfo() => GetBoolSetting("Viewport.ShowCameraInfo", false);
+        public async Task SetShowCameraInfoAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowCameraInfo", value);
+
+        // Helper methods for bool settings
+        private bool GetBoolSetting(string key, bool defaultValue)
+        {
+            try
+            {
+                var value = _settingsStore.GetAsync(key).GetAwaiter().GetResult();
+                if (string.IsNullOrEmpty(value)) return defaultValue;
+                return bool.TryParse(value, out bool result) ? result : defaultValue;
+            }
+            catch
+            {
+                return defaultValue;
+            }
+        }
+
+        private async Task SetBoolSettingAsync(string key, bool value)
+        {
+            try
+            {
+                await _settingsStore.UpsertAsync(key, value.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"SettingsService: Failed to persist {key}.");
+            }
+        }
+
     }
 }

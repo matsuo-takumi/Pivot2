@@ -475,11 +475,8 @@ namespace Pivot
                     case "Code":
                         NavigateTo(NavigationRegion.Code);
                         break;
-                    case "Preference":
+                case "Preference":
                         NavigateTo(NavigationRegion.Preference);
-                        break;
-                    case "VulkanTest":
-                        NavigateTo(NavigationRegion.VulkanTest);
                         break;
                 }
             }
@@ -528,13 +525,6 @@ namespace Pivot
                     if (PreferenceFrame.Content?.GetType() != typeof(Views.PreferencePage))
                     {
                         PreferenceFrame.Navigate(typeof(Views.PreferencePage), null, transition);
-                    }
-                    break;
-                case NavigationRegion.VulkanTest:
-                    // 既にVulkanTestPageが表示されている場合は再ナビゲートしない
-                    if (VulkanTestFrame.Content?.GetType() != typeof(Views.VulkanTestPage))
-                    {
-                        VulkanTestFrame.Navigate(typeof(Views.VulkanTestPage), null, transition);
                     }
                     break;
             }

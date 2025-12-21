@@ -43,9 +43,6 @@
                 <PivotItem Header="Preference">
                     <Frame x:Name="PreferenceFrame" Background="Transparent"/>
                 </PivotItem>
-                <PivotItem Header="VulkanTest">
-                    <Frame x:Name="VulkanTestFrame" Background="Transparent"/>
-                </PivotItem>
             </Pivot>
         </Grid>
     </Grid>

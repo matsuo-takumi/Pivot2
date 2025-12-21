@@ -222,20 +222,27 @@ namespace Pivot.Controls
 
         private void InitializeRenderer()
         {
+            if (_initialized) return;
+            
             try
             {
-                _renderer = new VulkanInteropRenderer();
-                
                 // Calculate actual pixel size
                 var scale = this.CompositionScaleX;
+                if (scale <= 0) scale = 1;
                 var width = (int)(this.ActualWidth * scale);
                 var height = (int)(this.ActualHeight * scale);
 
-                if (width > 0 && height > 0)
+                if (width <= 0 || height <= 0)
                 {
-                    _renderer.Initialize(this, width, height);
-                    _initialized = true;
+                    // Size not ready yet, will try again on SizeChanged
+                    return;
                 }
+                
+                _renderer = new VulkanInteropRenderer();
+                _renderer.Initialize(this, width, height);
+                _initialized = true;
+                
+                System.Diagnostics.Debug.WriteLine($"[VulkanSwapChainPanel] Initialized: {width}x{height}");
             }
             catch (Exception ex)
             {
@@ -245,15 +252,24 @@ namespace Pivot.Controls
 
         private void OnSizeChanged(object sender, SizeChangedEventArgs e)
         {
+            // Try to initialize if not yet done (size may have been 0 on Loaded)
+            if (!_initialized)
+            {
+                InitializeRenderer();
+            }
+            
+            // Resize if initialized
             if (_initialized && _renderer != null)
             {
                 var scale = this.CompositionScaleX;
+                if (scale <= 0) scale = 1;
                 var width = (int)(e.NewSize.Width * scale);
                 var height = (int)(e.NewSize.Height * scale);
 
                 if (width > 0 && height > 0)
                 {
                     _renderer.Resize(width, height);
+                    System.Diagnostics.Debug.WriteLine($"[VulkanSwapChainPanel] Resized: {width}x{height}");
                 }
             }
         }

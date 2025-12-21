@@ -24,9 +24,10 @@
     </UserControl.Resources>
     
     <Grid>
-        <local:VulkanSwapChainPanel x:Name="VulkanPanel"
-                                   HorizontalAlignment="Stretch"
-                                   VerticalAlignment="Stretch"/>
+        <SwapChainPanel x:Name="VulkanSwapChainPanel"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"/>
+
 
         <!-- Axis Gizmo -->
         <local:AxisGizmo x:Name="AxisGizmoControl"
@@ -41,6 +42,33 @@
                 <FontIcon Glyph="&#xE9A6;" FontSize="14"/>
             </Button>
         </StackPanel>
+        
+        <!-- Info Overlay -->
+        <Border x:Name="InfoOverlay"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="8"
+                Padding="8"
+                Background="#80000000"
+                CornerRadius="4">
+            <StackPanel Spacing="2">
+                <!-- Viewport Stats -->
+                <TextBlock x:Name="FpsText" Text="FPS: --" Foreground="Lime" FontFamily="Consolas" FontSize="11"/>
+                <TextBlock x:Name="ResolutionText" Text="Resolution: -- x --" Foreground="Cyan" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+                <TextBlock x:Name="ViewportSizeText" Text="Viewport: -- x --" Foreground="Cyan" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+                <TextBlock x:Name="CameraInfoText" Text="Camera: --" Foreground="Yellow" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+                
+                <!-- Separator -->
+                <Border x:Name="InfoSeparator" Height="1" Background="#40FFFFFF" Margin="0,4,0,4" Visibility="Collapsed"/>
+                
+                <!-- Model Stats -->
+                <TextBlock x:Name="PolygonCountText" Text="Polygons: --" Foreground="White" FontFamily="Consolas" FontSize="11"/>
+                <TextBlock x:Name="VertexCountText" Text="Vertices: --" Foreground="White" FontFamily="Consolas" FontSize="11"/>
+                <TextBlock x:Name="UVSetCountText" Text="UV Sets: --" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+                <TextBlock x:Name="MaterialCountText" Text="Materials: --" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+                <TextBlock x:Name="BoundingBoxText" Text="Bounds: --" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
         
         <Border x:Name="ErrorMessageBorder"
                 Background="#CC000000"
