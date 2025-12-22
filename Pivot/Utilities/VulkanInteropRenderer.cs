@@ -11,6 +11,7 @@ using DxgiFormat = Vortice.DXGI.Format;
 using VkFormat = Silk.NET.Vulkan.Format;
 using DxgiSharedResourceFlags = Vortice.DXGI.SharedResourceFlags;
 using System.IO;
+using Pivot.Models;
 
 namespace Pivot.Utilities
 {
@@ -511,9 +512,13 @@ namespace Pivot.Utilities
 
         private void CreatePipeline()
         {
-            // Load SPIR-V from disk (Note: filenames changed to shader.vert.spv/shader.frag.spv)
-            var vertBytes = File.ReadAllBytes(@"d:\Repositry\Product\Pivot2\Pivot\Shaders\vert.spv"); 
-            var fragBytes = File.ReadAllBytes(@"d:\Repositry\Product\Pivot2\Pivot\Shaders\frag.spv");
+            // Load SPIR-V from disk
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var vertPath = Path.Combine(baseDir, "Shaders", "vert.spv");
+            var fragPath = Path.Combine(baseDir, "Shaders", "frag.spv");
+
+            var vertBytes = File.ReadAllBytes(vertPath); 
+            var fragBytes = File.ReadAllBytes(fragPath);
 
             // Create shader modules
             fixed (byte* vertCode = vertBytes)
@@ -834,6 +839,7 @@ namespace Pivot.Utilities
 
             // 1. Update UBO
             UpdateUniformBuffer((float)_currentWidth / _currentHeight, camera);
+            UpdateShadingBuffer();
 
             // 2. Record Command Buffer
             _vk.ResetCommandBuffer(_vkCommandBuffer, 0);
@@ -847,7 +853,7 @@ namespace Pivot.Utilities
             CheckVkResult(_vk.BeginCommandBuffer(_vkCommandBuffer, in beginInfo));
 
             var clearValues = stackalloc ClearValue[2];
-            clearValues[0].Color = new ClearColorValue { Float32_0 = 0.2f, Float32_1 = 0.6f, Float32_2 = 0.8f, Float32_3 = 1.0f };
+            clearValues[0].Color = new ClearColorValue { Float32_0 = _bgColorR, Float32_1 = _bgColorG, Float32_2 = _bgColorB, Float32_3 = 1.0f };
             clearValues[1].DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 };
 
             var renderPassInfo = new RenderPassBeginInfo
@@ -1098,9 +1104,56 @@ namespace Pivot.Utilities
                     LayerCount = 1
                 }
             };
-
             CheckVkResult(_vk.CreateImageView(_device, in createInfo, null, out var imageView));
             return imageView;
+        }
+
+        // Shading Mode
+        private ShadingMode _currentShadingMode = ShadingMode.WorldNormal;
+        private Silk.NET.Vulkan.Buffer _vkShadingBuffer;
+        private DeviceMemory _vkShadingBufferMemory;
+        private void* _vkShadingBufferMapped;
+
+        // Background color (RGB)
+        private float _bgColorR = 0.2f;
+        private float _bgColorG = 0.6f;
+        private float _bgColorB = 0.8f;
+
+        // Light parameters
+        private System.Numerics.Vector3 _lightDirection = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(0.5f, 1.0f, 0.3f));
+        private float _lightIntensity = 1.0f;
+        private System.Numerics.Vector3 _lightColor = new System.Numerics.Vector3(1f, 1f, 1f);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ShadingParams
+        {
+            public int Mode;
+            public float NearPlane;
+            public float FarPlane;
+            public float LightIntensity;
+            public System.Numerics.Vector3 LightDirection;
+            public float _padding1;
+            public System.Numerics.Vector3 LightColor;
+            public float _padding2;
+        }
+
+        public void SetShadingMode(ShadingMode mode)
+        {
+            _currentShadingMode = mode;
+        }
+
+        public void SetBackgroundColor(float r, float g, float b)
+        {
+            _bgColorR = r;
+            _bgColorG = g;
+            _bgColorB = b;
+        }
+
+        public void SetLightParams(System.Numerics.Vector3 direction, float intensity, System.Numerics.Vector3 color)
+        {
+            _lightDirection = System.Numerics.Vector3.Normalize(direction);
+            _lightIntensity = intensity;
+            _lightColor = color;
         }
 
         private void CreateDescriptorSetLayout()
@@ -1114,11 +1167,22 @@ namespace Pivot.Utilities
                 PImmutableSamplers = null
             };
 
+            var shadingLayoutBinding = new DescriptorSetLayoutBinding
+            {
+                Binding = 1,
+                DescriptorType = DescriptorType.UniformBuffer,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.FragmentBit,
+                PImmutableSamplers = null
+            };
+
+            var bindings = stackalloc DescriptorSetLayoutBinding[] { uboLayoutBinding, shadingLayoutBinding };
+
             var layoutInfo = new DescriptorSetLayoutCreateInfo
             {
                 SType = StructureType.DescriptorSetLayoutCreateInfo,
-                BindingCount = 1,
-                PBindings = &uboLayoutBinding
+                BindingCount = 2,
+                PBindings = bindings
             };
 
             CheckVkResult(_vk.CreateDescriptorSetLayout(_device, in layoutInfo, null, out _vkDescriptorSetLayout));
@@ -1126,28 +1190,35 @@ namespace Pivot.Utilities
 
         private void CreateUniformBuffers()
         {
+            // 1. Camera UBO
             ulong bufferSize = (ulong)Marshal.SizeOf<UniformBufferObject>();
+            CreateBuffer(bufferSize, BufferUsageFlags.UniformBufferBit, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vkUniformBuffer, out _vkUniformBufferMemory);
             
-            CreateBuffer(bufferSize, BufferUsageFlags.UniformBufferBit, 
-                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, 
-                out _vkUniformBuffer, out _vkUniformBufferMemory);
+            void* pMapped;
+            CheckVkResult(_vk.MapMemory(_device, _vkUniformBufferMemory, 0, bufferSize, 0, &pMapped));
+            _vkUniformBufferMapped = pMapped;
 
-            CheckVkResult(_vk.MapMemory(_device, _vkUniformBufferMemory, 0, bufferSize, 0, ref _vkUniformBufferMapped));
+            // 2. Shading Params UBO
+            ulong shadingBufferSize = (ulong)Marshal.SizeOf<ShadingParams>();
+            CreateBuffer(shadingBufferSize, BufferUsageFlags.UniformBufferBit, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, out _vkShadingBuffer, out _vkShadingBufferMemory);
+            
+            void* pShadingMapped;
+            CheckVkResult(_vk.MapMemory(_device, _vkShadingBufferMemory, 0, shadingBufferSize, 0, &pShadingMapped));
+            _vkShadingBufferMapped = pShadingMapped;
         }
 
         private void CreateDescriptorPool()
         {
-            var poolSize = new DescriptorPoolSize
-            {
-                Type = DescriptorType.UniformBuffer,
-                DescriptorCount = 1
+            var poolSizes = stackalloc DescriptorPoolSize[] 
+            { 
+                new DescriptorPoolSize { Type = DescriptorType.UniformBuffer, DescriptorCount = 2 } 
             };
 
             var poolInfo = new DescriptorPoolCreateInfo
             {
                 SType = StructureType.DescriptorPoolCreateInfo,
                 PoolSizeCount = 1,
-                PPoolSizes = &poolSize,
+                PPoolSizes = poolSizes,
                 MaxSets = 1
             };
 
@@ -1156,17 +1227,18 @@ namespace Pivot.Utilities
 
         private void CreateDescriptorSets()
         {
-            var layout = _vkDescriptorSetLayout;
+            var layouts = stackalloc DescriptorSetLayout[] { _vkDescriptorSetLayout };
             var allocInfo = new DescriptorSetAllocateInfo
             {
                 SType = StructureType.DescriptorSetAllocateInfo,
                 DescriptorPool = _vkDescriptorPool,
                 DescriptorSetCount = 1,
-                PSetLayouts = &layout
+                PSetLayouts = layouts
             };
 
             CheckVkResult(_vk.AllocateDescriptorSets(_device, in allocInfo, out _vkDescriptorSet));
 
+            // 1. Camera UBO
             var bufferInfo = new DescriptorBufferInfo
             {
                 Buffer = _vkUniformBuffer,
@@ -1174,7 +1246,17 @@ namespace Pivot.Utilities
                 Range = (ulong)Marshal.SizeOf<UniformBufferObject>()
             };
 
-            var descriptorWrite = new WriteDescriptorSet
+            // 2. Shading Params UBO
+            var shadingBufferInfo = new DescriptorBufferInfo
+            {
+                Buffer = _vkShadingBuffer,
+                Offset = 0,
+                Range = (ulong)Marshal.SizeOf<ShadingParams>()
+            };
+
+            var descriptorWrites = stackalloc WriteDescriptorSet[2];
+
+            descriptorWrites[0] = new WriteDescriptorSet
             {
                 SType = StructureType.WriteDescriptorSet,
                 DstSet = _vkDescriptorSet,
@@ -1185,7 +1267,18 @@ namespace Pivot.Utilities
                 PBufferInfo = &bufferInfo
             };
 
-            _vk.UpdateDescriptorSets(_device, 1, in descriptorWrite, 0, null);
+            descriptorWrites[1] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = _vkDescriptorSet,
+                DstBinding = 1,
+                DstArrayElement = 0,
+                DescriptorType = DescriptorType.UniformBuffer,
+                DescriptorCount = 1,
+                PBufferInfo = &shadingBufferInfo
+            };
+
+            _vk.UpdateDescriptorSets(_device, 2, descriptorWrites, 0, null);
         }
 
         public void UpdateUniformBuffer(float aspectRatio, OrbitCamera camera)
@@ -1274,10 +1367,26 @@ namespace Pivot.Utilities
             
             _sharedTexture?.Dispose();
             _swapChain?.Dispose();
-            _d3dContext?.Dispose();
             _d3dDevice?.Dispose();
             
             _disposed = true;
+        }
+
+        private void UpdateShadingBuffer()
+        {
+            var shadingParams = new ShadingParams
+            {
+                Mode = (int)_currentShadingMode,
+                NearPlane = 0.1f,
+                FarPlane = 100.0f,
+                LightIntensity = _lightIntensity,
+                LightDirection = _lightDirection,
+                _padding1 = 0.0f,
+                LightColor = _lightColor,
+                _padding2 = 0.0f
+            };
+
+            System.Buffer.MemoryCopy(&shadingParams, _vkShadingBufferMapped, (ulong)Marshal.SizeOf<ShadingParams>(), (ulong)Marshal.SizeOf<ShadingParams>());
         }
         
         /// <summary>

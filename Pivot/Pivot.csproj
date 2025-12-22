@@ -39,7 +39,6 @@
     <!-- Optimize incremental builds -->
     <UseRidGraph>true</UseRidGraph>
     <SkipCopyBuildProduct>false</SkipCopyBuildProduct>
-    
     <!-- Reduce file I/O during build -->
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
@@ -52,6 +51,9 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="Shaders\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

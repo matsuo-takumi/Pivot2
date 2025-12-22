@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:hx="using:HelixToolkit.WinUI"
     xmlns:local="using:Pivot.Controls"
+    xmlns:models="using:Pivot.Models"
     mc:Ignorable="d"
     KeyDown="OnKeyDown"
     IsTabStop="True">
@@ -37,7 +38,19 @@
 
         <!-- Controls Overlay -->
         <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Spacing="8" Orientation="Horizontal">
-            <Button x:Name="FitButton" Click="FitButton_Click" ToolTipService.ToolTip="Fit to View (F)" 
+            <DropDownButton x:Name="ShadingModeButton" ToolTipService.ToolTip="Shading Mode"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8">
+                <FontIcon Glyph="&#xE7B3;" FontSize="14"/>
+                <DropDownButton.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem x:Name="NormalModeItem" Text="World Normal" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.WorldNormal}"/>
+                        <MenuFlyoutItem x:Name="DepthModeItem" Text="Depth" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Depth}"/>
+                        <MenuFlyoutItem x:Name="LitModeItem" Text="Lit" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Lit}"/>
+                        <MenuFlyoutItem x:Name="UVModeItem" Text="UV Checker" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.UV}"/>
+                    </MenuFlyout>
+                </DropDownButton.Flyout>
+            </DropDownButton>
+            <Button x:Name="FitButton" Command="{x:Bind _viewModel.ResetCameraCommand}" ToolTipService.ToolTip="Fit to View (F)" 
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8">
                 <FontIcon Glyph="&#xE9A6;" FontSize="14"/>
             </Button>
@@ -62,11 +75,11 @@
                 <Border x:Name="InfoSeparator" Height="1" Background="#40FFFFFF" Margin="0,4,0,4" Visibility="Collapsed"/>
                 
                 <!-- Model Stats -->
-                <TextBlock x:Name="PolygonCountText" Text="Polygons: --" Foreground="White" FontFamily="Consolas" FontSize="11"/>
-                <TextBlock x:Name="VertexCountText" Text="Vertices: --" Foreground="White" FontFamily="Consolas" FontSize="11"/>
-                <TextBlock x:Name="UVSetCountText" Text="UV Sets: --" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
-                <TextBlock x:Name="MaterialCountText" Text="Materials: --" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
-                <TextBlock x:Name="BoundingBoxText" Text="Bounds: --" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+                <TextBlock x:Name="PolygonCountText" Text="{x:Bind _viewModel.PolygonCountString, Mode=OneWay}" Foreground="White" FontFamily="Consolas" FontSize="11"/>
+                <TextBlock x:Name="VertexCountText" Text="{x:Bind _viewModel.VertexCountString, Mode=OneWay}" Foreground="White" FontFamily="Consolas" FontSize="11"/>
+                <TextBlock x:Name="UVSetCountText" Text="{x:Bind _viewModel.UvSetCountString, Mode=OneWay}" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+                <TextBlock x:Name="MaterialCountText" Text="{x:Bind _viewModel.MaterialCountString, Mode=OneWay}" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
+                <TextBlock x:Name="BoundingBoxText" Text="{x:Bind _viewModel.BoundsString, Mode=OneWay}" Foreground="White" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/>
             </StackPanel>
         </Border>
         

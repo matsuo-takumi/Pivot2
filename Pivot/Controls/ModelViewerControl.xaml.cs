@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Pivot.Models;
 using Pivot.Services;
 using Pivot.Utilities;
+using Pivot.ViewModels;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -16,30 +17,22 @@ namespace Pivot.Controls
 {
     public sealed partial class ModelViewerControl : UserControl
     {
+        private readonly ModelViewerViewModel _viewModel = new();
         private VulkanInteropRenderer? _renderer;
-        private readonly OrbitCamera _camera = new();
         private bool _isInitialized;
         private bool _isDisposed;
-        
-        private BoundingBox _currentBounds;
-        private bool _hasBounds = false;
         
         // Mouse input
         private Point _lastPointerPosition;
         private bool _isLeftDragging;
         private bool _isMiddleDragging;
         private bool _isRightDragging;
+        private bool _isLightDragging; // Ctrl+L light rotation
         
         // FPS tracking
         private readonly Stopwatch _fpsStopwatch = new();
         private int _frameCount;
         private double _lastFpsUpdate;
-        
-        // Model stats
-        private int _polygonCount;
-        private int _vertexCount;
-        private int _uvSetCount;
-        private int _materialCount;
         
         // Settings
         private SettingsService? _settings;
@@ -70,6 +63,9 @@ namespace Pivot.Controls
         public ModelViewerControl()
         {
             this.InitializeComponent();
+            // Note: Do NOT set DataContext here to preserve parent binding context
+            // Use x:Bind to access _viewModel directly instead
+
             this.Loaded += OnLoaded;
             this.Unloaded += OnUnloaded;
             this.SizeChanged += OnSizeChanged;
@@ -129,6 +125,9 @@ namespace Pivot.Controls
 
                 _renderer = new VulkanInteropRenderer();
                 _renderer.Initialize(VulkanSwapChainPanel, width, height);
+                
+                // Pass renderer to ViewModel
+                _viewModel.SetRenderer(_renderer);
 
                 _isInitialized = true;
                 Debug.WriteLine($"[ModelViewerControl] Initialized: {width}x{height}");
@@ -147,6 +146,7 @@ namespace Pivot.Controls
 
             try
             {
+                _viewModel.SetRenderer(null);
                 _renderer?.Dispose();
                 _renderer = null;
                 _isInitialized = false;
@@ -190,8 +190,8 @@ namespace Pivot.Controls
 
             try
             {
-                _renderer.Render(_camera);
-                AxisGizmoControl.UpdateFromCamera(_camera);
+                _renderer.Render(_viewModel.Camera);
+                AxisGizmoControl.UpdateFromCamera(_viewModel.Camera);
                 
                 // Update FPS counter
                 _frameCount++;
@@ -219,7 +219,7 @@ namespace Pivot.Controls
                     
                     if (CameraInfoText.Visibility == Visibility.Visible)
                     {
-                        CameraInfoText.Text = $"Camera: d={_camera.Distance:F2}";
+                        CameraInfoText.Text = $"Camera: d={_viewModel.Camera.Distance:F2}";
                     }
                 }
             }
@@ -260,19 +260,7 @@ namespace Pivot.Controls
             InfoOverlay.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        private void UpdateModelStats()
-        {
-            PolygonCountText.Text = $"Polygons: {_polygonCount:N0}";
-            VertexCountText.Text = $"Vertices: {_vertexCount:N0}";
-            UVSetCountText.Text = $"UV Sets: {_uvSetCount}";
-            MaterialCountText.Text = $"Materials: {_materialCount}";
-            
-            if (_hasBounds)
-            {
-                var size = _currentBounds.Size;
-                BoundingBoxText.Text = $"Bounds: {size.X:F2} x {size.Y:F2} x {size.Z:F2}";
-            }
-        }
+
 
         #region Pointer Events
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -307,24 +295,31 @@ namespace Pivot.Controls
             var altState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu);
             var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
             var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+            var lKeyState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.L);
             bool isAlt = (altState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
             bool isShift = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
             bool isCtrl = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+            bool isL = (lKeyState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
 
-            // Check Rotate gesture
-            if (CheckGesture(_gestureConfig.RotateButton, _gestureConfig.RotateRequiresAlt, _gestureConfig.RotateRequiresShift, _gestureConfig.RotateRequiresCtrl, isAlt, isShift, isCtrl))
+            // Ctrl+L light rotation (UE-style)
+            if (isCtrl && isL && _isLeftDragging)
             {
-                _camera.Rotate(-deltaX * 0.01f, deltaY * 0.01f);
+                _viewModel.RotateLight(deltaX * 0.01f, deltaY * 0.01f);
+            }
+            // Check Rotate gesture
+            else if (CheckGesture(_gestureConfig.RotateButton, _gestureConfig.RotateRequiresAlt, _gestureConfig.RotateRequiresShift, _gestureConfig.RotateRequiresCtrl, isAlt, isShift, isCtrl))
+            {
+                _viewModel.RotateCamera((-deltaX * 0.01f, deltaY * 0.01f));
             }
             // Check Pan gesture
             else if (CheckGesture(_gestureConfig.PanButton, _gestureConfig.PanRequiresAlt, _gestureConfig.PanRequiresShift, _gestureConfig.PanRequiresCtrl, isAlt, isShift, isCtrl))
             {
-                _camera.Pan(-deltaX, deltaY);
+                _viewModel.PanCamera((-deltaX, deltaY));
             }
             // Check Zoom gesture
             else if (CheckGesture(_gestureConfig.ZoomButton, _gestureConfig.ZoomRequiresAlt, _gestureConfig.ZoomRequiresShift, _gestureConfig.ZoomRequiresCtrl, isAlt, isShift, isCtrl))
             {
-                _camera.Zoom(-deltaY * 0.1f);
+                _viewModel.ZoomCamera(-deltaY * 0.1f);
             }
 
             _lastPointerPosition = currentPos;
@@ -361,7 +356,7 @@ namespace Pivot.Controls
         private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
             var delta = e.GetCurrentPoint(VulkanSwapChainPanel).Properties.MouseWheelDelta;
-            _camera.Zoom(delta / 120f);
+            _viewModel.ZoomCamera(delta / 120f);
         }
         #endregion
 
@@ -369,80 +364,18 @@ namespace Pivot.Controls
         {
             if (e.Key == Windows.System.VirtualKey.F)
             {
-                FitCameraToModel();
+                _viewModel.ResetCamera();
                 e.Handled = true;
             }
         }
 
-        private void FitButton_Click(object sender, RoutedEventArgs e)
-        {
-            FitCameraToModel();
-        }
 
-        private void FitCameraToModel()
-        {
-            if (!_hasBounds) return;
-            _camera.FitToBounds(_currentBounds);
-        }
 
         private static void OnModelPathChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is ModelViewerControl control && e.NewValue is string path)
             {
-                control.LoadModelAsync(path);
-            }
-        }
-
-        private async void LoadModelAsync(string? path)
-        {
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-            {
-                return;
-            }
-
-            try
-            {
-                LoadingIndicator.Visibility = Visibility.Visible;
-                ErrorMessageBorder.Visibility = Visibility.Collapsed;
-
-                if (!_isInitialized || _renderer == null)
-                {
-                    ShowError("Renderer not initialized", "Please wait for initialization.");
-                    return;
-                }
-
-                MeshData? meshData = null;
-                await Task.Run(() =>
-                {
-                    using var loader = new ModelLoader();
-                    meshData = loader.LoadModel(path);
-                });
-
-                if (meshData != null)
-                {
-                    _renderer.UploadMesh(meshData.Vertices, meshData.Indices);
-                    
-                    _currentBounds = meshData.Bounds;
-                    _hasBounds = true;
-                    
-                    // Store model stats
-                    _polygonCount = meshData.Indices.Length / 3;
-                    _vertexCount = meshData.Vertices.Length;
-                    _uvSetCount = meshData.UVSetCount;
-                    _materialCount = meshData.MaterialCount;
-                    
-                    UpdateModelStats();
-                    
-                    _camera.FitToBounds(meshData.Bounds);
-                }
-
-                LoadingIndicator.Visibility = Visibility.Collapsed;
-                Debug.WriteLine($"[ModelViewerControl] Loaded: {path}");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[ModelViewerControl] Load error: {ex.Message}");
-                ShowError("モデルの読み込みに失敗しました", ex.Message);
+                control._viewModel.ModelPath = path;
             }
         }
 
