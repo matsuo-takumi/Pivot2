@@ -6,6 +6,7 @@ using Pivot.Models;
 using System.Collections.Generic;
 using System;
 using Microsoft.Extensions.Logging;
+using Windows.UI;
 
 namespace Pivot.Views
 {
@@ -44,6 +45,9 @@ namespace Pivot.Views
                 
                 // Load grid settings
                 LoadGridSettings();
+                
+                // Load background settings
+                LoadBackgroundSettings();
             }
             
             _isInitializing = false;
@@ -146,6 +150,95 @@ namespace Pivot.Views
             ShowCameraInfoToggle.IsOn = _settings.GetShowCameraInfo();
         }
 
+        private void LoadBackgroundSettings()
+        {
+            if (_settings == null) return;
+            
+            try
+            {
+                var mode = _settings.GetViewportBackgroundMode();
+                for (int i = 0; i < BackgroundModeCombo.Items.Count; i++)
+                {
+                    if (BackgroundModeCombo.Items[i] is ComboBoxItem item &&
+                        item.Tag?.ToString() == mode.ToString())
+                    {
+                        BackgroundModeCombo.SelectedIndex = i;
+                        break;
+                    }
+                }
+                UpdateBackgroundColorPanelVisibility(mode);
+                
+                var hexColor = _settings.GetViewportBackgroundColor();
+                BgColorPicker.Color = HexToColor(hexColor);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"LoadBackgroundSettings error: {ex.Message}");
+            }
+        }
+
+        private async void BackgroundModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isInitializing || _settings == null) return;
+            
+            try
+            {
+                if (BackgroundModeCombo.SelectedItem is ComboBoxItem item &&
+                    item.Tag is string tagStr &&
+                    Enum.TryParse<ViewportBackgroundMode>(tagStr, out var mode))
+                {
+                    await _settings.SetViewportBackgroundModeAsync(mode);
+                    UpdateBackgroundColorPanelVisibility(mode);
+                    System.Diagnostics.Debug.WriteLine($"[AssetSettingsPage] Saved background mode: {mode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"BackgroundModeCombo_SelectionChanged error: {ex.Message}");
+            }
+        }
+
+        private void UpdateBackgroundColorPanelVisibility(ViewportBackgroundMode mode)
+        {
+            BackgroundColorPanel.Visibility = mode == ViewportBackgroundMode.Custom 
+                ? Visibility.Visible 
+                : Visibility.Collapsed;
+        }
+
+        private async void BgColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        {
+            if (_isInitializing || _settings == null) return;
+            
+            try
+            {
+                var color = args.NewColor;
+                var hexColor = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+                await _settings.SetViewportBackgroundColorAsync(hexColor);
+                System.Diagnostics.Debug.WriteLine($"[AssetSettingsPage] Saved background color: {hexColor}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"BgColorPicker_ColorChanged error: {ex.Message}");
+            }
+        }
+
+        private static Color HexToColor(string hex)
+        {
+            try
+            {
+                hex = hex.TrimStart('#');
+                if (hex.Length == 6)
+                {
+                    byte r = Convert.ToByte(hex.Substring(0, 2), 16);
+                    byte g = Convert.ToByte(hex.Substring(2, 2), 16);
+                    byte b = Convert.ToByte(hex.Substring(4, 2), 16);
+                    return Color.FromArgb(255, r, g, b);
+                }
+            }
+            catch { }
+            return Color.FromArgb(255, 51, 153, 204); // Default
+        }
+
         private void ShowGridToggle_Toggled(object sender, RoutedEventArgs e)
         {
             if (_isInitializing || _settings == null) return;
@@ -244,5 +337,3 @@ namespace Pivot.Views
         }
     }
 }
-
-

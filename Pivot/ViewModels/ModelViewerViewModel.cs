@@ -1,5 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml;
+using Pivot.Models;
+using Pivot.Services;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -11,6 +16,39 @@ namespace Pivot.ViewModels
         private readonly Pivot.Utilities.OrbitCamera _camera = new();
         private Pivot.Utilities.VulkanInteropRenderer? _renderer;
         private Pivot.Utilities.BoundingBox _currentBounds;
+        private SettingsService? _settingsService;
+        private ViewportBackgroundMode _backgroundMode = ViewportBackgroundMode.Custom;
+
+        public ModelViewerViewModel()
+        {
+            _settingsService = App.Current?.Services?.GetService<SettingsService>();
+            var messenger = App.Current?.Services?.GetService<IMessenger>();
+            
+            if (messenger != null)
+            {
+                messenger.Register<ModelViewerViewModel, Pivot.Messages.SettingsChangedMessage>(this, static (r, m) => r.OnSettingsChanged(m));
+                messenger.Register<ModelViewerViewModel, Pivot.Messages.ThemeChangedMessage>(this, static (r, m) => r.OnThemeChanged(m));
+            }
+        }
+        
+        private void OnSettingsChanged(Pivot.Messages.SettingsChangedMessage message)
+        {
+            if (message.Value == "Viewport.BackgroundMode" || message.Value == "Viewport.BackgroundColor")
+            {
+                // UIスレッドで実行する必要があるかもしれないが、プロパティ変更は通常マーシャリングされる
+                //念のためDispatcherQueueを使うのが安全だが、ここでは直接呼び出してみる
+                InitializeBackgroundFromSettings();
+            }
+        }
+
+        private void OnThemeChanged(Pivot.Messages.ThemeChangedMessage message)
+        {
+            // テーマ変更時はMatchThemeの場合のみ再適用
+            if (_backgroundMode == ViewportBackgroundMode.MatchTheme)
+            {
+                ApplyThemeBasedBackground();
+            }
+        }
         
         [ObservableProperty]
         private string? _modelPath;
@@ -33,11 +71,92 @@ namespace Pivot.ViewModels
         {
             _renderer = renderer;
             
+            // Initialize background from settings
+            InitializeBackgroundFromSettings();
+            
             // If we have a pending model path, load it now
             if (_renderer != null && !string.IsNullOrWhiteSpace(ModelPath) && File.Exists(ModelPath))
             {
                 _ = LoadModelAsync(ModelPath);
             }
+        }
+        
+        /// <summary>
+        /// Initialize background color from settings
+        /// </summary>
+        private void InitializeBackgroundFromSettings()
+        {
+            try
+            {
+                _settingsService ??= App.Current?.Services?.GetService<SettingsService>();
+                if (_settingsService == null) return;
+                
+                _backgroundMode = _settingsService.GetViewportBackgroundMode();
+                
+                if (_backgroundMode == ViewportBackgroundMode.MatchTheme)
+                {
+                    ApplyThemeBasedBackground();
+                }
+                else
+                {
+                    var hexColor = _settingsService.GetViewportBackgroundColor();
+                    BackgroundColor = HexToColor(hexColor);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] InitializeBackgroundFromSettings error: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Apply background color based on current Mica backdrop style and theme
+        /// </summary>
+        public void ApplyThemeBasedBackground()
+        {
+            try
+            {
+                _settingsService ??= App.Current?.Services?.GetService<SettingsService>();
+                _backgroundMode = _settingsService?.GetViewportBackgroundMode() ?? ViewportBackgroundMode.Custom;
+                
+                if (_backgroundMode != ViewportBackgroundMode.MatchTheme)
+                {
+                    // Use custom color from settings
+                    var hexColor = _settingsService?.GetViewportBackgroundColor() ?? "#3399CC";
+                    BackgroundColor = HexToColor(hexColor);
+                    return;
+                }
+                
+                // MatchTheme mode: Set transparent background to show Mica backdrop
+                _renderer?.SetTransparentBackground();
+                
+                // Also update BackgroundColor property with a transparent value for consistency
+                BackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+                
+                System.Diagnostics.Debug.WriteLine("[ModelViewerViewModel] Applied transparent background for Mica");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] ApplyThemeBasedBackground error: {ex.Message}");
+            }
+        }
+
+        
+        private static Windows.UI.Color HexToColor(string hex)
+        {
+            try
+            {
+                hex = hex.TrimStart('#');
+                if (hex.Length == 6)
+                {
+                    byte r = Convert.ToByte(hex.Substring(0, 2), 16);
+                    byte g = Convert.ToByte(hex.Substring(2, 2), 16);
+                    byte b = Convert.ToByte(hex.Substring(4, 2), 16);
+                    return Windows.UI.Color.FromArgb(255, r, g, b);
+                }
+            }
+            catch { }
+            return Windows.UI.Color.FromArgb(255, 51, 153, 204); // Default
         }
         
 
@@ -99,7 +218,7 @@ namespace Pivot.ViewModels
 
         partial void OnBackgroundColorChanged(Windows.UI.Color value)
         {
-            _renderer?.SetBackgroundColor(value.R / 255f, value.G / 255f, value.B / 255f);
+            _renderer?.SetBackgroundColor(value.R / 255f, value.G / 255f, value.B / 255f, value.A / 255f);
         }
 
         partial void OnLightDirectionChanged(System.Numerics.Vector3 value)

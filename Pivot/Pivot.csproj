@@ -41,6 +41,12 @@
     <SkipCopyBuildProduct>false</SkipCopyBuildProduct>
     <!-- Reduce file I/O during build -->
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    
+    <!-- Additional build performance optimizations -->
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    
+    <!-- XAML compilation optimization -->
+    <EnableXamlPreCompilation>true</EnableXamlPreCompilation>
   </PropertyGroup>
 
   <ItemGroup>

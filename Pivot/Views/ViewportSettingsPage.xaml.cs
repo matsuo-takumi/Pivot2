@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Pivot.Models;
 using Pivot.Services;
 using System;
+using Windows.UI;
 
 namespace Pivot.Views
 {
@@ -25,9 +26,9 @@ namespace Pivot.Views
         {
             try
             {
+                // Camera gesture preset
                 var preset = _settings?.GetViewportCameraGesture() ?? CameraGesturePreset.Maya;
                 
-                // Select the correct ComboBox item
                 for (int i = 0; i < GesturePresetComboBox.Items.Count; i++)
                 {
                     if (GesturePresetComboBox.Items[i] is ComboBoxItem item && 
@@ -39,6 +40,22 @@ namespace Pivot.Views
                 }
                 
                 UpdateGestureDisplay(preset);
+                
+                // Background mode
+                var bgMode = _settings?.GetViewportBackgroundMode() ?? ViewportBackgroundMode.Custom;
+                if (bgMode == ViewportBackgroundMode.Custom)
+                {
+                    CustomModeRadio.IsChecked = true;
+                }
+                else
+                {
+                    MatchThemeModeRadio.IsChecked = true;
+                }
+                UpdateColorPickerVisibility(bgMode);
+                
+                // Background color
+                var bgColorHex = _settings?.GetViewportBackgroundColor() ?? "#3399CC";
+                BgColorPicker.Color = HexToColor(bgColorHex);
             }
             catch (Exception ex)
             {
@@ -95,5 +112,78 @@ namespace Pivot.Views
                     break;
             }
         }
+
+        private async void BackgroundModeRadio_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isInitializing) return;
+            
+            try
+            {
+                ViewportBackgroundMode mode = ViewportBackgroundMode.Custom;
+                
+                if (MatchThemeModeRadio.IsChecked == true)
+                {
+                    mode = ViewportBackgroundMode.MatchTheme;
+                }
+                
+                if (_settings != null)
+                {
+                    await _settings.SetViewportBackgroundModeAsync(mode);
+                    System.Diagnostics.Debug.WriteLine($"[ViewportSettingsPage] Saved background mode: {mode}");
+                }
+                
+                UpdateColorPickerVisibility(mode);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ViewportSettingsPage.BackgroundModeRadio_SelectionChanged error: {ex.Message}");
+            }
+        }
+
+        private void UpdateColorPickerVisibility(ViewportBackgroundMode mode)
+        {
+            ColorPickerPanel.Visibility = mode == ViewportBackgroundMode.Custom 
+                ? Visibility.Visible 
+                : Visibility.Collapsed;
+        }
+
+        private async void BgColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        {
+            if (_isInitializing) return;
+            
+            try
+            {
+                var color = args.NewColor;
+                var hexColor = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+                
+                if (_settings != null)
+                {
+                    await _settings.SetViewportBackgroundColorAsync(hexColor);
+                    System.Diagnostics.Debug.WriteLine($"[ViewportSettingsPage] Saved background color: {hexColor}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ViewportSettingsPage.BgColorPicker_ColorChanged error: {ex.Message}");
+            }
+        }
+
+        private static Color HexToColor(string hex)
+        {
+            try
+            {
+                hex = hex.TrimStart('#');
+                if (hex.Length == 6)
+                {
+                    byte r = Convert.ToByte(hex.Substring(0, 2), 16);
+                    byte g = Convert.ToByte(hex.Substring(2, 2), 16);
+                    byte b = Convert.ToByte(hex.Substring(4, 2), 16);
+                    return Color.FromArgb(255, r, g, b);
+                }
+            }
+            catch { }
+            return Color.FromArgb(255, 51, 153, 204); // Default
+        }
     }
 }
+

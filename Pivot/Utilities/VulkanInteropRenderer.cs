@@ -853,7 +853,7 @@ namespace Pivot.Utilities
             CheckVkResult(_vk.BeginCommandBuffer(_vkCommandBuffer, in beginInfo));
 
             var clearValues = stackalloc ClearValue[2];
-            clearValues[0].Color = new ClearColorValue { Float32_0 = _bgColorR, Float32_1 = _bgColorG, Float32_2 = _bgColorB, Float32_3 = 1.0f };
+            clearValues[0].Color = new ClearColorValue { Float32_0 = _bgColorR, Float32_1 = _bgColorG, Float32_2 = _bgColorB, Float32_3 = _bgColorA };
             clearValues[1].DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 };
 
             var renderPassInfo = new RenderPassBeginInfo
@@ -1114,10 +1114,11 @@ namespace Pivot.Utilities
         private DeviceMemory _vkShadingBufferMemory;
         private void* _vkShadingBufferMapped;
 
-        // Background color (RGB)
+        // Background color (RGBA)
         private float _bgColorR = 0.2f;
         private float _bgColorG = 0.6f;
         private float _bgColorB = 0.8f;
+        private float _bgColorA = 1.0f; // 0.0 = transparent (shows Mica), 1.0 = opaque
 
         // Light parameters
         private System.Numerics.Vector3 _lightDirection = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(0.5f, 1.0f, 0.3f));
@@ -1147,6 +1148,26 @@ namespace Pivot.Utilities
             _bgColorR = r;
             _bgColorG = g;
             _bgColorB = b;
+            _bgColorA = 1.0f;
+        }
+        
+        public void SetBackgroundColor(float r, float g, float b, float a)
+        {
+            _bgColorR = r;
+            _bgColorG = g;
+            _bgColorB = b;
+            _bgColorA = a;
+        }
+        
+        /// <summary>
+        /// Set transparent background to show Mica backdrop
+        /// </summary>
+        public void SetTransparentBackground()
+        {
+            _bgColorR = 0.0f;
+            _bgColorG = 0.0f;
+            _bgColorB = 0.0f;
+            _bgColorA = 0.0f;
         }
 
         public void SetLightParams(System.Numerics.Vector3 direction, float intensity, System.Numerics.Vector3 color)

@@ -8,7 +8,7 @@ namespace Pivot.Utilities
     /// </summary>
     public class OrbitCamera
     {
-        private float _yaw = 0.0f;      // Horizontal rotation (radians)
+        private float _yaw = MathF.PI;  // Horizontal rotation (radians) - start looking at -Z (front view)
         private float _pitch = 0.3f;    // Vertical rotation (radians)
         private float _distance = 3.0f; // Distance from target
         
@@ -119,8 +119,8 @@ namespace Pivot.Utilities
             // Ensure minimum distance
             Distance = MathF.Max(distanceNeeded, radius * 2f);
             
-            // Set a nice viewing angle (45° yaw, 30° pitch)
-            _yaw = MathF.PI / 4f;
+            // Set a nice viewing angle (225° yaw for front-right view, 30° pitch)
+            _yaw = MathF.PI + MathF.PI / 4f;
             _pitch = MathF.PI / 6f;
         }
         
@@ -131,7 +131,7 @@ namespace Pivot.Utilities
         {
             Target = Vector3.Zero;
             Distance = 3.0f;
-            _yaw = 0.0f;
+            _yaw = MathF.PI;  // Looking at -Z (front)
             _pitch = 0.3f;
         }
     }

@@ -1073,6 +1073,49 @@ namespace Pivot.Services
         public bool GetBackfaceCulling() => GetBoolSetting("Viewport.BackfaceCulling", true);
         public async Task SetBackfaceCullingAsync(bool value) => await SetBoolSettingAsync("Viewport.BackfaceCulling", value);
 
+        // Viewport background settings
+        public ViewportBackgroundMode GetViewportBackgroundMode()
+        {
+            try
+            {
+                var value = _settingsStore.GetAsync("Viewport.BackgroundMode").GetAwaiter().GetResult();
+                if (Enum.TryParse<ViewportBackgroundMode>(value, out var mode))
+                    return mode;
+            }
+            catch { }
+            return _cache.ViewportBackgroundMode;
+        }
+
+        public async Task SetViewportBackgroundModeAsync(ViewportBackgroundMode mode)
+        {
+            _cache.ViewportBackgroundMode = mode;
+            try
+            {
+                await _settingsStore.UpsertAsync("Viewport.BackgroundMode", mode.ToString());
+                _messenger?.Send(new Messages.SettingsChangedMessage("Viewport.BackgroundMode"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Viewport.BackgroundMode.");
+            }
+        }
+
+        public string GetViewportBackgroundColor() => _cache.ViewportBackgroundColor ?? "#3399CC";
+
+        public async Task SetViewportBackgroundColorAsync(string hexColor)
+        {
+            _cache.ViewportBackgroundColor = hexColor ?? "#3399CC";
+            try
+            {
+                await _settingsStore.UpsertAsync("Viewport.BackgroundColor", _cache.ViewportBackgroundColor);
+                _messenger?.Send(new Messages.SettingsChangedMessage("Viewport.BackgroundColor"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Viewport.BackgroundColor.");
+            }
+        }
+
         // Helper methods for bool settings
         private bool GetBoolSetting(string key, bool defaultValue)
         {

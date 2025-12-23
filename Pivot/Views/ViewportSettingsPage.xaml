@@ -91,6 +91,30 @@
                     </Grid>
                 </StackPanel>
             </Border>
+            
+            <!-- Background Color Settings -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Background" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Set the 3D viewport background color" 
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                           TextWrapping="Wrap"/>
+                
+                <!-- Mode selector -->
+                <RadioButtons x:Name="BackgroundModeRadio" 
+                              SelectionChanged="BackgroundModeRadio_SelectionChanged">
+                    <RadioButton x:Name="CustomModeRadio" Tag="Custom" Content="Custom Color"/>
+                    <RadioButton x:Name="MatchThemeModeRadio" Tag="MatchTheme" Content="Match Window Theme"/>
+                </RadioButtons>
+                
+                <!-- Color picker (Custom mode only) -->
+                <StackPanel x:Name="ColorPickerPanel" Spacing="8">
+                    <ColorPicker x:Name="BgColorPicker" 
+                                 ColorSpectrumShape="Ring" 
+                                 IsAlphaEnabled="False"
+                                 IsMoreButtonVisible="True"
+                                 ColorChanged="BgColorPicker_ColorChanged"/>
+                </StackPanel>
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </Page>

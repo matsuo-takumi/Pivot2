@@ -87,5 +87,9 @@ namespace Pivot.Models
         public float ViewportGridSpacing { get; set; } = 1f;
         public string ViewportGridColor { get; set; } = "#404040";
         public bool ViewportShowAxisGizmo { get; set; } = true;
+        
+        // Background settings
+        public ViewportBackgroundMode ViewportBackgroundMode { get; set; } = ViewportBackgroundMode.Custom;
+        public string ViewportBackgroundColor { get; set; } = "#3399CC"; // Default: 51, 153, 204
     }
 }
