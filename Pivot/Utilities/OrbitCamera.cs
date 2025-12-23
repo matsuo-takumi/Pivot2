@@ -22,7 +22,7 @@ namespace Pivot.Utilities
         public float Distance
         {
             get => _distance;
-            set => _distance = Math.Clamp(value, 0.1f, 10000f);
+            set => _distance = Math.Clamp(value, 0.1f, 1000000f);
         }
         
         public float Yaw

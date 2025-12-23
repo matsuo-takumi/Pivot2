@@ -72,7 +72,8 @@ namespace Pivot.Utilities
                 (uint)(PostProcessSteps.Triangulate | 
                        PostProcessSteps.GenerateNormals |
                        PostProcessSteps.FlipUVs |
-                       PostProcessSteps.JoinIdenticalVertices));
+                       PostProcessSteps.JoinIdenticalVertices |
+                       PostProcessSteps.FlipWindingOrder));
             
             if (scene == null || scene->MFlags == (uint)SceneFlags.Incomplete || scene->MRootNode == null)
             {
@@ -106,8 +107,8 @@ namespace Pivot.Utilities
             
             _assimp.FreeScene(scene);
             
-            // Transform coordinates if needed
-            if (detectedUpAxis != TargetUpAxis && detectedUpAxis != UpAxis.Unknown)
+            // Transform coordinates if needed (always for FBX to handle handedness and axis signs)
+            if (detectedUpAxis != UpAxis.Unknown)
             {
                 TransformVertices(vertices, detectedUpAxis, TargetUpAxis);
             }
@@ -181,58 +182,110 @@ namespace Pivot.Utilities
             {
                 var metadata = scene->MMetaData;
                 
-                // Look for UpAxis key (FBX stores this)
+                int upAxis = 1; // Default: Y-up
+                int upAxisSign = 1;
+                int coordAxis = 0;
+                int coordAxisSign = 1;
+                
+                // Look for coordinate system keys
                 for (uint i = 0; i < metadata->MNumProperties; i++)
                 {
                     var key = metadata->MKeys[i];
                     var keyStr = key.AsString;
+                    var value = metadata->MValues[i];
                     
-                    if (keyStr == "UpAxis" || keyStr == "OriginalUpAxis")
+                    if (value.MType == MetadataType.Int32)
                     {
-                        var value = metadata->MValues[i];
-                        if (value.MType == MetadataType.Int32)
-                        {
-                            // FBX: 0=X, 1=Y, 2=Z
-                            var axisValue = *(int*)value.MData;
-                            return axisValue == 2 ? UpAxis.ZUp : UpAxis.YUp;
-                        }
+                        int intValue = *(int*)value.MData;
+                        
+                        if (keyStr == "UpAxis")
+                            upAxis = intValue;
+                        else if (keyStr == "UpAxisSign")
+                            upAxisSign = intValue;
+                        else if (keyStr == "CoordAxis")
+                            coordAxis = intValue;
+                        else if (keyStr == "CoordAxisSign")
+                            coordAxisSign = intValue;
                     }
                 }
+                
+                // Store handedness info for later use if needed
+                _lastLoadedIsLeftHanded = (coordAxisSign == -1);
+                _lastUpAxisSign = upAxisSign;
+                
+                // FBX: 0=X, 1=Y, 2=Z
+                return upAxis == 2 ? UpAxis.ZUp : UpAxis.YUp;
             }
             
             // Default FBX to Y-up (Maya export default)
             return UpAxis.YUp;
         }
         
+        // Store coordinate system info from last loaded file
+        private bool _lastLoadedIsLeftHanded = false;
+        private int _lastUpAxisSign = 1;
+        
         /// <summary>
         /// Transform vertices from source to target up-axis
         /// </summary>
         private void TransformVertices(List<Vertex> vertices, UpAxis source, UpAxis target)
         {
-            Matrix4x4 transform;
+            Matrix4x4 transform = Matrix4x4.Identity;
+            bool needsTransform = false;
             
             if (source == UpAxis.YUp && target == UpAxis.ZUp)
             {
                 // Y-up to Z-up: rotate -90° around X
                 // (x, y, z) -> (x, -z, y)
                 transform = Matrix4x4.CreateRotationX(-MathF.PI / 2f);
+                needsTransform = true;
             }
             else if (source == UpAxis.ZUp && target == UpAxis.YUp)
             {
                 // Z-up to Y-up: rotate 90° around X
                 // (x, y, z) -> (x, z, -y)
                 transform = Matrix4x4.CreateRotationX(MathF.PI / 2f);
+                needsTransform = true;
             }
-            else
+            
+            // Handle left-handed coordinate systems (common in 3ds Max exports)
+            // Left-handed to right-handed: flip X axis
+            if (_lastLoadedIsLeftHanded)
             {
-                return; // No transform needed
+                var flipX = Matrix4x4.CreateScale(-1f, 1f, 1f);
+                transform = transform * flipX;
+                needsTransform = true;
             }
+            
+            // Handle negative UpAxisSign (axis pointing in negative direction)
+            if (_lastUpAxisSign == -1)
+            {
+                // Flip the up axis
+                if (target == UpAxis.YUp)
+                {
+                    var flipY = Matrix4x4.CreateScale(1f, -1f, 1f);
+                    transform = transform * flipY;
+                }
+                else
+                {
+                    var flipZ = Matrix4x4.CreateScale(1f, 1f, -1f);
+                    transform = transform * flipZ;
+                }
+                needsTransform = true;
+            }
+            
+            if (!needsTransform) return;
             
             for (int i = 0; i < vertices.Count; i++)
             {
                 var v = vertices[i];
                 v.Position = Vector3.Transform(v.Position, transform);
                 v.Normal = Vector3.TransformNormal(v.Normal, transform);
+                
+                // Normalize normal after transformation
+                if (v.Normal.LengthSquared() > 0.0001f)
+                    v.Normal = Vector3.Normalize(v.Normal);
+                    
                 vertices[i] = v;
             }
         }

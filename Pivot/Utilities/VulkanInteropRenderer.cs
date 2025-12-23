@@ -1283,11 +1283,18 @@ namespace Pivot.Utilities
 
         public void UpdateUniformBuffer(float aspectRatio, OrbitCamera camera)
         {
+            // Calculate far plane dynamically based on camera distance
+            float dist = camera.Distance;
+            float farPlane = (float)Math.Max(dist * 10.0, 10000.0);
+            
+            // Flip X and Z to correct coordinate system for Vulkan
+            var modelMatrix = System.Numerics.Matrix4x4.CreateScale(-1f, 1f, -1f);
+            
             var ubo = new UniformBufferObject
             {
-                Model = System.Numerics.Matrix4x4.Identity,
+                Model = modelMatrix,
                 View = camera.GetViewMatrix(),
-                Proj = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfView((float)Math.PI / 4.0f, aspectRatio, 0.1f, 100.0f)
+                Proj = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfView((float)Math.PI / 4.0f, aspectRatio, 0.1f, farPlane)
             };
             
             // Vulkan's Y coordinate is inverted comparing to OpenGL
