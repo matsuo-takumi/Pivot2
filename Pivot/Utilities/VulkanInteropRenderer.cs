@@ -57,6 +57,11 @@ namespace Pivot.Utilities
         private float _lightIntensity = 1.0f;
         private System.Numerics.Vector3 _lightColor = new System.Numerics.Vector3(1f, 1f, 1f);
 
+        // Material parameters (PBR)
+        private System.Numerics.Vector3 _materialAlbedo = new System.Numerics.Vector3(0.7f, 0.7f, 0.7f);
+        private float _materialMetallic = 0.0f;
+        private float _materialRoughness = 0.5f;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct ShadingParams
         {
@@ -68,6 +73,13 @@ namespace Pivot.Utilities
             public float _padding1;
             public System.Numerics.Vector3 LightColor;
             public float _padding2;
+            // PBR Material params
+            public System.Numerics.Vector3 MaterialAlbedo;
+            public float MaterialMetallic;
+            public float MaterialRoughness;
+            public float _padding3;
+            public float _padding4;
+            public float _padding5;
         }
 
         public VulkanInteropRenderer()
@@ -312,6 +324,16 @@ namespace Pivot.Utilities
             _lightColor = color;
         }
 
+        /// <summary>
+        /// Set PBR material parameters
+        /// </summary>
+        public void SetMaterialParams(float r, float g, float b, float metallic, float roughness)
+        {
+            _materialAlbedo = new System.Numerics.Vector3(r, g, b);
+            _materialMetallic = metallic;
+            _materialRoughness = roughness;
+        }
+
         #endregion
 
         #region Private Methods
@@ -475,7 +497,14 @@ namespace Pivot.Utilities
                 LightDirection = _lightDirection,
                 _padding1 = 0.0f,
                 LightColor = _lightColor,
-                _padding2 = 0.0f
+                _padding2 = 0.0f,
+                // PBR Material params
+                MaterialAlbedo = _materialAlbedo,
+                MaterialMetallic = _materialMetallic,
+                MaterialRoughness = _materialRoughness,
+                _padding3 = 0.0f,
+                _padding4 = 0.0f,
+                _padding5 = 0.0f
             };
 
             System.Buffer.MemoryCopy(&shadingParams, _vkShadingBufferMapped, (ulong)Marshal.SizeOf<ShadingParams>(), (ulong)Marshal.SizeOf<ShadingParams>());

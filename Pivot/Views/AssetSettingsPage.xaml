@@ -282,6 +282,10 @@
                 </ScrollViewer>
             </PivotItem>
 
+            <PivotItem Header="Material">
+                <local:MaterialSettingsView x:Name="MaterialSettingsView" />
+            </PivotItem>
+
             <PivotItem Header="General">
                 <Grid Padding="12">
                     <TextBlock Text="General Asset settings (placeholder)" Foreground="{ThemeResource AppTextCaptionBrush}" />

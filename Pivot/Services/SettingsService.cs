@@ -1143,5 +1143,54 @@ namespace Pivot.Services
             }
         }
 
+        // Material settings
+        public (float R, float G, float B, float Metallic, float Roughness) GetMaterialParams()
+        {
+            return (_cache.MaterialAlbedoR, _cache.MaterialAlbedoG, _cache.MaterialAlbedoB, 
+                    _cache.MaterialMetallic, _cache.MaterialRoughness);
+        }
+
+        public async Task SetMaterialParamsAsync(float r, float g, float b, float metallic, float roughness)
+        {
+            _cache.MaterialAlbedoR = r;
+            _cache.MaterialAlbedoG = g;
+            _cache.MaterialAlbedoB = b;
+            _cache.MaterialMetallic = metallic;
+            _cache.MaterialRoughness = roughness;
+            try
+            {
+                await _settingsStore.UpsertAsync("Material.AlbedoR", r.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                await _settingsStore.UpsertAsync("Material.AlbedoG", g.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                await _settingsStore.UpsertAsync("Material.AlbedoB", b.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                await _settingsStore.UpsertAsync("Material.Metallic", metallic.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                await _settingsStore.UpsertAsync("Material.Roughness", roughness.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Material params.");
+            }
+        }
+
+        public List<MaterialPreset> GetMaterialPresets()
+        {
+            var defaultPresets = MaterialPreset.GetDefaultPresets();
+            defaultPresets.AddRange(_cache.CustomMaterialPresets ?? new List<MaterialPreset>());
+            return defaultPresets;
+        }
+
+        public async Task SetMaterialPresetsAsync(List<MaterialPreset> customPresets)
+        {
+            _cache.CustomMaterialPresets = customPresets ?? new List<MaterialPreset>();
+            try
+            {
+                var json = JsonSerializer.Serialize(_cache.CustomMaterialPresets);
+                await _settingsStore.UpsertAsync("Material.CustomPresets", json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Material presets.");
+            }
+        }
+
     }
 }

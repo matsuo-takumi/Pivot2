@@ -349,6 +349,18 @@ namespace Pivot.Utilities
                     vertex.TexCoord = Vector2.Zero;
                 }
                 
+                // Vertex Colors (use first set if available)
+                if (mesh->MColors[0] != null)
+                {
+                    // Assimp MColors returns Vector4 directly (RGBA as XYZW)
+                    vertex.Color = mesh->MColors[0][i];
+                }
+                else
+                {
+                    // Default to white if no vertex colors
+                    vertex.Color = Vector4.One;
+                }
+                
                 vertices.Add(vertex);
             }
             

@@ -39,6 +39,10 @@ namespace Pivot.ViewModels
                 //念のためDispatcherQueueを使うのが安全だが、ここでは直接呼び出してみる
                 InitializeBackgroundFromSettings();
             }
+            else if (message.Value == "MaterialParams")
+            {
+                ApplyMaterialParams();
+            }
         }
 
         private void OnThemeChanged(Pivot.Messages.ThemeChangedMessage message)
@@ -159,6 +163,26 @@ namespace Pivot.ViewModels
             return Windows.UI.Color.FromArgb(255, 51, 153, 204); // Default
         }
         
+        /// <summary>
+        /// Apply PBR material parameters from settings
+        /// </summary>
+        private void ApplyMaterialParams()
+        {
+            try
+            {
+                _settingsService ??= App.Current?.Services?.GetService<SettingsService>();
+                if (_settingsService == null || _renderer == null) return;
+                
+                var (r, g, b, metallic, roughness) = _settingsService.GetMaterialParams();
+                _renderer.SetMaterialParams(r, g, b, metallic, roughness);
+                
+                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] Applied material params: RGB({r:F2},{g:F2},{b:F2}) M={metallic:F2} R={roughness:F2}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] ApplyMaterialParams error: {ex.Message}");
+            }
+        }
 
         
         [RelayCommand]

@@ -23,6 +23,26 @@ namespace Pivot.Models
         /// <summary>
         /// Checkerboard pattern based on UV coordinates
         /// </summary>
-        UV = 3
+        UV = 3,
+
+        /// <summary>
+        /// Physically-based rendering with material properties
+        /// </summary>
+        Material = 4,
+
+        /// <summary>
+        /// Display vertex colors from the model
+        /// </summary>
+        VertexColor = 5,
+
+        /// <summary>
+        /// UV-mapped texture display
+        /// </summary>
+        Texture = 6,
+
+        /// <summary>
+        /// Combined: Texture × Material × Vertex Color blended
+        /// </summary>
+        Combined = 7
     }
 }

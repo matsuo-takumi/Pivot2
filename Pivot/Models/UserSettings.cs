@@ -91,5 +91,18 @@ namespace Pivot.Models
         // Background settings
         public ViewportBackgroundMode ViewportBackgroundMode { get; set; } = ViewportBackgroundMode.Custom;
         public string ViewportBackgroundColor { get; set; } = "#3399CC"; // Default: 51, 153, 204
+
+        // Material settings (PBR)
+        public float MaterialAlbedoR { get; set; } = 0.7f;
+        public float MaterialAlbedoG { get; set; } = 0.7f;
+        public float MaterialAlbedoB { get; set; } = 0.7f;
+        public float MaterialMetallic { get; set; } = 0.0f;
+        public float MaterialRoughness { get; set; } = 0.5f;
+
+        // Custom material presets (stored as JSON)
+        public List<MaterialPreset> CustomMaterialPresets { get; set; } = new List<MaterialPreset>();
+        
+        // Backface culling
+        public bool ViewportBackfaceCulling { get; set; } = true;
     }
 }

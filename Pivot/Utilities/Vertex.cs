@@ -11,6 +11,7 @@ namespace Pivot.Utilities
         public Vector3 Position;
         public Vector3 Normal;
         public Vector2 TexCoord;
+        public Vector4 Color; // RGBA vertex color
 
         public static VertexInputBindingDescription GetBindingDescription()
         {
@@ -46,6 +47,13 @@ namespace Pivot.Utilities
                     Location = 2,
                     Format = VkFormat.R32G32Sfloat,
                     Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(TexCoord))
+                },
+                new VertexInputAttributeDescription
+                {
+                    Binding = 0,
+                    Location = 3,
+                    Format = VkFormat.R32G32B32A32Sfloat,
+                    Offset = (uint)Marshal.OffsetOf<Vertex>(nameof(Color))
                 }
             };
         }

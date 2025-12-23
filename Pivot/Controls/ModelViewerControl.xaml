@@ -47,6 +47,11 @@
                         <MenuFlyoutItem x:Name="DepthModeItem" Text="Depth" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Depth}"/>
                         <MenuFlyoutItem x:Name="LitModeItem" Text="Lit" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Lit}"/>
                         <MenuFlyoutItem x:Name="UVModeItem" Text="UV Checker" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.UV}"/>
+                        <MenuFlyoutSeparator/>
+                        <MenuFlyoutItem x:Name="MaterialModeItem" Text="Material (PBR)" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Material}"/>
+                        <MenuFlyoutItem x:Name="VertexColorModeItem" Text="Vertex Color" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.VertexColor}"/>
+                        <MenuFlyoutItem x:Name="TextureModeItem" Text="Texture" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Texture}"/>
+                        <MenuFlyoutItem x:Name="CombinedModeItem" Text="Combined" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Combined}"/>
                     </MenuFlyout>
                 </DropDownButton.Flyout>
             </DropDownButton>
