@@ -91,21 +91,39 @@
             </Button>
         </StackPanel>
         
-        <!-- Bottom-Right Material Settings Button -->
-        <DropDownButton x:Name="MaterialSettingsButton" 
-                        HorizontalAlignment="Right" 
-                        VerticalAlignment="Bottom" 
-                        Margin="12"
-                        ToolTipService.ToolTip="Material Settings"
-                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
-                        Padding="8">
-            <FontIcon Glyph="&#xE771;" FontSize="14"/>
-            <DropDownButton.Flyout>
-                <Flyout>
-                    <views:MaterialSettingsView x:Name="FloatingMaterialSettings" />
-                </Flyout>
-            </DropDownButton.Flyout>
-        </DropDownButton>
+        <!-- Bottom-Right Settings Buttons -->
+        <StackPanel HorizontalAlignment="Right" 
+                    VerticalAlignment="Bottom" 
+                    Margin="12"
+                    Orientation="Horizontal"
+                    Spacing="8">
+            
+            <!-- Lighting Settings Button -->
+            <DropDownButton x:Name="LightingSettingsButton" 
+                            ToolTipService.ToolTip="Lighting Settings"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                            Padding="8">
+                <FontIcon Glyph="&#xE706;" FontSize="14"/>
+                <DropDownButton.Flyout>
+                    <Flyout Placement="TopEdgeAlignedRight">
+                        <views:LightingSettingsView x:Name="FloatingLightingSettings" />
+                    </Flyout>
+                </DropDownButton.Flyout>
+            </DropDownButton>
+            
+            <!-- Material Settings Button -->
+            <DropDownButton x:Name="MaterialSettingsButton" 
+                            ToolTipService.ToolTip="Material Settings"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                            Padding="8">
+                <FontIcon Glyph="&#xE771;" FontSize="14"/>
+                <DropDownButton.Flyout>
+                    <Flyout Placement="TopEdgeAlignedRight">
+                        <views:MaterialSettingsView x:Name="FloatingMaterialSettings" />
+                    </Flyout>
+                </DropDownButton.Flyout>
+            </DropDownButton>
+        </StackPanel>
         
         <!-- Info Overlay -->
         <Border x:Name="InfoOverlay"

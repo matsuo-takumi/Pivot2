@@ -44,7 +44,7 @@ namespace Pivot.Utilities
         private int _currentHeight;
 
         // Shading Mode
-        private ShadingMode _currentShadingMode = ShadingMode.WorldNormal;
+        private ShadingMode _currentShadingMode = ShadingMode.Combined;
 
         // Background color (RGBA)
         private float _bgColorR = 0.2f;
@@ -52,10 +52,22 @@ namespace Pivot.Utilities
         private float _bgColorB = 0.8f;
         private float _bgColorA = 1.0f; // 0.0 = transparent (shows Mica), 1.0 = opaque
 
-        // Light parameters
-        private System.Numerics.Vector3 _lightDirection = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(0.5f, 1.0f, 0.3f));
-        private float _lightIntensity = 1.0f;
-        private System.Numerics.Vector3 _lightColor = new System.Numerics.Vector3(1f, 1f, 1f);
+        // Key Light parameters (main directional light) - Z inverted for front-facing
+        private System.Numerics.Vector3 _keyLightDirection = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(0.5f, 1.0f, -0.3f));
+        private float _keyLightIntensity = 1.0f;
+        private System.Numerics.Vector3 _keyLightColor = new System.Numerics.Vector3(1f, 1f, 1f);
+
+        // Ambient Light parameters
+        private float _ambientIntensity = 0.1f;
+        private System.Numerics.Vector3 _ambientColor = new System.Numerics.Vector3(0.4f, 0.4f, 0.5f);
+
+        // Rim Light parameters
+        private float _rimLightIntensity = 0.3f;
+        private System.Numerics.Vector3 _rimLightColor = new System.Numerics.Vector3(0.8f, 0.9f, 1.0f);
+
+        // Back Light parameters
+        private float _backLightIntensity = 0.2f;
+        private System.Numerics.Vector3 _backLightColor = new System.Numerics.Vector3(0.5f, 0.5f, 0.6f);
 
         // Material parameters (PBR)
         private System.Numerics.Vector3 _materialAlbedo = new System.Numerics.Vector3(0.7f, 0.7f, 0.7f);
@@ -74,16 +86,39 @@ namespace Pivot.Utilities
             public int Mode;
             public float NearPlane;
             public float FarPlane;
-            public float LightIntensity;
-            public System.Numerics.Vector3 LightDirection;
+            public float _padding0;
+
+            // Key Light (Main directional light)
+            public System.Numerics.Vector3 KeyLightDirection;
+            public float KeyLightIntensity;
+            public System.Numerics.Vector3 KeyLightColor;
             public float _padding1;
-            public System.Numerics.Vector3 LightColor;
-            public float _padding2;
+
+            // Ambient Light
+            public System.Numerics.Vector3 AmbientColor;
+            public float AmbientIntensity;
+
+            // Rim Light
+            public System.Numerics.Vector3 RimLightColor;
+            public float RimLightIntensity;
+
+            // Back Light
+            public System.Numerics.Vector3 BackLightColor;
+            public float BackLightIntensity;
+
             // PBR Material params
             public System.Numerics.Vector3 MaterialAlbedo;
             public float MaterialMetallic;
             public float MaterialRoughness;
-            // Shader toggles (as int for GLSL compatibility)
+            public float _padding2;
+            public float _padding3;
+            public float _padding4;
+
+            // Camera position for correct view direction calculation
+            public System.Numerics.Vector3 CameraPosition;
+            public float _padding5;
+
+            // Shader toggles (as int for GLSL compatibility) - must start at 16-byte boundary
             public int UseTexture;
             public int UseVertexColor;
             public int UseUVChecker;
@@ -164,7 +199,7 @@ namespace Pivot.Utilities
 
             // 2. Update UBO
             UpdateUniformBuffer((float)_currentWidth / _currentHeight, camera);
-            UpdateShadingBuffer();
+            UpdateShadingBuffer(camera);
 
             // 3. Record Command Buffer
             vk.ResetCommandBuffer(_vkCommandBuffer, 0);
@@ -325,11 +360,35 @@ namespace Pivot.Utilities
             _bgColorA = 0.0f;
         }
 
+        public void SetKeyLightParams(System.Numerics.Vector3 direction, float intensity, System.Numerics.Vector3 color)
+        {
+            _keyLightDirection = System.Numerics.Vector3.Normalize(direction);
+            _keyLightIntensity = intensity;
+            _keyLightColor = color;
+        }
+
+        public void SetAmbientLight(float intensity, System.Numerics.Vector3 color)
+        {
+            _ambientIntensity = intensity;
+            _ambientColor = color;
+        }
+
+        public void SetRimLight(float intensity, System.Numerics.Vector3 color)
+        {
+            _rimLightIntensity = intensity;
+            _rimLightColor = color;
+        }
+
+        public void SetBackLight(float intensity, System.Numerics.Vector3 color)
+        {
+            _backLightIntensity = intensity;
+            _backLightColor = color;
+        }
+
+        // Legacy method for compatibility - redirects to SetKeyLightParams
         public void SetLightParams(System.Numerics.Vector3 direction, float intensity, System.Numerics.Vector3 color)
         {
-            _lightDirection = System.Numerics.Vector3.Normalize(direction);
-            _lightIntensity = intensity;
-            _lightColor = color;
+            SetKeyLightParams(direction, intensity, color);
         }
 
         /// <summary>
@@ -505,22 +564,42 @@ namespace Pivot.Utilities
             System.Buffer.MemoryCopy(&ubo, _vkUniformBufferMapped, (ulong)Marshal.SizeOf<UniformBufferObject>(), (ulong)Marshal.SizeOf<UniformBufferObject>());
         }
 
-        private void UpdateShadingBuffer()
+        private void UpdateShadingBuffer(OrbitCamera camera)
         {
             var shadingParams = new ShadingParams
             {
                 Mode = (int)_currentShadingMode,
                 NearPlane = 0.1f,
                 FarPlane = 100.0f,
-                LightIntensity = _lightIntensity,
-                LightDirection = _lightDirection,
+                _padding0 = 0.0f,
+
+                // Key Light
+                KeyLightDirection = _keyLightDirection,
+                KeyLightIntensity = _keyLightIntensity,
+                KeyLightColor = _keyLightColor,
                 _padding1 = 0.0f,
-                LightColor = _lightColor,
-                _padding2 = 0.0f,
+
+                // Ambient Light
+                AmbientColor = _ambientColor,
+                AmbientIntensity = _ambientIntensity,
+
+                // Rim Light
+                RimLightColor = _rimLightColor,
+                RimLightIntensity = _rimLightIntensity,
+
+                // Back Light
+                BackLightColor = _backLightColor,
+                BackLightIntensity = _backLightIntensity,
+
                 // PBR Material params
                 MaterialAlbedo = _materialAlbedo,
                 MaterialMetallic = _materialMetallic,
                 MaterialRoughness = _materialRoughness,
+
+                // Camera position
+                CameraPosition = camera.Position,
+                _padding5 = 0.0f,
+
                 // Shader toggles
                 UseTexture = _useTexture ? 1 : 0,
                 UseVertexColor = _useVertexColor ? 1 : 0,

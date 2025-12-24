@@ -287,8 +287,9 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private Windows.UI.Color _backgroundColor = Windows.UI.Color.FromArgb(255, 51, 153, 204);
 
+        // Key Light (Main directional light) - Z inverted for front-facing
         [ObservableProperty]
-        private System.Numerics.Vector3 _lightDirection = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(0.5f, 1.0f, 0.3f));
+        private System.Numerics.Vector3 _lightDirection = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(0.5f, 1.0f, -0.3f));
 
         [ObservableProperty]
         private float _lightIntensity = 1.0f;
@@ -296,28 +297,55 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private Windows.UI.Color _lightColor = Windows.UI.Color.FromArgb(255, 255, 255, 255); // White
 
-        // Spherical coordinates for light (yaw/pitch in radians)
+        // Spherical coordinates for key light (yaw/pitch in radians)
+        [ObservableProperty]
         private float _lightYaw = 0.3f;
+
+        [ObservableProperty]
         private float _lightPitch = 1.0f;
 
-        partial void OnBackgroundColorChanged(Windows.UI.Color value)
+        // Ambient Light
+        [ObservableProperty]
+        private float _ambientIntensity = 0.1f;
+
+        [ObservableProperty]
+        private Windows.UI.Color _ambientColor = Windows.UI.Color.FromArgb(255, 102, 102, 128);
+
+        // Rim Light
+        [ObservableProperty]
+        private float _rimIntensity = 0.3f;
+
+        [ObservableProperty]
+        private Windows.UI.Color _rimColor = Windows.UI.Color.FromArgb(255, 204, 230, 255);
+
+        // Back Light
+        [ObservableProperty]
+        private float _backIntensity = 0.2f;
+
+        [ObservableProperty]
+        private Windows.UI.Color _backColor = Windows.UI.Color.FromArgb(255, 128, 128, 153);
+
+        partial void OnLightYawChanged(float value)
         {
-            _renderer?.SetBackgroundColor(value.R / 255f, value.G / 255f, value.B / 255f, value.A / 255f);
+            UpdateLightDirectionFromSpherical();
         }
 
-        partial void OnLightDirectionChanged(System.Numerics.Vector3 value)
+        partial void OnLightPitchChanged(float value)
         {
-            _renderer?.SetLightParams(value, LightIntensity, new System.Numerics.Vector3(LightColor.R / 255f, LightColor.G / 255f, LightColor.B / 255f));
+            UpdateLightDirectionFromSpherical();
         }
 
-        partial void OnLightIntensityChanged(float value)
+        /// <summary>
+        /// Update light direction from yaw/pitch spherical coordinates
+        /// </summary>
+        private void UpdateLightDirectionFromSpherical()
         {
-            _renderer?.SetLightParams(LightDirection, value, new System.Numerics.Vector3(LightColor.R / 255f, LightColor.G / 255f, LightColor.B / 255f));
-        }
+            // Convert spherical to cartesian
+            float x = (float)(Math.Sin(_lightPitch) * Math.Cos(_lightYaw));
+            float y = (float)Math.Cos(_lightPitch);
+            float z = (float)(Math.Sin(_lightPitch) * Math.Sin(_lightYaw));
 
-        partial void OnLightColorChanged(Windows.UI.Color value)
-        {
-            _renderer?.SetLightParams(LightDirection, LightIntensity, new System.Numerics.Vector3(value.R / 255f, value.G / 255f, value.B / 255f));
+            LightDirection = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(x, y, z));
         }
 
         /// <summary>
@@ -325,15 +353,62 @@ namespace Pivot.ViewModels
         /// </summary>
         public void RotateLight(float deltaYaw, float deltaPitch)
         {
-            _lightYaw += deltaYaw;
-            _lightPitch = Math.Clamp(_lightPitch + deltaPitch, 0.1f, (float)Math.PI - 0.1f);
+            LightYaw += deltaYaw;
+            LightPitch = Math.Clamp(LightPitch + deltaPitch, 0.1f, (float)Math.PI - 0.1f);
+        }
 
-            // Convert spherical to cartesian
-            float x = (float)(Math.Sin(_lightPitch) * Math.Cos(_lightYaw));
-            float y = (float)Math.Cos(_lightPitch);
-            float z = (float)(Math.Sin(_lightPitch) * Math.Sin(_lightYaw));
+        partial void OnBackgroundColorChanged(Windows.UI.Color value)
+        {
+            _renderer?.SetBackgroundColor(value.R / 255f, value.G / 255f, value.B / 255f, value.A / 255f);
+        }
 
-            LightDirection = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(x, y, z));
+        // Key Light changed handlers
+        partial void OnLightDirectionChanged(System.Numerics.Vector3 value)
+        {
+            _renderer?.SetKeyLightParams(value, LightIntensity, new System.Numerics.Vector3(LightColor.R / 255f, LightColor.G / 255f, LightColor.B / 255f));
+        }
+
+        partial void OnLightIntensityChanged(float value)
+        {
+            _renderer?.SetKeyLightParams(LightDirection, value, new System.Numerics.Vector3(LightColor.R / 255f, LightColor.G / 255f, LightColor.B / 255f));
+        }
+
+        partial void OnLightColorChanged(Windows.UI.Color value)
+        {
+            _renderer?.SetKeyLightParams(LightDirection, LightIntensity, new System.Numerics.Vector3(value.R / 255f, value.G / 255f, value.B / 255f));
+        }
+
+        // Ambient Light changed handlers
+        partial void OnAmbientIntensityChanged(float value)
+        {
+            _renderer?.SetAmbientLight(value, new System.Numerics.Vector3(AmbientColor.R / 255f, AmbientColor.G / 255f, AmbientColor.B / 255f));
+        }
+
+        partial void OnAmbientColorChanged(Windows.UI.Color value)
+        {
+            _renderer?.SetAmbientLight(AmbientIntensity, new System.Numerics.Vector3(value.R / 255f, value.G / 255f, value.B / 255f));
+        }
+
+        // Rim Light changed handlers
+        partial void OnRimIntensityChanged(float value)
+        {
+            _renderer?.SetRimLight(value, new System.Numerics.Vector3(RimColor.R / 255f, RimColor.G / 255f, RimColor.B / 255f));
+        }
+
+        partial void OnRimColorChanged(Windows.UI.Color value)
+        {
+            _renderer?.SetRimLight(RimIntensity, new System.Numerics.Vector3(value.R / 255f, value.G / 255f, value.B / 255f));
+        }
+
+        // Back Light changed handlers
+        partial void OnBackIntensityChanged(float value)
+        {
+            _renderer?.SetBackLight(value, new System.Numerics.Vector3(BackColor.R / 255f, BackColor.G / 255f, BackColor.B / 255f));
+        }
+
+        partial void OnBackColorChanged(Windows.UI.Color value)
+        {
+            _renderer?.SetBackLight(BackIntensity, new System.Numerics.Vector3(value.R / 255f, value.G / 255f, value.B / 255f));
         }
 
         [ObservableProperty]
@@ -430,6 +505,84 @@ namespace Pivot.ViewModels
             {
                 IsLoading = false;
             }
+        }
+
+        /// <summary>
+        /// Save current lighting state to settings
+        /// </summary>
+        public async Task SaveLightingStateAsync()
+        {
+            if (_settingsService == null) return;
+            
+            var state = new LightingPreset
+            {
+                Name = "Last Used",
+                KeyIntensity = LightIntensity,
+                KeyColor = LightColor,
+                KeyYaw = LightYaw,
+                KeyPitch = LightPitch,
+                AmbientIntensity = AmbientIntensity,
+                AmbientColor = AmbientColor,
+                RimIntensity = RimIntensity,
+                RimColor = RimColor,
+                BackIntensity = BackIntensity,
+                BackColor = BackColor
+            };
+            
+            await _settingsService.SaveLightingStateAsync(state);
+        }
+
+        /// <summary>
+        /// Restore lighting state from settings
+        /// </summary>
+        public async Task RestoreLightingStateAsync()
+        {
+            if (_settingsService == null) return;
+            
+            var state = await _settingsService.GetSavedLightingStateAsync();
+            if (state != null)
+            {
+                ApplyLightingPreset(state);
+            }
+        }
+
+        /// <summary>
+        /// Apply a lighting preset to current state
+        /// </summary>
+        public void ApplyLightingPreset(LightingPreset preset)
+        {
+            LightIntensity = preset.KeyIntensity;
+            LightColor = preset.KeyColor;
+            LightYaw = preset.KeyYaw;
+            LightPitch = preset.KeyPitch;
+            AmbientIntensity = preset.AmbientIntensity;
+            AmbientColor = preset.AmbientColor;
+            RimIntensity = preset.RimIntensity;
+            RimColor = preset.RimColor;
+            BackIntensity = preset.BackIntensity;
+            BackColor = preset.BackColor;
+        }
+
+        /// <summary>
+        /// Create a LightingPreset from current state
+        /// </summary>
+        public LightingPreset CreateLightingPresetFromCurrent(string name)
+        {
+            return new LightingPreset
+            {
+                Name = name,
+                IsCustom = true,
+                KeyIntensity = LightIntensity,
+                KeyColor = LightColor,
+                KeyYaw = LightYaw,
+                KeyPitch = LightPitch,
+                AmbientIntensity = AmbientIntensity,
+                AmbientColor = AmbientColor,
+                RimIntensity = RimIntensity,
+                RimColor = RimColor,
+                BackIntensity = BackIntensity,
+                BackColor = BackColor
+            };
         }
     }
 }

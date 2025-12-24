@@ -10,15 +10,38 @@ layout(binding = 1) uniform ShadingParams {
     int mode;           // 0=WorldNormal, 1=Depth, 2=Lit, 3=UV, 4=Material, 5=VertexColor, 6=Texture, 7=Blend
     float nearPlane;
     float farPlane;
-    float lightIntensity;
-    vec3 lightDirection;
+    float _padding0;
+    
+    // Key Light (Main directional light)
+    vec3 keyLightDirection;
+    float keyLightIntensity;
+    vec3 keyLightColor;
     float _padding1;
-    vec3 lightColor;
-    float _padding2;
+    
+    // Ambient Light
+    vec3 ambientColor;
+    float ambientIntensity;
+    
+    // Rim Light
+    vec3 rimLightColor;
+    float rimLightIntensity;
+    
+    // Back Light
+    vec3 backLightColor;
+    float backLightIntensity;
+    
     // PBR Material params
     vec3 materialAlbedo;
     float materialMetallic;
     float materialRoughness;
+    float _padding2;
+    float _padding3;
+    float _padding4;
+    
+    // Camera position for correct view direction
+    vec3 cameraPosition;
+    float _padding5;
+    
     // Toggle flags
     int useTexture;
     int useVertexColor;
@@ -68,15 +91,24 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-vec3 calculatePBR(vec3 N, vec3 V, vec3 albedo, float metallic, float roughness) {
-    vec3 L = normalize(shading.lightDirection);
-    vec3 H = normalize(V + L);
+// Calculate contribution from a single directional light
+vec3 calculateDirectionalLight(vec3 N, vec3 V, vec3 L, vec3 lightColor, float intensity, vec3 albedo, float metallic, float roughness, vec3 F0) {
+    // Early exit for surfaces facing away from light
+    float NdotL = max(dot(N, L), 0.0);
+    if (NdotL <= 0.0) return vec3(0.0);
     
-    // Fresnel reflectance at normal incidence
-    vec3 F0 = vec3(0.04);
-    F0 = mix(F0, albedo, metallic);
+    float NdotV = max(dot(N, V), 0.001); // Prevent division issues
     
-    // Cook-Torrance BRDF
+    // Check for degenerate half vector (when V and L are nearly opposite)
+    vec3 H_unnorm = V + L;
+    float H_len = length(H_unnorm);
+    if (H_len < 0.001) {
+        // V and L are nearly opposite, skip specular, only diffuse
+        vec3 kD = vec3(1.0) * (1.0 - metallic);
+        return kD * albedo / PI * lightColor * intensity * NdotL;
+    }
+    vec3 H = H_unnorm / H_len;
+    
     float NDF = DistributionGGX(N, H, roughness);
     float G = GeometrySmith(N, V, L, roughness);
     vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
@@ -86,15 +118,36 @@ vec3 calculatePBR(vec3 N, vec3 V, vec3 albedo, float metallic, float roughness) 
     kD *= 1.0 - metallic;
     
     vec3 numerator = NDF * G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    float denominator = 4.0 * NdotV * NdotL + 0.0001;
     vec3 specular = numerator / denominator;
     
-    float NdotL = max(dot(N, L), 0.0);
+    return (kD * albedo / PI + specular) * lightColor * intensity * NdotL;
+}
+
+vec3 calculateMultiLightPBR(vec3 N, vec3 V, vec3 albedo, float metallic, float roughness) {
+    // Fresnel reflectance at normal incidence
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, albedo, metallic);
     
-    vec3 Lo = (kD * albedo / PI + specular) * shading.lightColor * shading.lightIntensity * NdotL;
+    vec3 Lo = vec3(0.0);
     
-    // Ambient
-    vec3 ambient = vec3(0.03) * albedo;
+    // Key Light (main directional light)
+    vec3 keyDir = normalize(shading.keyLightDirection);
+    Lo += calculateDirectionalLight(N, V, keyDir, shading.keyLightColor, shading.keyLightIntensity, albedo, metallic, roughness, F0);
+    
+    // Back Light (opposite to key light)
+    vec3 backDir = -keyDir;
+    Lo += calculateDirectionalLight(N, V, backDir, shading.backLightColor, shading.backLightIntensity, albedo, metallic, roughness, F0);
+    
+    // Rim Light (based on view direction - Fresnel-like effect)
+    // Only apply rim when the surface is lit (not facing away from camera)
+    float NdotV_rim = max(dot(N, V), 0.0);
+    float rimFactor = 1.0 - NdotV_rim;
+    rimFactor = pow(rimFactor, 4.0) * NdotV_rim; // Multiply by NdotV to prevent artifacts at grazing angles
+    Lo += shading.rimLightColor * shading.rimLightIntensity * rimFactor;
+    
+    // Ambient Light
+    vec3 ambient = shading.ambientColor * shading.ambientIntensity * albedo;
     
     return ambient + Lo;
 }
@@ -113,7 +166,8 @@ vec3 getTextureColor() {
 
 void main() {
     vec3 normal = normalize(fragNormal);
-    vec3 viewDir = normalize(-fragWorldPos);
+    // Correct view direction from camera position to fragment
+    vec3 viewDir = normalize(shading.cameraPosition - fragWorldPos);
     
     if (shading.mode == 0) {
         // World Normal - map [-1,1] to [0,1]
@@ -125,11 +179,11 @@ void main() {
         outColor = vec4(vec3(1.0 - depth), 1.0);
     }
     else if (shading.mode == 2) {
-        // Lit - dynamic directional lighting
-        vec3 lightDir = normalize(shading.lightDirection);
-        float ambient = 0.15;
-        float diffuse = max(dot(normal, lightDir), 0.0) * 0.85 * shading.lightIntensity;
-        vec3 brightness = (ambient + diffuse) * shading.lightColor;
+        // Lit - dynamic directional lighting (simple version)
+        vec3 lightDir = normalize(shading.keyLightDirection);
+        float ambient = shading.ambientIntensity;
+        float diffuse = max(dot(normal, lightDir), 0.0) * shading.keyLightIntensity;
+        vec3 brightness = (ambient * shading.ambientColor + diffuse * shading.keyLightColor);
         outColor = vec4(brightness, 1.0);
     }
     else if (shading.mode == 3) {
@@ -137,8 +191,8 @@ void main() {
         outColor = vec4(getUVChecker(), 1.0);
     }
     else if (shading.mode == 4) {
-        // Material (PBR)
-        vec3 result = calculatePBR(normal, viewDir, shading.materialAlbedo, shading.materialMetallic, shading.materialRoughness);
+        // Material (PBR) with multi-light
+        vec3 result = calculateMultiLightPBR(normal, viewDir, shading.materialAlbedo, shading.materialMetallic, shading.materialRoughness);
         // HDR tonemapping
         result = result / (result + vec3(1.0));
         // Gamma correction
@@ -154,43 +208,40 @@ void main() {
         outColor = vec4(getTextureColor(), 1.0);
     }
     else if (shading.mode == 7) {
-        // Blend mode: blend enabled toggles
-        vec3 blendedAlbedo = vec3(1.0); // Start with white (neutral multiply)
+        // Blend mode: average blend of enabled toggles with multi-light
+        vec3 blendedAlbedo = vec3(0.0);
         float alpha = 1.0;
         int blendCount = 0;
         
-        // Material (PBR albedo)
         if (shading.useMaterial == 1) {
-            blendedAlbedo *= shading.materialAlbedo;
+            blendedAlbedo += shading.materialAlbedo;
             blendCount++;
         }
         
-        // Vertex Color
         if (shading.useVertexColor == 1) {
-            blendedAlbedo *= fragColor.rgb;
+            blendedAlbedo += fragColor.rgb;
             alpha *= fragColor.a;
             blendCount++;
         }
         
-        // Texture (placeholder)
         if (shading.useTexture == 1) {
-            blendedAlbedo *= getTextureColor();
+            blendedAlbedo += getTextureColor();
             blendCount++;
         }
         
-        // UV Checker overlay
         if (shading.useUVChecker == 1) {
-            blendedAlbedo *= getUVChecker();
+            blendedAlbedo += getUVChecker();
             blendCount++;
         }
         
-        // If nothing is enabled, use material albedo as fallback
-        if (blendCount == 0) {
+        if (blendCount > 0) {
+            blendedAlbedo /= float(blendCount);
+        } else {
             blendedAlbedo = shading.materialAlbedo;
         }
         
-        // Apply PBR lighting to the blended result
-        vec3 result = calculatePBR(normal, viewDir, blendedAlbedo, shading.materialMetallic, shading.materialRoughness);
+        // Apply multi-light PBR
+        vec3 result = calculateMultiLightPBR(normal, viewDir, blendedAlbedo, shading.materialMetallic, shading.materialRoughness);
         
         // HDR tonemapping
         result = result / (result + vec3(1.0));
@@ -204,4 +255,3 @@ void main() {
         outColor = vec4(normal * 0.5 + 0.5, 1.0);
     }
 }
-

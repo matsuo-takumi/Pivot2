@@ -1238,5 +1238,103 @@ namespace Pivot.Services
             }
         }
 
+        // Lighting State Persistence
+        public async Task<LightingPreset?> GetSavedLightingStateAsync()
+        {
+            try
+            {
+                var json = await _settingsStore.GetAsync("Viewport.LightingState");
+                if (!string.IsNullOrWhiteSpace(json) && LooksLikeJsonObject(json))
+                {
+                    return JsonSerializer.Deserialize<LightingPreset>(json);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load lighting state.");
+            }
+            return null;
+        }
+
+        public async Task SaveLightingStateAsync(LightingPreset state)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(state);
+                await _settingsStore.UpsertAsync("Viewport.LightingState", json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to save lighting state.");
+            }
+        }
+
+        // Lighting Presets
+        public async Task<List<LightingPreset>> GetLightingPresetsAsync()
+        {
+            try
+            {
+                var json = await _settingsStore.GetAsync("Viewport.LightingPresets");
+                if (!string.IsNullOrWhiteSpace(json) && LooksLikeJsonArray(json))
+                {
+                    var presets = JsonSerializer.Deserialize<List<LightingPreset>>(json);
+                    if (presets != null && presets.Count > 0)
+                    {
+                        return presets;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load lighting presets.");
+            }
+            // Return default presets if none saved
+            return LightingPreset.GetDefaultPresets();
+        }
+
+        public async Task SaveLightingPresetsAsync(List<LightingPreset> presets)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(presets);
+                await _settingsStore.UpsertAsync("Viewport.LightingPresets", json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to save lighting presets.");
+            }
+        }
+
+        // Material State Persistence
+        public async Task<MaterialPreset?> GetSavedMaterialStateAsync()
+        {
+            try
+            {
+                var json = await _settingsStore.GetAsync("Viewport.MaterialState");
+                if (!string.IsNullOrWhiteSpace(json) && LooksLikeJsonObject(json))
+                {
+                    return JsonSerializer.Deserialize<MaterialPreset>(json);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load material state.");
+            }
+            return null;
+        }
+
+        public async Task SaveMaterialStateAsync(MaterialPreset state)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(state);
+                await _settingsStore.UpsertAsync("Viewport.MaterialState", json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to save material state.");
+            }
+        }
+
     }
 }

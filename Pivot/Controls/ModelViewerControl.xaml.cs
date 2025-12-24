@@ -77,7 +77,7 @@ namespace Pivot.Controls
             VulkanSwapChainPanel.PointerWheelChanged += OnPointerWheelChanged;
         }
 
-        private void OnLoaded(object sender, RoutedEventArgs e)
+        private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             this.Focus(FocusState.Programmatic);
             
@@ -99,14 +99,23 @@ namespace Pivot.Controls
                 _renderer.SetBackfaceCulling(_settings.GetBackfaceCulling());
             }
             
+            // Pass ViewModel to LightingSettingsView
+            FloatingLightingSettings.ViewModel = _viewModel;
+            
+            // Restore lighting state from settings
+            await _viewModel.RestoreLightingStateAsync();
+            
             UpdateInfoVisibility();
             
             _fpsStopwatch.Start();
             CompositionTarget.Rendering += OnRendering;
         }
 
-        private void OnUnloaded(object sender, RoutedEventArgs e)
+        private async void OnUnloaded(object sender, RoutedEventArgs e)
         {
+            // Save lighting state before unloading
+            await _viewModel.SaveLightingStateAsync();
+            
             _fpsStopwatch.Stop();
             CompositionTarget.Rendering -= OnRendering;
             DisposeRenderer();

@@ -41,12 +41,13 @@
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <ColorPicker x:Name="AlbedoColorPicker" 
                                  Grid.Column="1"
-                                 ColorSpectrumShape="Ring"
+                                 ColorSpectrumShape="Box"
                                  IsAlphaEnabled="False"
                                  IsMoreButtonVisible="False"
-                                 IsColorSliderVisible="True"
-                                 IsColorChannelTextInputVisible="True"
+                                 IsColorSliderVisible="False"
+                                 IsColorChannelTextInputVisible="False"
                                  IsHexInputVisible="True"
+                                 MinWidth="180" MaxWidth="220"
                                  ColorChanged="AlbedoColorPicker_ColorChanged"/>
                 </Grid>
                 

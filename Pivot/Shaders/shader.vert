@@ -28,6 +28,6 @@ void main() {
     
     fragTexCoord = inTexCoord;
     fragDepth = -viewPos.z; // Positive depth in view space
-    fragWorldPos = worldPos.xyz;
+    fragWorldPos = worldPos.xyz; // World space position
     fragColor = inColor;
 }
