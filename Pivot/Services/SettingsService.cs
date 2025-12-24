@@ -1336,5 +1336,41 @@ namespace Pivot.Services
             }
         }
 
+        // Material Presets
+        public async Task<List<MaterialPreset>> GetMaterialPresetsAsync()
+        {
+            try
+            {
+                var json = await _settingsStore.GetAsync("Viewport.MaterialPresets");
+                if (!string.IsNullOrWhiteSpace(json) && LooksLikeJsonArray(json))
+                {
+                    var presets = JsonSerializer.Deserialize<List<MaterialPreset>>(json);
+                    if (presets != null && presets.Count > 0)
+                    {
+                        return presets;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to load material presets.");
+            }
+            // Return default presets if none saved
+            return MaterialPreset.GetDefaultPresets();
+        }
+
+        public async Task SaveMaterialPresetsAsync(List<MaterialPreset> presets)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(presets);
+                await _settingsStore.UpsertAsync("Viewport.MaterialPresets", json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to save material presets.");
+            }
+        }
+
     }
 }
