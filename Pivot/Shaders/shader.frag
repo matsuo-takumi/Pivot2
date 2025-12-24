@@ -7,7 +7,7 @@ layout(location = 3) in vec3 fragWorldPos;
 layout(location = 4) in vec4 fragColor;
 
 layout(binding = 1) uniform ShadingParams {
-    int mode;           // 0=WorldNormal, 1=Depth, 2=Lit, 3=UV, 4=Material, 5=VertexColor, 6=Texture, 7=Combined
+    int mode;           // 0=WorldNormal, 1=Depth, 2=Lit, 3=UV, 4=Material, 5=VertexColor, 6=Texture, 7=Blend
     float nearPlane;
     float farPlane;
     float lightIntensity;
@@ -19,9 +19,11 @@ layout(binding = 1) uniform ShadingParams {
     vec3 materialAlbedo;
     float materialMetallic;
     float materialRoughness;
-    float _padding3;
-    float _padding4;
-    float _padding5;
+    // Toggle flags
+    int useTexture;
+    int useVertexColor;
+    int useUVChecker;
+    int useMaterial;
 } shading;
 
 layout(location = 0) out vec4 outColor;
@@ -97,6 +99,18 @@ vec3 calculatePBR(vec3 N, vec3 V, vec3 albedo, float metallic, float roughness) 
     return ambient + Lo;
 }
 
+// UV Checker pattern
+vec3 getUVChecker() {
+    float scale = 10.0;
+    float checker = mod(floor(fragTexCoord.x * scale) + floor(fragTexCoord.y * scale), 2.0);
+    return checker > 0.5 ? vec3(0.8, 0.8, 0.8) : vec3(0.3, 0.3, 0.3);
+}
+
+// Texture color (placeholder - using UV gradient for now)
+vec3 getTextureColor() {
+    return vec3(fragTexCoord, 0.5);
+}
+
 void main() {
     vec3 normal = normalize(fragNormal);
     vec3 viewDir = normalize(-fragWorldPos);
@@ -120,10 +134,7 @@ void main() {
     }
     else if (shading.mode == 3) {
         // UV Checkerboard
-        float scale = 10.0;
-        float checker = mod(floor(fragTexCoord.x * scale) + floor(fragTexCoord.y * scale), 2.0);
-        vec3 color = checker > 0.5 ? vec3(0.8, 0.8, 0.8) : vec3(0.3, 0.3, 0.3);
-        outColor = vec4(color, 1.0);
+        outColor = vec4(getUVChecker(), 1.0);
     }
     else if (shading.mode == 4) {
         // Material (PBR)
@@ -140,22 +151,57 @@ void main() {
     }
     else if (shading.mode == 6) {
         // Texture mode - using UV as color for now (placeholder for actual texture)
-        // When texture sampler is added, this will use texture2D(texSampler, fragTexCoord)
-        vec3 uvColor = vec3(fragTexCoord, 0.5);
-        outColor = vec4(uvColor, 1.0);
+        outColor = vec4(getTextureColor(), 1.0);
     }
     else if (shading.mode == 7) {
-        // Combined: Material × Vertex Color
-        vec3 combinedAlbedo = shading.materialAlbedo * fragColor.rgb;
-        vec3 result = calculatePBR(normal, viewDir, combinedAlbedo, shading.materialMetallic, shading.materialRoughness);
+        // Blend mode: blend enabled toggles
+        vec3 blendedAlbedo = vec3(1.0); // Start with white (neutral multiply)
+        float alpha = 1.0;
+        int blendCount = 0;
+        
+        // Material (PBR albedo)
+        if (shading.useMaterial == 1) {
+            blendedAlbedo *= shading.materialAlbedo;
+            blendCount++;
+        }
+        
+        // Vertex Color
+        if (shading.useVertexColor == 1) {
+            blendedAlbedo *= fragColor.rgb;
+            alpha *= fragColor.a;
+            blendCount++;
+        }
+        
+        // Texture (placeholder)
+        if (shading.useTexture == 1) {
+            blendedAlbedo *= getTextureColor();
+            blendCount++;
+        }
+        
+        // UV Checker overlay
+        if (shading.useUVChecker == 1) {
+            blendedAlbedo *= getUVChecker();
+            blendCount++;
+        }
+        
+        // If nothing is enabled, use material albedo as fallback
+        if (blendCount == 0) {
+            blendedAlbedo = shading.materialAlbedo;
+        }
+        
+        // Apply PBR lighting to the blended result
+        vec3 result = calculatePBR(normal, viewDir, blendedAlbedo, shading.materialMetallic, shading.materialRoughness);
+        
         // HDR tonemapping
         result = result / (result + vec3(1.0));
         // Gamma correction
         result = pow(result, vec3(1.0/2.2));
-        outColor = vec4(result, fragColor.a);
+        
+        outColor = vec4(result, alpha);
     }
     else {
         // Fallback to normal
         outColor = vec4(normal * 0.5 + 0.5, 1.0);
     }
 }
+

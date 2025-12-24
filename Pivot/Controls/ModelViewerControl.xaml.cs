@@ -265,6 +265,9 @@ namespace Pivot.Controls
         #region Pointer Events
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            // Capture focus so keyboard shortcuts work
+            this.Focus(FocusState.Programmatic);
+            
             var props = e.GetCurrentPoint(VulkanSwapChainPanel).Properties;
             _lastPointerPosition = e.GetCurrentPoint(VulkanSwapChainPanel).Position;
 
@@ -366,6 +369,34 @@ namespace Pivot.Controls
             {
                 _viewModel.ResetCamera();
                 e.Handled = true;
+                return;
+            }
+            
+            // Check Alt modifier for shading mode shortcuts
+            var altState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu);
+            bool isAlt = (altState & Windows.UI.Core.CoreVirtualKeyStates.Down) != 0;
+            
+            if (isAlt)
+            {
+                switch (e.Key)
+                {
+                    case Windows.System.VirtualKey.Number1:
+                        _viewModel.SetShadingMode(ShadingMode.Lit);
+                        e.Handled = true;
+                        break;
+                    case Windows.System.VirtualKey.Number2:
+                        _viewModel.SetShadingMode(ShadingMode.Depth);
+                        e.Handled = true;
+                        break;
+                    case Windows.System.VirtualKey.Number3:
+                        _viewModel.SetShadingMode(ShadingMode.WorldNormal);
+                        e.Handled = true;
+                        break;
+                    case Windows.System.VirtualKey.Number4:
+                        _viewModel.SetShadingMode(ShadingMode.Combined);
+                        e.Handled = true;
+                        break;
+                }
             }
         }
 

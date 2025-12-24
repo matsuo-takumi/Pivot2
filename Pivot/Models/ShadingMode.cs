@@ -41,7 +41,7 @@ namespace Pivot.Models
         Texture = 6,
 
         /// <summary>
-        /// Combined: Texture × Material × Vertex Color blended
+        /// Blend mode: Blends enabled toggles (Texture, Material, Vertex Color, UV)
         /// </summary>
         Combined = 7
     }

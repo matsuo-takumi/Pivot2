@@ -7,6 +7,7 @@
     xmlns:hx="using:HelixToolkit.WinUI"
     xmlns:local="using:Pivot.Controls"
     xmlns:models="using:Pivot.Models"
+    xmlns:views="using:Pivot.Views"
     mc:Ignorable="d"
     KeyDown="OnKeyDown"
     IsTabStop="True">
@@ -36,30 +37,75 @@
                         VerticalAlignment="Bottom"
                         Margin="8"/>
 
-        <!-- Controls Overlay -->
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Spacing="8" Orientation="Horizontal">
+        <!-- Top-Right Controls Overlay -->
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Spacing="4" Orientation="Horizontal">
+            <!-- Toggle Buttons for Texture, Vertex Color, Material -->
+            <ToggleButton x:Name="TextureToggleButton" 
+                          IsChecked="{x:Bind _viewModel.UseTexture, Mode=TwoWay}"
+                          ToolTipService.ToolTip="Texture"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                          Padding="8">
+                <FontIcon Glyph="&#xE8B9;" FontSize="14"/>
+            </ToggleButton>
+            <ToggleButton x:Name="VertexColorToggleButton" 
+                          IsChecked="{x:Bind _viewModel.UseVertexColor, Mode=TwoWay}"
+                          ToolTipService.ToolTip="Vertex Color"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                          Padding="8">
+                <FontIcon Glyph="&#xE790;" FontSize="14"/>
+            </ToggleButton>
+            <ToggleButton x:Name="MaterialToggleButton" 
+                          IsChecked="{x:Bind _viewModel.UseMaterial, Mode=TwoWay}"
+                          ToolTipService.ToolTip="Material (PBR)"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                          Padding="8">
+                <FontIcon Glyph="&#xE771;" FontSize="14"/>
+            </ToggleButton>
+            <ToggleButton x:Name="UVCheckerToggleButton" 
+                          IsChecked="{x:Bind _viewModel.UseUVChecker, Mode=TwoWay}"
+                          ToolTipService.ToolTip="UV Checker"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                          Padding="8">
+                <FontIcon Glyph="&#xED63;" FontSize="14"/>
+            </ToggleButton>
+            
+            <!-- Shading Mode Dropdown -->
             <DropDownButton x:Name="ShadingModeButton" ToolTipService.ToolTip="Shading Mode"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8">
                 <FontIcon Glyph="&#xE7B3;" FontSize="14"/>
                 <DropDownButton.Flyout>
                     <MenuFlyout>
-                        <MenuFlyoutItem x:Name="NormalModeItem" Text="World Normal" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.WorldNormal}"/>
-                        <MenuFlyoutItem x:Name="DepthModeItem" Text="Depth" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Depth}"/>
-                        <MenuFlyoutItem x:Name="LitModeItem" Text="Lit" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Lit}"/>
-                        <MenuFlyoutItem x:Name="UVModeItem" Text="UV Checker" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.UV}"/>
+                        <MenuFlyoutItem x:Name="LitModeItem" Text="Lit (Alt+1)" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Lit}"/>
+                        <MenuFlyoutItem x:Name="DepthModeItem" Text="Depth (Alt+2)" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Depth}"/>
+                        <MenuFlyoutItem x:Name="NormalModeItem" Text="World Normal (Alt+3)" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.WorldNormal}"/>
                         <MenuFlyoutSeparator/>
-                        <MenuFlyoutItem x:Name="MaterialModeItem" Text="Material (PBR)" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Material}"/>
-                        <MenuFlyoutItem x:Name="VertexColorModeItem" Text="Vertex Color" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.VertexColor}"/>
-                        <MenuFlyoutItem x:Name="TextureModeItem" Text="Texture" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Texture}"/>
-                        <MenuFlyoutItem x:Name="CombinedModeItem" Text="Combined" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Combined}"/>
+                        <MenuFlyoutItem x:Name="BlendModeItem" Text="Blend (Alt+4)" Command="{x:Bind _viewModel.SetShadingModeCommand}" CommandParameter="{x:Bind models:ShadingMode.Combined}"/>
                     </MenuFlyout>
                 </DropDownButton.Flyout>
             </DropDownButton>
+            
+            <!-- Fit to View Button -->
             <Button x:Name="FitButton" Command="{x:Bind _viewModel.ResetCameraCommand}" ToolTipService.ToolTip="Fit to View (F)" 
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8">
                 <FontIcon Glyph="&#xE9A6;" FontSize="14"/>
             </Button>
         </StackPanel>
+        
+        <!-- Bottom-Right Material Settings Button -->
+        <DropDownButton x:Name="MaterialSettingsButton" 
+                        HorizontalAlignment="Right" 
+                        VerticalAlignment="Bottom" 
+                        Margin="12"
+                        ToolTipService.ToolTip="Material Settings"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                        Padding="8">
+            <FontIcon Glyph="&#xE771;" FontSize="14"/>
+            <DropDownButton.Flyout>
+                <Flyout>
+                    <views:MaterialSettingsView x:Name="FloatingMaterialSettings" />
+                </Flyout>
+            </DropDownButton.Flyout>
+        </DropDownButton>
         
         <!-- Info Overlay -->
         <Border x:Name="InfoOverlay"

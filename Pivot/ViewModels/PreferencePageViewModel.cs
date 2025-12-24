@@ -34,6 +34,7 @@ namespace Pivot.ViewModels
                 "Image" => CreateImageSettingsPage(),
                 "Directories" => new DirectoryPage(),
                 "Theme" => new ThemePage(),
+                "KeyConfig" => new Views.KeyConfigPage(),
                 "Code" => CreateCodeSettingsPage(),
                 "Color" => CreateColorSettingsPage(),
                 _ => null

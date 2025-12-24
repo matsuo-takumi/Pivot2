@@ -1,0 +1,96 @@
+<Page
+    x:Class="Pivot.Views.KeyConfigPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+        <StackPanel Spacing="24" MaxWidth="600">
+            
+            <!-- Header -->
+            <TextBlock Text="Key Config" FontSize="24" FontWeight="SemiBold"/>
+            <TextBlock Text="Customize keyboard shortcuts for various actions." 
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                       FontSize="13" 
+                       Margin="0,0,0,16"/>
+            
+            <!-- Asset Section -->
+            <StackPanel Spacing="12">
+                <TextBlock Text="Asset" FontSize="18" FontWeight="SemiBold"/>
+                <TextBlock Text="Shading mode shortcuts for 3D viewer" 
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                           FontSize="12"/>
+                
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                        CornerRadius="8" 
+                        Padding="16">
+                    <Grid RowSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        
+                        <!-- Lit Shortcut -->
+                        <TextBlock Grid.Row="0" Grid.Column="0" 
+                                   Text="Lit" 
+                                   VerticalAlignment="Center" 
+                                   FontSize="13"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" 
+                                 x:Name="LitShortcutBox" 
+                                 Text="Alt+1" 
+                                 IsReadOnly="True"
+                                 PlaceholderText="Press key combination..."
+                                 MinWidth="120"/>
+                        
+                        <!-- Depth Shortcut -->
+                        <TextBlock Grid.Row="1" Grid.Column="0" 
+                                   Text="Depth" 
+                                   VerticalAlignment="Center" 
+                                   FontSize="13"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" 
+                                 x:Name="DepthShortcutBox" 
+                                 Text="Alt+2" 
+                                 IsReadOnly="True"
+                                 PlaceholderText="Press key combination..."
+                                 MinWidth="120"/>
+                        
+                        <!-- World Normal Shortcut -->
+                        <TextBlock Grid.Row="2" Grid.Column="0" 
+                                   Text="World Normal" 
+                                   VerticalAlignment="Center" 
+                                   FontSize="13"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" 
+                                 x:Name="WorldNormalShortcutBox" 
+                                 Text="Alt+3" 
+                                 IsReadOnly="True"
+                                 PlaceholderText="Press key combination..."
+                                 MinWidth="120"/>
+                    </Grid>
+                </Border>
+                
+                <!-- Info Note -->
+                <Border Background="{ThemeResource SystemFillColorCautionBackgroundBrush}" 
+                        CornerRadius="4" 
+                        Padding="12">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE946;" FontSize="14" 
+                                  Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                        <TextBlock Text="Shortcut customization will be available in a future update." 
+                                   FontSize="12" 
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+            
+        </StackPanel>
+    </ScrollViewer>
+</Page>

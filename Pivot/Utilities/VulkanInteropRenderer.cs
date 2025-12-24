@@ -62,6 +62,12 @@ namespace Pivot.Utilities
         private float _materialMetallic = 0.0f;
         private float _materialRoughness = 0.5f;
 
+        // Shader toggle flags
+        private bool _useTexture = false;
+        private bool _useVertexColor = false;
+        private bool _useUVChecker = false;
+        private bool _useMaterial = true;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct ShadingParams
         {
@@ -77,9 +83,11 @@ namespace Pivot.Utilities
             public System.Numerics.Vector3 MaterialAlbedo;
             public float MaterialMetallic;
             public float MaterialRoughness;
-            public float _padding3;
-            public float _padding4;
-            public float _padding5;
+            // Shader toggles (as int for GLSL compatibility)
+            public int UseTexture;
+            public int UseVertexColor;
+            public int UseUVChecker;
+            public int UseMaterial;
         }
 
         public VulkanInteropRenderer()
@@ -334,6 +342,17 @@ namespace Pivot.Utilities
             _materialRoughness = roughness;
         }
 
+        /// <summary>
+        /// Set shader toggle states for Material-based rendering
+        /// </summary>
+        public void SetShaderToggles(bool useTexture, bool useVertexColor, bool useUVChecker, bool useMaterial)
+        {
+            _useTexture = useTexture;
+            _useVertexColor = useVertexColor;
+            _useUVChecker = useUVChecker;
+            _useMaterial = useMaterial;
+        }
+
         #endregion
 
         #region Private Methods
@@ -502,9 +521,11 @@ namespace Pivot.Utilities
                 MaterialAlbedo = _materialAlbedo,
                 MaterialMetallic = _materialMetallic,
                 MaterialRoughness = _materialRoughness,
-                _padding3 = 0.0f,
-                _padding4 = 0.0f,
-                _padding5 = 0.0f
+                // Shader toggles
+                UseTexture = _useTexture ? 1 : 0,
+                UseVertexColor = _useVertexColor ? 1 : 0,
+                UseUVChecker = _useUVChecker ? 1 : 0,
+                UseMaterial = _useMaterial ? 1 : 0
             };
 
             System.Buffer.MemoryCopy(&shadingParams, _vkShadingBufferMapped, (ulong)Marshal.SizeOf<ShadingParams>(), (ulong)Marshal.SizeOf<ShadingParams>());

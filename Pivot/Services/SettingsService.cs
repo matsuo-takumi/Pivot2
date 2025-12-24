@@ -1192,5 +1192,51 @@ namespace Pivot.Services
             }
         }
 
+        // Key binding settings for Asset tab shortcuts
+        public string GetAssetLitShortcut() => _cache.AssetLitShortcut ?? "Alt+1";
+        
+        public async Task SetAssetLitShortcutAsync(string shortcut)
+        {
+            _cache.AssetLitShortcut = shortcut ?? "Alt+1";
+            try
+            {
+                await _settingsStore.UpsertAsync("KeyConfig.AssetLit", _cache.AssetLitShortcut);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist KeyConfig.AssetLit.");
+            }
+        }
+
+        public string GetAssetDepthShortcut() => _cache.AssetDepthShortcut ?? "Alt+2";
+        
+        public async Task SetAssetDepthShortcutAsync(string shortcut)
+        {
+            _cache.AssetDepthShortcut = shortcut ?? "Alt+2";
+            try
+            {
+                await _settingsStore.UpsertAsync("KeyConfig.AssetDepth", _cache.AssetDepthShortcut);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist KeyConfig.AssetDepth.");
+            }
+        }
+
+        public string GetAssetWorldNormalShortcut() => _cache.AssetWorldNormalShortcut ?? "Alt+3";
+        
+        public async Task SetAssetWorldNormalShortcutAsync(string shortcut)
+        {
+            _cache.AssetWorldNormalShortcut = shortcut ?? "Alt+3";
+            try
+            {
+                await _settingsStore.UpsertAsync("KeyConfig.AssetWorldNormal", _cache.AssetWorldNormalShortcut);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist KeyConfig.AssetWorldNormal.");
+            }
+        }
+
     }
 }

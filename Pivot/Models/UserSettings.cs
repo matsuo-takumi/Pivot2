@@ -104,5 +104,10 @@ namespace Pivot.Models
         
         // Backface culling
         public bool ViewportBackfaceCulling { get; set; } = true;
+
+        // Key bindings for Asset tab shading mode shortcuts
+        public string AssetLitShortcut { get; set; } = "Alt+1";
+        public string AssetDepthShortcut { get; set; } = "Alt+2";
+        public string AssetWorldNormalShortcut { get; set; } = "Alt+3";
     }
 }

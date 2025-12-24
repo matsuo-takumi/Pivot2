@@ -210,11 +210,71 @@ namespace Pivot.ViewModels
         }
         
         [ObservableProperty]
-        private Pivot.Models.ShadingMode _currentShadingMode = Pivot.Models.ShadingMode.WorldNormal;
+        private Pivot.Models.ShadingMode _currentShadingMode = Pivot.Models.ShadingMode.Combined;
+
+        // Shader toggle properties
+        [ObservableProperty]
+        private bool _useTexture = false;
+
+        [ObservableProperty]
+        private bool _useVertexColor = false;
+
+        [ObservableProperty]
+        private bool _useUVChecker = false;
+
+        [ObservableProperty]
+        private bool _useMaterial = true;
 
         partial void OnCurrentShadingModeChanged(Pivot.Models.ShadingMode value)
         {
             _renderer?.SetShadingMode(value);
+            ApplyShaderToggles();
+        }
+
+        partial void OnUseTextureChanged(bool value)
+        {
+            ApplyShaderToggles();
+        }
+
+        partial void OnUseVertexColorChanged(bool value)
+        {
+            ApplyShaderToggles();
+        }
+
+        partial void OnUseUVCheckerChanged(bool value)
+        {
+            ApplyShaderToggles();
+        }
+
+        partial void OnUseMaterialChanged(bool value)
+        {
+            ApplyShaderToggles();
+        }
+
+        /// <summary>
+        /// Apply current shader toggle states to the renderer
+        /// </summary>
+        private void ApplyShaderToggles()
+        {
+            _renderer?.SetShaderToggles(UseTexture, UseVertexColor, UseUVChecker, UseMaterial);
+        }
+
+        [RelayCommand]
+        public void ToggleTexture()
+        {
+            UseTexture = !UseTexture;
+        }
+
+        [RelayCommand]
+        public void ToggleVertexColor()
+        {
+            UseVertexColor = !UseVertexColor;
+        }
+
+        [RelayCommand]
+        public void ToggleUVChecker()
+        {
+            UseUVChecker = !UseUVChecker;
         }
 
         [RelayCommand]
