@@ -27,6 +27,13 @@ namespace Pivot.Views
 
         private TemplateItem? _lastSelectedItemForRange;
 
+        // Layout constants
+        private const double ItemWidth = 220.0;
+        private const double ItemHeight = 170.0;
+        private const double ItemRowSpacing = 8.0;
+        private const double ItemColumnSpacing = 8.0;
+        private const double PagePadding = 48.0; // 12*2 (Page) + 6*2 (Border) + 6*2 (Margin/Padding approx)
+
         private const double DragActivationThresholdSquared = 16.0;
         private bool _isPointerDown = false;
         private bool _isDragIntent = false;
@@ -50,19 +57,7 @@ namespace Pivot.Views
             ApplyLayout(ViewModel.CurrentLayout);
 
             // 自動ロード: 設定に保存された ImageDirectories があればテスト用に読み込む（安全策: try/catch）
-            try
-            {
-                var settings = App.Current.Services.GetService<SettingsService>();
-                if (settings != null)
-                {
-                    var dirs = settings.GetUserSettings().ImageDirectories;
-                    if (dirs != null && dirs.Count > 0)
-                    {
-                        _ = ViewModel.LoadFromDirectoriesAsync(dirs, 300);
-                    }
-                }
-            }
-            catch { }
+
 
             this.Unloaded += ImagePage_Unloaded;
             
@@ -89,7 +84,10 @@ namespace Pivot.Views
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"ImagePage SettingsChanged Error: {ex.Message}");
+                    }
                 });
             }
         }
@@ -98,11 +96,11 @@ namespace Pivot.Views
 
         private void ImagePage_Unloaded(object sender, RoutedEventArgs e)
         {
-            try { ViewModel?.CancelLoads(); } catch { }
+            try { ViewModel?.CancelLoads(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ImagePage Unload Error 1: {ex.Message}"); }
             // Clean up message registration
-            try { WeakReferenceMessenger.Default.UnregisterAll(this); } catch { }
+            try { WeakReferenceMessenger.Default.UnregisterAll(this); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ImagePage Unload Error 2: {ex.Message}"); }
 
-            try { PreviewControl.Close(); } catch { }
+            try { PreviewControl.Close(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ImagePage Unload Error 3: {ex.Message}"); }
         }
 
         private void ImagePage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -115,7 +113,7 @@ namespace Pivot.Views
         private void UpdateResponsive(double width)
         {
             if (width <= 0) return;
-            try { _resizeCts?.Cancel(); } catch { }
+            try { _resizeCts?.Cancel(); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"UpdateResponsive Cancel Error: {ex.Message}"); }
             _resizeCts = new System.Threading.CancellationTokenSource();
             var ct = _resizeCts.Token;
             _ = System.Threading.Tasks.Task.Run(async () =>
@@ -124,7 +122,7 @@ namespace Pivot.Views
                 {
                     await System.Threading.Tasks.Task.Delay(150, ct);
                     if (ct.IsCancellationRequested) return;
-                    var columns = (int)System.Math.Max(1, System.Math.Floor((width - 48) / 220));
+                    var columns = (int)System.Math.Max(1, System.Math.Floor((width - PagePadding) / ItemWidth));
                     DispatcherQueue.TryEnqueue(() =>
                     {
                         if (ViewModel == null) return;
@@ -134,7 +132,10 @@ namespace Pivot.Views
                         }
                     });
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"UpdateResponsive Error: {ex.Message}");
+                }
             });
         }
 
@@ -162,10 +163,10 @@ namespace Pivot.Views
                 case LayoutType.Grid:
                     ItemsRepeaterMain.Layout = new UniformGridLayout
                     {
-                        MinItemWidth = 220,
-                        MinItemHeight = 170,
-                        MinRowSpacing = 8,
-                        MinColumnSpacing = 8
+                        MinItemWidth = ItemWidth,
+                        MinItemHeight = ItemHeight,
+                        MinRowSpacing = ItemRowSpacing,
+                        MinColumnSpacing = ItemColumnSpacing
                     };
                     ItemsRepeaterMain.Visibility = Visibility.Visible;
                     MasonryColumnsControl.Visibility = Visibility.Collapsed;
@@ -175,7 +176,7 @@ namespace Pivot.Views
                     UpdateResponsive(ActualWidth);
                     if (ViewModel != null)
                     {
-                        double available = System.Math.Max(0, ActualWidth - 48);
+                        double available = System.Math.Max(0, ActualWidth - PagePadding);
                         int cols = ViewModel.MasonryColumnCount > 0 ? ViewModel.MasonryColumnCount : 1;
                         if (cols <= 0) cols = 1;
                         ViewModel.MasonryColumnWidth = System.Math.Floor(available / cols) - 16;
@@ -189,10 +190,10 @@ namespace Pivot.Views
                 default:
                     ItemsRepeaterMain.Layout = new UniformGridLayout
                     {
-                        MinItemWidth = 220,
-                        MinItemHeight = 170,
-                        MinRowSpacing = 8,
-                        MinColumnSpacing = 8
+                        MinItemWidth = ItemWidth,
+                        MinItemHeight = ItemHeight,
+                        MinRowSpacing = ItemRowSpacing,
+                        MinColumnSpacing = ItemColumnSpacing
                     };
                     ItemsRepeaterMain.Visibility = Visibility.Visible;
                     MasonryColumnsControl.Visibility = Visibility.Collapsed;
@@ -219,7 +220,10 @@ namespace Pivot.Views
                         isCtrlPressed = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
                         isShiftPressed = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"ImageItem_PointerPressed KeyState Error: {ex.Message}");
+                    }
 
                     _isPointerDown = true;
                     _isDragIntent = false;
@@ -265,7 +269,10 @@ namespace Pivot.Views
                     _isDragIntent = true;
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ImageItem_PointerMoved Error: {ex.Message}");
+            }
         }
 
         private void ImageItem_PointerReleased(object sender, PointerRoutedEventArgs e)
@@ -283,7 +290,7 @@ namespace Pivot.Views
             _pressedItem = null;
             if (sender is UIElement uiElement)
             {
-                try { uiElement.ReleasePointerCapture(e.Pointer); } catch { }
+                try { uiElement.ReleasePointerCapture(e.Pointer); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ImageItem_PointerReleased Capture Error: {ex.Message}"); }
             }
         }
 

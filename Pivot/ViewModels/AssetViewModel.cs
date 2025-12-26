@@ -11,10 +11,12 @@ using System;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
 using Pivot.ViewModels;
+using Pivot.Messages;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace Pivot.ViewModels
 {
-    public partial class AssetViewModel : ObservableObject
+    public partial class AssetViewModel : ObservableObject, IRecipient<DirectoryChangedMessage>
     {
         public ObservableCollection<TemplateItem> Assets { get; set; }
 
@@ -106,14 +108,19 @@ namespace Pivot.ViewModels
                 }
             };
 
-            Assets = new ObservableCollection<TemplateItem>
+            Assets = new ObservableCollection<TemplateItem>();
+
+            // Initial load
+            try
             {
-                new TemplateItem { Name = "Test Asset 1", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/160x120?text=Asset+1" },
-                new TemplateItem { Name = "Test Asset 2", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/300x260?text=Asset+2" },
-                new TemplateItem { Name = "Test Asset 3", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/200x180?text=Asset+3" },
-                new TemplateItem { Name = "Test Asset 4", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/400x140?text=Asset+4" },
-                new TemplateItem { Name = "Test Asset 5", Kind = AssetKind.Model, ThumbnailPath = "https://via.placeholder.com/120x200?text=Asset+5" }
-            };
+                var settings = App.Current.Services.GetService<SettingsService>();
+                if (settings != null)
+                {
+                    var dirs = settings.GetUserSettings().AssetDirectories;
+                    _ = LoadFromDirectoriesAsync(dirs, 300);
+                }
+            }
+            catch { }
 
             BuildMasonryColumns();
             UseTextListMode = _currentLayout == LayoutType.List;
@@ -152,6 +159,9 @@ namespace Pivot.ViewModels
                 }
             }
             catch { }
+
+            // Register for directory changes
+            WeakReferenceMessenger.Default.Register<DirectoryChangedMessage>(this);
         }
 
         partial void OnSelectedFilterChanged(FilterViewModel? value)
@@ -344,6 +354,28 @@ namespace Pivot.ViewModels
                 return h;
             }
             return 180;
+        }
+
+
+        public void Receive(DirectoryChangedMessage message)
+        {
+            if (message.Value.Category == DirectoryCategory.Asset)
+            {
+                // Reload assets when directory settings change
+                try
+                {
+                    var settings = App.Current.Services.GetService<SettingsService>();
+                    if (settings != null)
+                    {
+                        var dirs = settings.GetUserSettings().AssetDirectories;
+                        _ = LoadFromDirectoriesAsync(dirs, 300);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"AssetViewModel Receive DirectoryChangedMessage Error: {ex.Message}");
+                }
+            }
         }
     }
 }

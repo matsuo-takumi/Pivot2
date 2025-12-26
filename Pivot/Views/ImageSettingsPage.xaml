@@ -10,19 +10,9 @@
     x:Name="ImageSettingsRoot">
 
     <Grid Padding="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
         <Pivot>
             <PivotItem Header="Tags">
                 <local:FilterSettingsView x:Name="FilterSettingsView" />
-            </PivotItem>
-
-            <PivotItem Header="General">
-                <Grid Padding="12">
-                    <TextBlock Text="General Image settings (placeholder)" Foreground="{ThemeResource AppTextCaptionBrush}" />
-                </Grid>
             </PivotItem>
         </Pivot>
     </Grid>

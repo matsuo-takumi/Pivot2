@@ -10,10 +10,12 @@ using System.Collections.Generic;
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
+using Pivot.Messages;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace Pivot.ViewModels
 {
-    public partial class ImageViewModel : ObservableObject
+    public partial class ImageViewModel : ObservableObject, IRecipient<DirectoryChangedMessage>
     {
         public ObservableCollection<TemplateItem> Images { get; set; }
 
@@ -97,14 +99,22 @@ namespace Pivot.ViewModels
             }
             catch { }
 
-            Images = new ObservableCollection<TemplateItem>
+            // Register for directory changes
+            WeakReferenceMessenger.Default.Register<DirectoryChangedMessage>(this);
+
+            Images = new ObservableCollection<TemplateItem>();
+
+            // Initial load
+            try
             {
-                new TemplateItem { Name = "Test Image 1", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/160x120?text=Image+1" },
-                new TemplateItem { Name = "Test Image 2", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/300x260?text=Image+2" },
-                new TemplateItem { Name = "Test Image 3", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/200x180?text=Image+3" },
-                new TemplateItem { Name = "Test Image 4", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/400x140?text=Image+4" },
-                new TemplateItem { Name = "Test Image 5", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/120x200?text=Image+5" }
-            };
+                var settings = App.Current.Services.GetService<SettingsService>();
+                if (settings != null)
+                {
+                    var dirs = settings.GetUserSettings().ImageDirectories;
+                    _ = LoadFromDirectoriesAsync(dirs, 300);
+                }
+            }
+            catch { }
 
             BuildMasonryColumns();
             UseTextListMode = _currentLayout == LayoutType.List;
@@ -295,6 +305,28 @@ namespace Pivot.ViewModels
                 return h;
             }
             return 180;
+        }
+
+
+        public void Receive(DirectoryChangedMessage message)
+        {
+            if (message.Value.Category == DirectoryCategory.Image)
+            {
+                // Reload images when directory settings change
+                try
+                {
+                    var settings = App.Current.Services.GetService<SettingsService>();
+                    if (settings != null)
+                    {
+                        var dirs = settings.GetUserSettings().ImageDirectories;
+                        _ = LoadFromDirectoriesAsync(dirs, 300);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"ImageViewModel Receive DirectoryChangedMessage Error: {ex.Message}");
+                }
+            }
         }
     }
 }

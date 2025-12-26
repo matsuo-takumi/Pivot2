@@ -44,58 +44,17 @@ namespace Pivot.Views
 
             ApplyLayout(ViewModel.CurrentLayout);
 
-            try
-            {
-                var settings = App.Current.Services.GetService<SettingsService>();
-                if (settings != null)
-                {
-                    var dirs = settings.GetUserSettings().AssetDirectories;
-                    if (dirs != null && dirs.Count > 0)
-                    {
-                        _ = ViewModel.LoadFromDirectoriesAsync(dirs, 300);
-                    }
-                }
-            }
-            catch { }
+
 
             this.Unloaded += AssetPage_Unloaded;
             
             // 設定変更を監視
             UpdateBorderThicknessPeriodically();
             
-            // ディレクトリ変更を購読して即座に反映
-            WeakReferenceMessenger.Default.Register<DirectoryChangedMessage>(this, OnDirectoryChanged);
+
         }
 
-        private void OnDirectoryChanged(object recipient, DirectoryChangedMessage message)
-        {
-            // Asset カテゴリの変更のみ処理
-            if (message.Value.Category != DirectoryCategory.Asset)
-                return;
-            
-            System.Diagnostics.Debug.WriteLine($"[AssetPage] Directory changed: {message.Value.Type} - {message.Value.Path}");
-            
-            // ディレクトリリストを再読み込み
-            DispatcherQueue.TryEnqueue(async () =>
-            {
-                try
-                {
-                    var settings = App.Current.Services.GetService<SettingsService>();
-                    if (settings != null)
-                    {
-                        var dirs = settings.GetUserSettings().AssetDirectories;
-                        if (dirs != null)
-                        {
-                            await ViewModel.LoadFromDirectoriesAsync(dirs, 300);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[AssetPage] Reload error: {ex.Message}");
-                }
-            });
-        }
+
         
         private async void UpdateBorderThicknessPeriodically()
         {
