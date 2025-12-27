@@ -91,6 +91,7 @@ namespace Pivot
 
 			// ViewModels
 			sc.AddTransient<MainViewModel>();
+			sc.AddTransient<HomeViewModel>();
 			sc.AddTransient<ThemeViewModel>();
 			sc.AddTransient<DirectoryViewModel>();
 			sc.AddTransient<ImageViewModel>();

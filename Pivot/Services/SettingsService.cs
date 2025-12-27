@@ -244,6 +244,51 @@ namespace Pivot.Services
                 _cache.MenuDisplayMode = MenuDisplayMode.Compact;
             }
 
+            // Image layout mode
+            try
+            {
+                var layoutStr = await _settingsStore.GetAsync("Image.LayoutMode");
+                if (Enum.TryParse<LayoutType>(layoutStr, out var layout))
+                {
+                    _cache.ImageLayoutMode = layout;
+                }
+                else
+                {
+                    _cache.ImageLayoutMode = LayoutType.Grid;
+                }
+            }
+            catch { _cache.ImageLayoutMode = LayoutType.Grid; }
+
+            // Image sort field
+            try
+            {
+                var sortFieldStr = await _settingsStore.GetAsync("Image.SortField");
+                if (!string.IsNullOrWhiteSpace(sortFieldStr))
+                {
+                    _cache.ImageSortField = sortFieldStr;
+                }
+                else
+                {
+                    _cache.ImageSortField = "Name";
+                }
+            }
+            catch { _cache.ImageSortField = "Name"; }
+
+            // Image sort direction
+            try
+            {
+                var sortDirStr = await _settingsStore.GetAsync("Image.SortDirection");
+                if (!string.IsNullOrWhiteSpace(sortDirStr))
+                {
+                    _cache.ImageSortDirection = sortDirStr;
+                }
+                else
+                {
+                    _cache.ImageSortDirection = "Ascending";
+                }
+            }
+            catch { _cache.ImageSortDirection = "Ascending"; }
+
             // Viewport camera gesture preset
             try
             {
@@ -1022,6 +1067,59 @@ namespace Pivot.Services
         {
             await _themeSettings.SetImageDragSelectionOpacityAsync(opacity);
             SyncThemeFromService();
+        }
+
+        // Image layout and sort settings
+        public LayoutType GetImageLayoutMode() => _cache.ImageLayoutMode;
+        public async Task SetImageLayoutModeAsync(LayoutType layout)
+        {
+            _cache.ImageLayoutMode = layout;
+            try
+            {
+                await _settingsStore.UpsertAsync("Image.LayoutMode", layout.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.LayoutMode.");
+            }
+        }
+
+        public SortField GetImageSortField()
+        {
+            if (Enum.TryParse<SortField>(_cache.ImageSortField, out var field))
+                return field;
+            return SortField.Name;
+        }
+        public async Task SetImageSortFieldAsync(SortField field)
+        {
+            _cache.ImageSortField = field.ToString();
+            try
+            {
+                await _settingsStore.UpsertAsync("Image.SortField", field.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SortField.");
+            }
+        }
+
+        public SortDirection GetImageSortDirection()
+        {
+            if (Enum.TryParse<SortDirection>(_cache.ImageSortDirection, out var dir))
+                return dir;
+            return SortDirection.Ascending;
+        }
+        public async Task SetImageSortDirectionAsync(SortDirection direction)
+        {
+            _cache.ImageSortDirection = direction.ToString();
+            try
+            {
+                await _settingsStore.UpsertAsync("Image.SortDirection", direction.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SortDirection.");
+            }
         }
 
         // Viewport settings

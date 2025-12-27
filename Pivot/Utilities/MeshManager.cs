@@ -91,6 +91,13 @@ namespace Pivot.Utilities
             var vk = _core.Vk;
             var device = _core.Device;
 
+            if (vertices.Length == 0 || indices.Length == 0)
+            {
+                _indexCount = 0;
+                // Leave buffers as null (CleanupBuffers called before this)
+                return;
+            }
+
             _indexCount = (uint)indices.Length;
 
             // Vertex Buffer

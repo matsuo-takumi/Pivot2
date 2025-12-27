@@ -21,32 +21,148 @@
         <conv:SelectionToBorderThicknessConverter x:Key="SelectionToBorderThicknessConverter"/>
         <conv:SelectionToBackgroundConverter x:Key="SelectionToBackgroundConverter"/>
         <conv:SelectionToPaddingConverter x:Key="SelectionToPaddingConverter"/>
+        <conv:DateTimeFormatConverter x:Key="DateTimeConverter"/>
+
+        <DataTemplate x:Key="MasonryItemTemplate" x:DataType="models:TemplateItem">
+            <Border BorderBrush="{Binding IsSelected, Converter={StaticResource SelectionToBorderBrushConverter}}" 
+                    BorderThickness="{Binding IsSelected, Converter={StaticResource SelectionToBorderThicknessConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
+                    CornerRadius="6" 
+                    Padding="{Binding IsSelected, Converter={StaticResource SelectionToPaddingConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
+                    Margin="4" 
+                    Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
+                    CanDrag="True"
+                    PointerPressed="ImageItem_PointerPressed"
+                    PointerMoved="ImageItem_PointerMoved"
+                    PointerReleased="ImageItem_PointerReleased"
+                    DragStarting="ImageItem_DragStarting"
+                    DoubleTapped="ImageItem_DoubleTapped"
+                    RightTapped="ImageItem_RightTapped">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Phase 0: Placeholder -->
+                    <Grid Grid.Row="0" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" x:Phase="0" Tag="{x:Bind}"/>
+                    
+                    <!-- Phase 1: Image -->
+                    <Image Grid.Row="0" Stretch="Uniform" Source="{x:Bind ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}" x:Phase="1"/>
+                    
+                    <!-- Text Footer -->
+                    <TextBlock Grid.Row="1" Text="{x:Bind Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
     </Page.Resources>
 
     <Grid Padding="12">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <!-- ヘッダー: 表示モード切替（半透明の背景で強調） -->
-        <Border Grid.Row="0" Background="#20E0F7FF" CornerRadius="6" Padding="8" Margin="0,0,0,8" HorizontalAlignment="Stretch">
+        <!-- Sidebar (Navigation) -->
+        <Border Grid.Column="0" Visibility="{Binding IsSidebarOpen, Converter={StaticResource BoolToVisibility}}" Background="{ThemeResource LayerFillColorDefaultBrush}" CornerRadius="8" Padding="0,12" Margin="0,0,12,0">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Images" FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                    <Button Command="{Binding ToggleLayoutCommand}" ToolTipService.ToolTip="{Binding CurrentLayout}">
-                        <FontIcon Glyph="&#xECA5;" FontFamily="Segoe MDL2 Assets"/>
-                    </Button>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <TextBlock Text="フォルダー" Style="{StaticResource SubtitleTextBlockStyle}" Margin="16,0,0,12"/>
+
+                <TreeView x:Name="FolderTreeView" Grid.Row="2" SelectionMode="Single" ItemInvoked="FolderTreeView_ItemInvoked">
+                    <TreeView.ItemTemplate>
+                        <DataTemplate x:DataType="models:FolderNode">
+                            <StackPanel Orientation="Horizontal" Spacing="8" Padding="0,4">
+                                <FontIcon Glyph="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{ThemeResource SystemAccentColor}"/>
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+                
+                <!-- Tag Placeholder -->
+                <StackPanel Grid.Row="3" Margin="16,12,16,0" Opacity="0.5">
+                    <TextBlock Text="タグ (近日公開)" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,0,0,8"/>
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Padding="8" Height="100">
+                        <TextBlock Text="タグ機能はまだ利用できません" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center"/>
+                    </Border>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- 本体: グリッド表示（ImageItemにバインド） -->
-        <Border Grid.Row="1" Background="#20E8F5E9" CornerRadius="6" Padding="6">
+        <!-- Main Content (Right Column) -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Header Bar with Controls -->
+            <Grid Grid.Row="0" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Toggle Sidebar Button -->
+                <Button Command="{Binding ToggleSidebarCommand}" 
+                        ToolTipService.ToolTip="Toggle Sidebar" 
+                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                        BorderThickness="1" 
+                        Padding="8"
+                        Width="36" Height="36">
+                    <FontIcon Glyph="&#xE700;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+                </Button>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <!-- Sort Dropdown -->
+                    <DropDownButton ToolTipService.ToolTip="Sort" 
+                                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                                    BorderThickness="1"
+                                    Padding="8"
+                                    MinWidth="36" Height="36">
+                        <FontIcon Glyph="{Binding SortIcon}" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+                        <DropDownButton.Flyout>
+                            <MenuFlyout Placement="Bottom">
+                                <MenuFlyoutItem Text="名前" Command="{Binding SetSortFieldCommand}" CommandParameter="Name"/>
+                                <MenuFlyoutItem Text="日付" Command="{Binding SetSortFieldCommand}" CommandParameter="Date"/>
+                                <MenuFlyoutItem Text="サイズ" Command="{Binding SetSortFieldCommand}" CommandParameter="Size"/>
+                                <MenuFlyoutItem Text="種類" Command="{Binding SetSortFieldCommand}" CommandParameter="Type"/>
+                            </MenuFlyout>
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+                    <!-- Sort Direction Toggle -->
+                    <Button Command="{Binding ToggleSortDirectionCommand}" 
+                            ToolTipService.ToolTip="Toggle Sort Direction" 
+                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                            BorderThickness="1"
+                            Padding="8"
+                            Width="36" Height="36">
+                        <FontIcon Glyph="{Binding SortDirectionIcon}" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+                    </Button>
+                    <!-- Layout Toggle -->
+                    <Button Command="{Binding ToggleLayoutCommand}" 
+                            ToolTipService.ToolTip="Toggle Layout" 
+                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" 
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                            BorderThickness="1"
+                            Padding="8"
+                            Width="36" Height="36">
+                        <FontIcon Glyph="{Binding LayoutIcon}" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+            
+            <!-- Main Content Area -->
+            <Border Grid.Row="1" Background="#20E8F5E9" CornerRadius="6" Padding="6">
             <Grid>
                 <ScrollViewer x:Name="MainScrollViewer" VerticalScrollBarVisibility="Auto" Background="Transparent">
                     <Grid>
@@ -71,24 +187,17 @@
                                         DoubleTapped="ImageItem_DoubleTapped"
                                         RightTapped="ImageItem_RightTapped">
                                     <Grid>
-                                        <Grid Visibility="{Binding DataContext.UseTextListMode, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" ColumnSpacing="12">
+                                        <Grid Visibility="{Binding DataContext.UseTextListMode, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" ColumnSpacing="12" Padding="4,6">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="300"/>
-                                                <ColumnDefinition Width="150"/>
-                                                <ColumnDefinition Width="100"/>
-                                                <ColumnDefinition Width="150"/>
-                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*" MinWidth="200"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="130"/>
                                             </Grid.ColumnDefinitions>
-                                            <FontIcon Grid.Column="0" Glyph="&#xE7B3;" FontSize="20" Foreground="{ThemeResource AppTextAccentBrush}" VerticalAlignment="Center"/>
-                                            <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2">
-                                                <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Path}" FontSize="11" Foreground="{ThemeResource AppTextCaptionBrush}" TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="2" Text="{Binding Path}" FontSize="12" Foreground="{ThemeResource AppTextMutedBrush}" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="3" Text="{Binding Size, Converter={StaticResource FileSizeConverter}}" FontSize="12" Foreground="{ThemeResource AppTextMutedBrush}" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="4" Text="{Binding LastModified}" FontSize="12" Foreground="{ThemeResource AppTextMutedBrush}" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="5" Text="" FontSize="12" Foreground="{ThemeResource AppTextDimBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <FontIcon Grid.Column="0" Glyph="&#xE7B3;" FontSize="16" Foreground="{ThemeResource SystemAccentColor}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Size, Converter={StaticResource FileSizeConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding LastModified, Converter={StaticResource DateTimeConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                         </Grid>
 
                                         <StackPanel Visibility="{Binding DataContext.ShowThumbnails, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" MaxWidth="200">
@@ -103,49 +212,7 @@
                         </ItemsRepeater.ItemTemplate>
                     </ItemsRepeater>
 
-                    <ItemsControl x:Name="MasonryColumnsControl" ItemsSource="{Binding MasonryColumns}" Visibility="Collapsed">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <ItemsControl ItemsSource="{Binding}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Vertical"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="models:TemplateItem">
-                                            <Border BorderBrush="{Binding IsSelected, Converter={StaticResource SelectionToBorderBrushConverter}}" 
-                                                    BorderThickness="{Binding IsSelected, Converter={StaticResource SelectionToBorderThicknessConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
-                                                    CornerRadius="6" 
-                                                    Padding="{Binding IsSelected, Converter={StaticResource SelectionToPaddingConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
-                                                    Margin="4" 
-                                                    Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}" 
-                                                    Width="{Binding DataContext.MasonryColumnWidth, ElementName=ImagePageRoot}"
-                                                    CanDrag="True"
-                                                    PointerPressed="ImageItem_PointerPressed"
-                                                    PointerMoved="ImageItem_PointerMoved"
-                                                    PointerReleased="ImageItem_PointerReleased"
-                                                    DragStarting="ImageItem_DragStarting"
-                                                    DoubleTapped="ImageItem_DoubleTapped"
-                                                    RightTapped="ImageItem_RightTapped">
-                                                <StackPanel>
-                                                    <Grid Background="Transparent">
-                                                        <Image Stretch="Uniform" Source="{Binding ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}"/>
-                                                    </Grid>
-                                                    <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+
 
                     <!-- Justified layout removed -->
                     </Grid>
@@ -155,5 +222,6 @@
                 <controls:ImagePreviewControl x:Name="PreviewControl" Grid.RowSpan="2" />
             </Grid>
         </Border>
+    </Grid>
     </Grid>
 </Page>

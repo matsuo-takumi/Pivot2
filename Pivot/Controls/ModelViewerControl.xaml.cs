@@ -27,7 +27,7 @@ namespace Pivot.Controls
         private bool _isLeftDragging;
         private bool _isMiddleDragging;
         private bool _isRightDragging;
-        private bool _isLightDragging; // Ctrl+L light rotation
+
         
         // FPS tracking
         private readonly Stopwatch _fpsStopwatch = new();
@@ -91,14 +91,6 @@ namespace Pivot.Controls
                 _gestureConfig = CameraGestureConfig.FromPreset(preset);
             }
             
-            InitializeRenderer();
-            
-            // Apply backface culling setting
-            if (_settings != null && _renderer != null)
-            {
-                _renderer.SetBackfaceCulling(_settings.GetBackfaceCulling());
-            }
-            
             // Pass ViewModel to LightingSettingsView
             FloatingLightingSettings.ViewModel = _viewModel;
             
@@ -107,8 +99,23 @@ namespace Pivot.Controls
             
             UpdateInfoVisibility();
             
-            _fpsStopwatch.Start();
-            CompositionTarget.Rendering += OnRendering;
+            // Defer Vulkan initialization to allow UI to render first
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                InitializeRenderer();
+                
+                // Apply backface culling setting
+                if (_settings != null && _renderer != null)
+                {
+                    _renderer.SetBackfaceCulling(_settings.GetBackfaceCulling());
+                }
+                
+                // Hide loading indicator after initialization
+                LoadingIndicator.Visibility = Visibility.Collapsed;
+                
+                _fpsStopwatch.Start();
+                CompositionTarget.Rendering += OnRendering;
+            });
         }
 
         private async void OnUnloaded(object sender, RoutedEventArgs e)
@@ -207,7 +214,9 @@ namespace Pivot.Controls
                 var elapsed = _fpsStopwatch.Elapsed.TotalSeconds;
                 if (elapsed - _lastFpsUpdate >= 0.5) // Update every 0.5 sec
                 {
-                    var fps = _frameCount / (elapsed - _lastFpsUpdate);
+                    double timeDiff = elapsed - _lastFpsUpdate;
+                    var fps = timeDiff > 0.001 ? _frameCount / timeDiff : 0;
+
                     FpsText.Text = $"FPS: {fps:F0}";
                     _frameCount = 0;
                     _lastFpsUpdate = elapsed;

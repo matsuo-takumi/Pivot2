@@ -48,6 +48,24 @@ namespace Pivot.CodeModule.Views
         private double _scratchpadStartX = 0;
         private double _scratchpadStartY = 0;
 
+        #region Cached UI Elements
+        // Cached references to frequently accessed UI elements to avoid repeated FindName calls
+        private ListView? _snippetListView;
+        private Grid? _scratchpadOverlay;
+        private Border? _scratchpadContainer;
+        private TextBox? _scratchpadEditor;
+        private TextBox? _scratchpadTitleBox;
+        private TextBox? _codeEditor;
+        private TextBox? _quickAddBox;
+        private NavigationView? _codeNav;
+        private Border? _placeholderBorder;
+        private Button? _scratchpadCloseButton;
+        private Grid? _cardPanel;
+        private Grid? _editorPanel;
+        private InfoBar? _quickAddInfoBar;
+        private bool _uiElementsCached = false;
+        #endregion
+
         public CodePage()
         {
             this.InitializeComponent();
@@ -69,6 +87,9 @@ namespace Pivot.CodeModule.Views
 
             // build left navigation (Snippets/Categories)
             try { BuildNavigationMenu(); } catch { }
+            
+            // Cache UI element references for performance
+            EnsureUIElementsCached();
             try
             {
                 var messenger = App.Current.Services.GetService(typeof(IMessenger)) as IMessenger;
@@ -246,6 +267,84 @@ namespace Pivot.CodeModule.Views
         private System.Collections.Specialized.NotifyCollectionChangedEventHandler? _snippetsCollectionChangedHandler;
         private IMessenger? _registeredMessenger;
 
+        #region UI Element Caching and Helpers
+
+        /// <summary>
+        /// Caches references to frequently accessed UI elements.
+        /// Call this once after InitializeComponent to avoid repeated FindName calls.
+        /// </summary>
+        private void EnsureUIElementsCached()
+        {
+            if (_uiElementsCached) return;
+            
+            try
+            {
+                _snippetListView = this.FindName("SnippetListView") as ListView;
+                _scratchpadOverlay = this.FindName("ScratchpadOverlay") as Grid;
+                _scratchpadContainer = this.FindName("ScratchpadContainer") as Border;
+                _scratchpadEditor = this.FindName("ScratchpadEditor") as TextBox;
+                _scratchpadTitleBox = this.FindName("ScratchpadTitleBox") as TextBox;
+                _codeEditor = this.FindName("CodeEditor") as TextBox;
+                _quickAddBox = this.FindName("QuickAddBox") as TextBox;
+                _codeNav = this.FindName("CodeNav") as NavigationView;
+                _placeholderBorder = this.FindName("PlaceholderBorder") as Border;
+                _scratchpadCloseButton = this.FindName("ScratchpadCloseButton") as Button;
+                _cardPanel = this.FindName("CardPanel") as Grid;
+                _editorPanel = this.FindName("EditorPanel") as Grid;
+                _quickAddInfoBar = this.FindName("QuickAddInfoBar") as InfoBar;
+                
+                _uiElementsCached = true;
+                System.Diagnostics.Debug.WriteLine("CodePage: UI elements cached successfully");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CodePage: Error caching UI elements: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Sets the interaction state of the snippet list.
+        /// </summary>
+        private void SetListInteractionEnabled(bool enabled)
+        {
+            EnsureUIElementsCached();
+            if (_snippetListView == null) return;
+            
+            _snippetListView.IsHitTestVisible = enabled;
+            _snippetListView.IsItemClickEnabled = enabled;
+            if (enabled)
+            {
+                _snippetListView.SelectionMode = ListViewSelectionMode.Single;
+            }
+        }
+
+        /// <summary>
+        /// Updates placeholder visibility based on whether snippets exist.
+        /// </summary>
+        private void UpdatePlaceholderVisibility()
+        {
+            EnsureUIElementsCached();
+            if (_placeholderBorder == null || ViewModel?.Snippets == null) return;
+            
+            _placeholderBorder.Visibility = ViewModel.Snippets.Any() 
+                ? Visibility.Collapsed 
+                : Visibility.Visible;
+        }
+
+        /// <summary>
+        /// Shows or hides the scratchpad overlay.
+        /// </summary>
+        private void SetScratchpadOverlayVisible(bool visible)
+        {
+            EnsureUIElementsCached();
+            if (_scratchpadOverlay != null)
+            {
+                _scratchpadOverlay.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        #endregion
+
         private void CodePage_Unloaded(object sender, RoutedEventArgs e)
         {
             try
@@ -271,15 +370,14 @@ namespace Pivot.CodeModule.Views
                 }
 
                 // Unregister editor handlers
-                var codeEditor = this.FindName("CodeEditor") as TextBox;
-                var scratchEditor = this.FindName("ScratchpadEditor") as TextBox;
-                if (codeEditor != null)
+                EnsureUIElementsCached();
+                if (_codeEditor != null)
                 {
-                    codeEditor.TextChanged -= CodeEditor_TextChanged;
+                    _codeEditor.TextChanged -= CodeEditor_TextChanged;
                 }
-                if (scratchEditor != null)
+                if (_scratchpadEditor != null)
                 {
-                    scratchEditor.TextChanged -= ScratchpadEditor_TextChanged;
+                    _scratchpadEditor.TextChanged -= ScratchpadEditor_TextChanged;
                 }
 
                 // Unregister size changed handler
@@ -290,10 +388,9 @@ namespace Pivot.CodeModule.Views
                 }
 
                 // Unregister overlay pointer handler
-                var overlayRoot = this.FindName("ScratchpadOverlay") as UIElement;
-                if (overlayRoot != null)
+                if (_scratchpadOverlay != null)
                 {
-                    overlayRoot.PointerPressed -= ScratchpadOverlay_PointerPressed;
+                    _scratchpadOverlay.PointerPressed -= ScratchpadOverlay_PointerPressed;
                 }
 
                 // Save current snippet before unloading
@@ -338,7 +435,10 @@ namespace Pivot.CodeModule.Views
                     repo.Save(newSnippet);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"OnAddClicked: Error saving to repository: {ex.Message}");
+            }
 
             if (ViewModel != null)
             {
@@ -355,20 +455,18 @@ namespace Pivot.CodeModule.Views
                 // Ensure ListView is clickable after adding new item
                 try
                 {
-                    var list = this.FindName("SnippetListView") as ListView;
-                    if (list != null)
+                    EnsureUIElementsCached();
+                    if (_snippetListView != null)
                     {
-                        // Force layout update to ensure new item is rendered
-                        list.UpdateLayout();
-                        list.ScrollIntoView(newSnippet);
-                        
-                        // Ensure clickability is enabled
-                        list.IsItemClickEnabled = true;
-                        list.IsHitTestVisible = true;
-                        list.SelectionMode = ListViewSelectionMode.Single;
+                        _snippetListView.UpdateLayout();
+                        _snippetListView.ScrollIntoView(newSnippet);
                     }
+                    SetListInteractionEnabled(true);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"OnAddClicked: Error updating ListView: {ex.Message}");
+                }
                 
                 ViewModel.SelectedSnippet = newSnippet;
             }
@@ -380,7 +478,10 @@ namespace Pivot.CodeModule.Views
             {
                 ViewModel?.FilterTags(sender.Text);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TagFilterBox_TextChanged: Error: {ex.Message}");
+            }
         }
 
         private void NewTagBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -434,106 +535,78 @@ namespace Pivot.CodeModule.Views
         {
             try
             {
-                var nav = this.FindName("CodeNav") as NavigationView;
-                if (nav == null) return;
-                nav.MenuItems.Clear();
-
-                // Keep a single "All" menu item for compact/navigation behavior (for NavigationView menu)
-                var allItem = new NavigationViewItem { Content = "All Snippets", Tag = "all", Icon = new SymbolIcon(Symbol.AllApps) };
-                nav.MenuItems.Add(allItem);
-
-                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                // Use Preferences > Code のタグ（CodeFilters）を左ナビに追加して、All Snippets のような挙動にする
-                var filters = settings?.GetCodeFilters() ?? new List<Pivot.Models.CustomFilter>();
-
-                // Add tags to NavigationView menu items with right-click context menu
-                try
+                // Delegate navigation item building to ViewModel
+                ViewModel?.BuildNavigationItems();
+                
+                // Bind NavigationView to ViewModel's NavigationItems if not already bound
+                EnsureUIElementsCached();
+                if (_codeNav != null && ViewModel != null)
                 {
-                    foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
+                    // Build menu items from ViewModel's NavigationItems collection
+                    _codeNav.MenuItems.Clear();
+                    foreach (var item in ViewModel.NavigationItems)
                     {
                         try
                         {
-                            var ni = new NavigationViewItem { Content = f.Name, Tag = f.Id, Icon = new SymbolIcon(Symbol.Tag) };
-                            
-                            // Add right-click context menu
-                            var menuFlyout = new MenuFlyout();
-                            
-                            // Ensure ListView remains clickable when menu is shown/closed
-                            menuFlyout.Opening += (s, e) =>
-                            {
-                                try
-                                {
-                                    var list = this.FindName("SnippetListView") as ListView;
-                                    if (list != null)
-                                    {
-                                        list.IsHitTestVisible = true;
-                                        list.IsItemClickEnabled = true;
-                                    }
-                                }
-                                catch { }
+                            var ni = new NavigationViewItem 
+                            { 
+                                Content = item.Name, 
+                                Tag = item.IsAllSnippets ? "all" : item.FilterId.ToString(),
+                                Icon = new SymbolIcon(item.IsAllSnippets ? Symbol.AllApps : Symbol.Tag)
                             };
                             
-                            menuFlyout.Closed += (s, e) =>
+                            // Add context menu for filter items (non-All items)
+                            if (!item.IsAllSnippets)
                             {
-                                try
+                                var menuFlyout = new MenuFlyout();
+                                var filterId = item.FilterId;
+                                var filterName = item.Name;
+                                
+                                var editMenuItem = new MenuFlyoutItem { Text = "編集" };
+                                editMenuItem.Click += async (s, e) => 
                                 {
-                                    var list = this.FindName("SnippetListView") as ListView;
-                                    if (list != null)
+                                    try
                                     {
-                                        list.IsHitTestVisible = true;
-                                        list.IsItemClickEnabled = true;
+                                        await EditTagAsync(filterId, filterName);
                                     }
-                                }
-                                catch { }
-                            };
-                            
-                            var editMenuItem = new MenuFlyoutItem { Text = "編集" };
-                            editMenuItem.Click += async (s, e) => 
-                            {
-                                try
+                                    catch (Exception ex)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"EditTag: Error: {ex.Message}");
+                                    }
+                                };
+                                menuFlyout.Items.Add(editMenuItem);
+                                
+                                var deleteMenuItem = new MenuFlyoutItem { Text = "削除" };
+                                deleteMenuItem.Click += async (s, e) => 
                                 {
-                                    await EditTagAsync(f.Id, f.Name);
-                                    // Ensure ListView is clickable after edit
-                                    var list = this.FindName("SnippetListView") as ListView;
-                                    if (list != null)
+                                    try
                                     {
-                                        list.IsHitTestVisible = true;
-                                        list.IsItemClickEnabled = true;
+                                        await DeleteTagAsync(filterId, filterName);
                                     }
-                                }
-                                catch { }
-                            };
-                            menuFlyout.Items.Add(editMenuItem);
-                            
-                            var deleteMenuItem = new MenuFlyoutItem { Text = "削除" };
-                            deleteMenuItem.Click += async (s, e) => 
-                            {
-                                try
-                                {
-                                    await DeleteTagAsync(f.Id, f.Name);
-                                    // Ensure ListView is clickable after delete
-                                    var list = this.FindName("SnippetListView") as ListView;
-                                    if (list != null)
+                                    catch (Exception ex)
                                     {
-                                        list.IsHitTestVisible = true;
-                                        list.IsItemClickEnabled = true;
+                                        System.Diagnostics.Debug.WriteLine($"DeleteTag: Error: {ex.Message}");
                                     }
-                                }
-                                catch { }
-                            };
-                            menuFlyout.Items.Add(deleteMenuItem);
+                                };
+                                menuFlyout.Items.Add(deleteMenuItem);
+                                
+                                ni.ContextFlyout = menuFlyout;
+                            }
                             
-                            ni.ContextFlyout = menuFlyout;
-                            
-                            nav.MenuItems.Add(ni);
+                            _codeNav.MenuItems.Add(ni);
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"BuildNavigationMenu: Error adding item '{item.Name}': {ex.Message}");
+                        }
+                    }
+                    
+                    // Select first item (All Snippets) by default
+                    if (_codeNav.MenuItems.Count > 0)
+                    {
+                        _codeNav.SelectedItem = _codeNav.MenuItems[0];
                     }
                 }
-                catch { }
-
-                nav.SelectedItem = allItem;
-                try { ViewModel?.Refresh(); } catch { }
             }
             catch (Exception ex)
             {
@@ -547,7 +620,7 @@ namespace Pivot.CodeModule.Views
             try
             {
                 if (ViewModel == null) return;
-                try { ViewModel.GetType().GetMethod("ShowDeletedSnippets")?.Invoke(ViewModel, null); } catch { }
+                ViewModel.ShowDeletedSnippets();
             }
             catch (Exception ex)
             {
@@ -577,71 +650,39 @@ namespace Pivot.CodeModule.Views
                 if (item == null || ViewModel == null) return;
 
                 var tagStr = item.Tag?.ToString() ?? string.Empty;
+                
+                // Handle "All Snippets" selection
                 if (string.Equals(tagStr, "all", StringComparison.OrdinalIgnoreCase))
                 {
-                    ViewModel.ActiveFilters.Clear();
-                    ViewModel.FilterSnippets();
-                    // Ensure ListView is clickable after filtering
-                    var list = this.FindName("SnippetListView") as ListView;
-                    if (list != null)
+                    ViewModel.ShowAllSnippetsCommand.Execute(null);
+                    if (ViewModel.SelectedSnippet != null) 
                     {
-                        list.IsHitTestVisible = true;
-                        list.IsItemClickEnabled = true;
+                        _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                     }
-                    if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                     return;
                 }
 
+                // Handle "Trash" selection
                 if (string.Equals(tagStr, "trash", StringComparison.OrdinalIgnoreCase))
                 {
-                    try { ViewModel?.GetType().GetMethod("ShowDeletedSnippets")?.Invoke(ViewModel, null); } catch { }
+                    ViewModel.ShowDeletedSnippets();
                     return;
                 }
 
+                // Handle filter selection by GUID
                 if (Guid.TryParse(tagStr, out var filterId))
                 {
-                    ViewModel.ActiveFilters.Clear();
-                    ViewModel.ActiveFilters.Add(filterId);
-                    ViewModel.FilterSnippets();
-                    // Ensure ListView is clickable after filtering
-                    var list = this.FindName("SnippetListView") as ListView;
-                    if (list != null)
+                    ViewModel.SelectFilterCommand.Execute(filterId);
+                    if (ViewModel.SelectedSnippet != null) 
                     {
-                        list.IsHitTestVisible = true;
-                        list.IsItemClickEnabled = true;
+                        _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
                     }
-                    if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
-                }
-                else
-                {
-                    // If the clicked item is a category parent (no Tag), try to find the category and apply all its filters
-                    try
-                    {
-                        var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                        var catName = item.Content?.ToString() ?? string.Empty;
-                            if (string.Equals(catName, "ごみ箱", StringComparison.OrdinalIgnoreCase))
-                            {
-                                // Show deleted snippets (Trash)
-                                try { ViewModel?.GetType().GetMethod("ShowDeletedSnippets")?.Invoke(ViewModel, null); } catch { }
-                                return;
-                            }
-                        if (settings != null && !string.IsNullOrWhiteSpace(catName))
-                        {
-                            var cats = settings.GetCodeCategories() ?? new List<Pivot.Models.CodeCategory>();
-                            var cat = cats.FirstOrDefault(c => string.Equals(c.Name, catName, StringComparison.OrdinalIgnoreCase));
-                            if (cat != null)
-                            {
-                                ViewModel.ActiveFilters.Clear();
-                                foreach (var fid in cat.FilterIds) ViewModel.ActiveFilters.Add(fid);
-                                ViewModel.FilterSnippets();
-                                if (ViewModel?.SelectedSnippet != null) _ = CloseSnippetWithAnimationAsync(skipRefreshAfterSave: true);
-                            }
-                        }
-                    }
-                    catch { }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CodeNav_ItemInvoked: Error: {ex.Message}");
+            }
         }
 
 
@@ -1476,10 +1517,40 @@ namespace Pivot.CodeModule.Views
                 }
 
                 var isShiftDown = IsShiftDown();
-                if (e.Key == Windows.System.VirtualKey.Enter && !isShiftDown)
+                if (e.Key == Windows.System.VirtualKey.Enter)
                 {
-                    e.Handled = true;
-                    CommitQuickAdd();
+                    if (isShiftDown)
+                    {
+                        // Shift+Enter: insert newline
+                        try
+                        {
+                            if (sender is TextBox tb)
+                            {
+                                var pos = tb.SelectionStart;
+                                var len = tb.SelectionLength;
+                                var text = tb.Text ?? string.Empty;
+                                // Remove selected text and insert newline
+                                if (len > 0)
+                                {
+                                    text = text.Remove(pos, len);
+                                }
+                                tb.Text = text.Insert(pos, "\r\n");
+                                tb.SelectionStart = pos + 2;
+                                tb.SelectionLength = 0;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"QuickAddBox_KeyDown: Error inserting newline: {ex.Message}");
+                        }
+                        e.Handled = true;
+                        return;
+                    }
+                    else
+                    {
+                        // Enter: commit
+                        e.Handled = true;
+                        CommitQuickAdd();
 
                     // Move focus away from the QuickAddBox so it is effectively blurred.
                     // Use DispatcherQueue to ensure this runs after any UI changes caused by CommitQuickAdd.
@@ -1522,6 +1593,7 @@ namespace Pivot.CodeModule.Views
                         });
                     }
                     catch { }
+                    }
                 }
             }
             catch { }
@@ -1531,9 +1603,9 @@ namespace Pivot.CodeModule.Views
         {
             try
             {
-                var box = this.FindName("QuickAddBox") as TextBox;
-                if (box == null) return;
-                var text = (box.Text ?? string.Empty).Trim();
+                EnsureUIElementsCached();
+                if (_quickAddBox == null) return;
+                var text = (_quickAddBox.Text ?? string.Empty).Trim();
                 if (string.IsNullOrWhiteSpace(text)) return;
 
                 // Derive title from first non-empty line
@@ -1551,8 +1623,7 @@ namespace Pivot.CodeModule.Views
                 // inherit current left-pane filter as tag (if a specific filter is selected)
                 try
                 {
-                    var nav = this.FindName("CodeNav") as NavigationView;
-                    var selected = nav?.SelectedItem as NavigationViewItem;
+                    var selected = _codeNav?.SelectedItem as NavigationViewItem;
                     var tagStr = selected?.Tag?.ToString() ?? string.Empty;
                     if (Guid.TryParse(tagStr, out var fid))
                     {
@@ -1626,7 +1697,7 @@ namespace Pivot.CodeModule.Views
                 catch { }
 
                 // Clear input
-                box.Text = string.Empty;
+                _quickAddBox.Text = string.Empty;
 
                 // show a brief saved toast (InfoBar)
                 try
@@ -2578,6 +2649,24 @@ namespace Pivot.CodeModule.Views
             try
             {
                 if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return true;
+            }
+            catch { }
+
+            return false;
+        }
+
+        private bool IsAltDown()
+        {
+            try
+            {
+                var core = Window.Current?.CoreWindow;
+                if (core != null && core.GetKeyState(Windows.System.VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return true;
+            }
+            catch { }
+
+            try
+            {
+                if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return true;
             }
             catch { }
 

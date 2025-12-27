@@ -28,6 +28,9 @@
         
         <Grid x:Name="Root" Grid.Row="1" Background="Transparent">
             <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
+                <PivotItem Header="Home">
+                    <Frame x:Name="HomeFrame" Background="Transparent"/>
+                </PivotItem>
                 <PivotItem Header="Asset">
                     <Frame x:Name="AssetFrame" Background="Transparent"/>
                 </PivotItem>

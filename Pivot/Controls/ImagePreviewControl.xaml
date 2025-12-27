@@ -34,13 +34,55 @@
                           HorizontalAlignment="Stretch" 
                           VerticalAlignment="Stretch">
                 
-                <Image x:Name="ImagePreviewImage" 
-                       Stretch="Uniform"
-                       HorizontalAlignment="Center" 
-                       VerticalAlignment="Center"
-                       DoubleTapped="ImagePreviewImage_DoubleTapped"/>
+                <!-- Pattern tiling grid (3x3 for pattern preview) -->
+                <Grid x:Name="PatternContainer">
+                    <Grid x:Name="PatternGrid" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Image x:Name="PatternImage00" Grid.Row="0" Grid.Column="0" Stretch="None" Margin="0"/>
+                        <Image x:Name="PatternImage01" Grid.Row="0" Grid.Column="1" Stretch="None" Margin="-1,0,0,0"/>
+                        <Image x:Name="PatternImage02" Grid.Row="0" Grid.Column="2" Stretch="None" Margin="-1,0,0,0"/>
+                        <Image x:Name="PatternImage10" Grid.Row="1" Grid.Column="0" Stretch="None" Margin="0,-1,0,0"/>
+                        <Image x:Name="PatternImage11" Grid.Row="1" Grid.Column="1" Stretch="None" Margin="-1,-1,0,0"/>
+                        <Image x:Name="PatternImage12" Grid.Row="1" Grid.Column="2" Stretch="None" Margin="-1,-1,0,0"/>
+                        <Image x:Name="PatternImage20" Grid.Row="2" Grid.Column="0" Stretch="None" Margin="0,-1,0,0"/>
+                        <Image x:Name="PatternImage21" Grid.Row="2" Grid.Column="1" Stretch="None" Margin="-1,-1,0,0"/>
+                        <Image x:Name="PatternImage22" Grid.Row="2" Grid.Column="2" Stretch="None" Margin="-1,-1,0,0"/>
+                    </Grid>
+                    <Image x:Name="ImagePreviewImage" 
+                           Stretch="Uniform"
+                           HorizontalAlignment="Center" 
+                           VerticalAlignment="Center"
+                           DoubleTapped="ImagePreviewImage_DoubleTapped"/>
+                </Grid>
             </ScrollViewer>
         </Border>
+
+        <!-- Toolbar (top center) -->
+        <StackPanel Orientation="Horizontal" 
+                    HorizontalAlignment="Center" 
+                    VerticalAlignment="Top" 
+                    Margin="0,20,0,0"
+                    Spacing="4">
+            <ToggleButton x:Name="PatternPreviewToggle"
+                          ToolTipService.ToolTip="パターンプレビュー"
+                          Click="PatternPreviewToggle_Click"
+                          Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                          BorderThickness="1"
+                          Padding="8"
+                          Width="36" Height="36">
+                <FontIcon Glyph="&#xF0E2;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+            </ToggleButton>
+        </StackPanel>
 
         <!-- Close button (top right) -->
         <Button x:Name="ImagePreviewCloseButton"

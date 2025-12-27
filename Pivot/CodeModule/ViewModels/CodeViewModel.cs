@@ -49,11 +49,24 @@ namespace Pivot.CodeModule.ViewModels
 
         public ObservableCollection<TagItem> AvailableTags { get; } = new();
         public ObservableCollection<TagItem> FilteredTags { get; } = new();
+        
+        /// <summary>
+        /// Navigation items for the left pane. Built from preferences and updated when filters change.
+        /// </summary>
+        public ObservableCollection<NavigationItem> NavigationItems { get; } = new();
+        
+        [ObservableProperty]
+        private NavigationItem? _selectedNavigationItem;
+        
         public SnippetSyncService? SyncService => _syncService;
         private string _tagFilterKeyword = string.Empty;
         private volatile bool _isTagSelectionUpdating = false;
         public RelayCommand<TagItem> ToggleTagCommand { get; private set; } = null!;
         public RelayCommand AddTagCommand { get; private set; } = null!;
+        public RelayCommand ShowAllSnippetsCommand { get; private set; } = null!;
+        public RelayCommand ShowDeletedSnippetsCommand { get; private set; } = null!;
+        public RelayCommand<Guid> SelectFilterCommand { get; private set; } = null!;
+        public RelayCommand<NavigationItem> NavigateToItemCommand { get; private set; } = null!;
         partial void OnSelectedSnippetChanging(CodeFile? oldValue, CodeFile? newValue)
         {
             // Do not auto-save while typing or on selection change.
@@ -78,14 +91,21 @@ namespace Pivot.CodeModule.ViewModels
                 var messenger = App.Current.Services.GetService(typeof(IMessenger)) as IMessenger;
                 messenger?.Register<CodeViewModel, TagSelectionMessage>(this, (r, m) => r.OnTagSelection(m));
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CodeViewModel: Error registering messenger: {ex.Message}");
+            }
 
             System.Diagnostics.Debug.WriteLine("CodeViewModel: constructed with repository.");
 
             // No test seeding in production — snippets come from repository (may be empty)
             if (_snippetCache != null)
             {
-                try { _ = _snippetCache.RefreshAsync(_allSnippets); } catch { }
+                try { _ = _snippetCache.RefreshAsync(_allSnippets); }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"CodeViewModel: Error refreshing cache: {ex.Message}");
+                }
             }
         }
 
@@ -112,12 +132,52 @@ namespace Pivot.CodeModule.ViewModels
             RefreshTagSelection();
         }
 
-        [MemberNotNull(nameof(ToggleTagCommand), nameof(AddTagCommand))]
+        [ObservableProperty]
+        private bool _isTrashMode = false;
+
+        [MemberNotNull(nameof(ToggleTagCommand), nameof(AddTagCommand), nameof(ShowAllSnippetsCommand), nameof(ShowDeletedSnippetsCommand), nameof(SelectFilterCommand), nameof(NavigateToItemCommand), nameof(EmptyTrashCommand))]
         private void InitializeTagInfrastructure()
         {
             ToggleTagCommand = new RelayCommand<TagItem>(ToggleTag);
             AddTagCommand = new RelayCommand(AddTag);
+            ShowAllSnippetsCommand = new RelayCommand(ExecuteShowAllSnippets);
+            ShowDeletedSnippetsCommand = new RelayCommand(() => ShowDeletedSnippets());
+            SelectFilterCommand = new RelayCommand<Guid>(ExecuteSelectFilter);
+            NavigateToItemCommand = new RelayCommand<NavigationItem>(ExecuteNavigateToItem);
+            EmptyTrashCommand = new RelayCommand(ExecuteEmptyTrash);
             InitializeTags();
+            BuildNavigationItems();
+        }
+
+        public RelayCommand EmptyTrashCommand { get; private set; } = null!;
+
+        private void ExecuteEmptyTrash()
+        {
+            if (_repo == null) return;
+            
+            // Get all logical deleted snippets
+            var trash = _repo.GetAll()?.Where(x => x.IsDeleted).ToList();
+            if (trash == null || !trash.Any()) return;
+
+            foreach (var snippet in trash)
+            {
+                // Hard delete from repo
+                try 
+                {
+                    _repo.Delete(snippet.Id);
+                    
+                    // Remove from internal list if present
+                    var existing = _allSnippets.FirstOrDefault(x => x.Id == snippet.Id);
+                    if (existing != null) _allSnippets.Remove(existing);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error deleting snippet {snippet.Id}: {ex.Message}");
+                }
+            }
+
+            // Refresh UI
+            ShowDeletedSnippets();
         }
 
         private void InitializeTags()
@@ -520,6 +580,126 @@ namespace Pivot.CodeModule.ViewModels
             return (input ?? string.Empty).Trim();
         }
 
+        #region Navigation Logic (moved from CodePage.xaml.cs)
+
+        /// <summary>
+        /// Builds navigation items from preferences. Call this to refresh the left navigation menu.
+        /// </summary>
+        public void BuildNavigationItems()
+        {
+            try
+            {
+                NavigationItems.Clear();
+
+                // Add "All Snippets" item
+                var allItem = NavigationItem.CreateAllSnippets();
+                NavigationItems.Add(allItem);
+
+                // Get filters from settings
+                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                var filters = settings?.GetCodeFilters() ?? new List<CustomFilter>();
+
+                foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
+                {
+                    try
+                    {
+                        var navItem = NavigationItem.CreateFilter(f.Name, f.Id);
+                        NavigationItems.Add(navItem);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"BuildNavigationItems: Error adding filter '{f.Name}': {ex.Message}");
+                    }
+                }
+
+                // Select "All Snippets" by default
+                SelectedNavigationItem = allItem;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"BuildNavigationItems: Error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Refreshes navigation items. Used when filters are updated in preferences.
+        /// </summary>
+        public void RefreshNavigationItems()
+        {
+            BuildNavigationItems();
+        }
+
+        private void ExecuteShowAllSnippets()
+        {
+            try
+            {
+                ActiveFilters.Clear();
+                _selectedCodeTags.Clear();
+                IsTrashMode = false;
+                Refresh();
+                SelectedSnippet = null;
+                System.Diagnostics.Debug.WriteLine("ExecuteShowAllSnippets: Showing all snippets");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ExecuteShowAllSnippets: Error: {ex.Message}");
+            }
+        }
+
+        private void ExecuteSelectFilter(Guid filterId)
+        {
+            try
+            {
+                ActiveFilters.Clear();
+                if (filterId != Guid.Empty)
+                {
+                    ActiveFilters.Add(filterId);
+                }
+                IsTrashMode = false;
+                FilterSnippets();
+                SelectedSnippet = null;
+                System.Diagnostics.Debug.WriteLine($"ExecuteSelectFilter: Selected filter {filterId}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ExecuteSelectFilter: Error: {ex.Message}");
+            }
+        }
+
+        private void ExecuteNavigateToItem(NavigationItem? item)
+        {
+            if (item == null) return;
+
+            try
+            {
+                if (item.IsAllSnippets)
+                {
+                    ExecuteShowAllSnippets();
+                }
+                else
+                {
+                    ExecuteSelectFilter(item.FilterId);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ExecuteNavigateToItem: Error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles navigation item selection change (called from View).
+        /// </summary>
+        partial void OnSelectedNavigationItemChanged(NavigationItem? oldValue, NavigationItem? newValue)
+        {
+            if (newValue != null)
+            {
+                ExecuteNavigateToItem(newValue);
+            }
+        }
+
+        #endregion
+
         public void Refresh()
         {
             if (_repo == null) return;
@@ -554,6 +734,7 @@ namespace Pivot.CodeModule.ViewModels
             {
                 var deleted = (_repo.GetAllDeleted() ?? Enumerable.Empty<CodeFile>()).ToList();
                 _allSnippets = deleted;
+                IsTrashMode = true;
                 ApplyCodeTagFilters();
             }
             catch { }

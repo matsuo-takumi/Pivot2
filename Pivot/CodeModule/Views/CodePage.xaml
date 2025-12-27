@@ -17,32 +17,12 @@
     </Page.Resources>
 
     <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" PointerPressed="Root_PointerPressed">
-        <!-- Header spanning both columns -->
-        <Border Grid.Row="0" Padding="8" CornerRadius="6" Margin="0,0,0,8">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-                    <!-- TagFilterControl removed for Code tab (tags are shown in left pane TreeView) -->
-                </StackPanel>
-            </Grid>
-        </Border>
+        <!-- Header row removed - tab title shown in main window -->
 
         <!-- NavigationView hosts the left pane and the main content to avoid gaps in Compact mode -->
-        <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked">
-            <!-- Trash item fixed at bottom using PaneFooter -->
+        <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" IsBackButtonVisible="Collapsed" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked">
             <NavigationView.PaneFooter>
-                <Button x:Name="TrashButton" Tag="trash" Click="TrashButton_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="8,0,8,8">
-                    <Button.Content>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <SymbolIcon Symbol="Delete" />
-                            <TextBlock Text="ごみ箱" />
-                        </StackPanel>
-                    </Button.Content>
-                </Button>
+                <NavigationViewItem x:Name="TrashButton" Tag="trash" Content="ごみ箱" Icon="Delete" Tapped="TrashButton_Click" />
             </NavigationView.PaneFooter>
             <!-- Items will be populated in code-behind -->
             <NavigationView.Content>
@@ -55,9 +35,15 @@
 
                     <!-- Quick add (Google Keep style): type and blur to create card) -->
                     <StackPanel Grid.Row="0">
+                        <Button Content="ごみ箱を空にする" 
+                                Command="{Binding EmptyTrashCommand}" 
+                                Visibility="{Binding IsTrashMode, Converter={StaticResource BooleanToVisibilityConverter}}" 
+                                HorizontalAlignment="Right" 
+                                Margin="0,0,0,8" 
+                                Style="{StaticResource AccentButtonStyle}"/>
                         <InfoBar x:Name="QuickAddInfoBar" IsOpen="False" Severity="Success" Margin="0,0,0,8" Message="Saved" />
                         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
-                            <TextBox x:Name="QuickAddBox" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" GotFocus="QuickAddBox_GotFocus" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                            <TextBox x:Name="QuickAddBox" AcceptsReturn="False" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" GotFocus="QuickAddBox_GotFocus" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                         </Border>
                     </StackPanel>
 

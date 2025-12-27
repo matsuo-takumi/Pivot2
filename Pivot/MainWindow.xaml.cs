@@ -83,6 +83,7 @@ namespace Pivot
             _messenger.Register<OverlayColorChangedMessage>(this);
 
             // 初期ナビゲーション（ViewModelからの要求でも遷移可能）
+            NavigateTo(NavigationRegion.Home);
             NavigateTo(NavigationRegion.Asset);
             NavigateTo(NavigationRegion.Image);
             NavigateTo(NavigationRegion.Project);
@@ -463,6 +464,9 @@ namespace Pivot
             {
                 switch (selectedPivotItem.Header as string)
                 {
+                    case "Home":
+                        NavigateTo(NavigationRegion.Home);
+                        break;
                     case "Asset":
                         NavigateTo(NavigationRegion.Asset);
                         break;
@@ -488,6 +492,13 @@ namespace Pivot
             var transition = new Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionInfo() { Effect = Microsoft.UI.Xaml.Media.Animation.SlideNavigationTransitionEffect.FromRight };
             switch (region)
             {
+                case NavigationRegion.Home:
+                    // 既にHomePageが表示されている場合は再ナビゲートしない
+                    if (HomeFrame.Content?.GetType() != typeof(Views.HomePage))
+                    {
+                        HomeFrame.Navigate(typeof(Views.HomePage), null, transition);
+                    }
+                    break;
                 case NavigationRegion.Asset:
                     // 既にAssetPageが表示されている場合は再ナビゲートしない
                     if (AssetFrame.Content?.GetType() != typeof(Views.AssetPage))

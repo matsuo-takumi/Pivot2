@@ -198,7 +198,8 @@ namespace Pivot.Utilities
             vk.ResetFences(device, 1, in _vkFence);
 
             // 2. Update UBO
-            UpdateUniformBuffer((float)_currentWidth / _currentHeight, camera);
+            float aspectRatio = _currentHeight > 0 ? (float)_currentWidth / _currentHeight : 1.0f;
+            UpdateUniformBuffer(aspectRatio, camera);
             UpdateShadingBuffer(camera);
 
             // 3. Record Command Buffer
@@ -247,15 +248,18 @@ namespace Pivot.Utilities
             vk.CmdBindDescriptorSets(_vkCommandBuffer, PipelineBindPoint.Graphics, _pipelineManager.PipelineLayout, 0, 1, &descriptorSet, 0, null);
 
             // Bind vertex buffer
-            var offset = 0ul;
-            var vertexBuffer = _meshManager.VertexBuffer;
-            vk.CmdBindVertexBuffers(_vkCommandBuffer, 0, 1, in vertexBuffer, in offset);
+            if (_meshManager.IndexCount > 0 && _meshManager.VertexBuffer.Handle != 0)
+            {
+                var offset = 0ul;
+                var vertexBuffer = _meshManager.VertexBuffer;
+                vk.CmdBindVertexBuffers(_vkCommandBuffer, 0, 1, in vertexBuffer, in offset);
 
-            // Bind index buffer
-            vk.CmdBindIndexBuffer(_vkCommandBuffer, _meshManager.IndexBuffer, 0, IndexType.Uint32);
+                // Bind index buffer
+                vk.CmdBindIndexBuffer(_vkCommandBuffer, _meshManager.IndexBuffer, 0, IndexType.Uint32);
 
-            // Draw indexed
-            vk.CmdDrawIndexed(_vkCommandBuffer, _meshManager.IndexCount, 1, 0, 0, 0);
+                // Draw indexed
+                vk.CmdDrawIndexed(_vkCommandBuffer, _meshManager.IndexCount, 1, 0, 0, 0);
+            }
 
             vk.CmdEndRenderPass(_vkCommandBuffer);
             VulkanCore.CheckVkResult(vk.EndCommandBuffer(_vkCommandBuffer));

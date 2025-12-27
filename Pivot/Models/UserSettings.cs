@@ -80,6 +80,11 @@ namespace Pivot.Models
         public string ImageDragSelectionColor { get; set; } = "#0078D4"; // Default accent blue for drag selection
         public double ImageDragSelectionOpacity { get; set; } = 0.3; // Default 30% opacity for drag selection
         
+        // Image layout and sort settings
+        public LayoutType ImageLayoutMode { get; set; } = LayoutType.Grid;
+        public string ImageSortField { get; set; } = "Name";
+        public string ImageSortDirection { get; set; } = "Ascending";
+        
         // Viewport settings
         public CameraGesturePreset ViewportCameraGesture { get; set; } = CameraGesturePreset.Maya;
         public bool ViewportShowGrid { get; set; } = true;

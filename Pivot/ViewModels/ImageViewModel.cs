@@ -11,41 +11,46 @@ using System;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
 
+using CommunityToolkit.Mvvm.Messaging;
+using Pivot.Messages;
+
 namespace Pivot.ViewModels
 {
-    public partial class ImageViewModel : ObservableObject
+    public partial class ImageViewModel : ObservableObject, IRecipient<DirectoryChangedMessage>
     {
-        public ObservableCollection<TemplateItem> Images { get; set; }
+        private readonly LayoutService _layoutService = new();
+        private readonly SortService _sortService = new();
 
-        public ObservableCollection<ObservableCollection<TemplateItem>> MasonryColumns { get; } = new ObservableCollection<ObservableCollection<TemplateItem>>();
-// ... existing code ...
+        public ObservableCollection<TemplateItem> Images { get; set; } = new();
 
-        private int _masonryColumnCount = 3;
-        public int MasonryColumnCount
+        // Navigation
+        public ObservableCollection<FolderNode> FolderTree { get; } = new();
+        private List<TemplateItem> _allImages = new();
+
+        [ObservableProperty]
+        private bool _isSidebarOpen = true;
+
+        [RelayCommand]
+        private void ToggleSidebar()
         {
-            get => _masonryColumnCount;
-            set
-            {
-                if (value <= 0) return;
-                _masonryColumnCount = value;
-                BuildMasonryColumns();
-            }
-        }
-
-        private double _masonryColumnWidth = 200.0;
-        public double MasonryColumnWidth
-        {
-            get => _masonryColumnWidth;
-            set
-            {
-                if (value <= 0) return;
-                _masonryColumnWidth = value;
-                BuildMasonryColumns();
-            }
+            IsSidebarOpen = !IsSidebarOpen;
         }
 
         [ObservableProperty]
+        private FolderNode? _selectedFolder;
+
+        partial void OnSelectedFolderChanged(FolderNode? value)
+        {
+            FilterImages();
+        }
+
+
+
+        [ObservableProperty]
         private LayoutType _currentLayout = LayoutType.Grid;
+
+        [ObservableProperty]
+        private string _layoutIcon = "\uF0E2";
 
         [ObservableProperty]
         private bool _useTextListMode = false;
@@ -56,22 +61,31 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private double _selectionBorderThickness = 2.0;
 
+        // Sort properties
+        [ObservableProperty]
+        private SortField _currentSortField = SortField.Name;
+
+        [ObservableProperty]
+        private SortDirection _currentSortDirection = SortDirection.Ascending;
+
+        [ObservableProperty]
+        private string _sortIcon = "\uE8AC";
+
+        [ObservableProperty]
+        private string _sortDirectionIcon = "\uE74A";
+
         public SelectionManagerViewModel<TemplateItem> SelectionManager { get; }
 
-        [RelayCommand]
-        private void ToggleLayout()
-        {
-            CurrentLayout = (LayoutType)(((int)CurrentLayout + 1) % 3);
-        }
-
         private System.Threading.CancellationTokenSource? _loadCts;
+        private SettingsService? _settings;
+        private DirectorySettingsService? _directorySettings;
+        private readonly IMessenger? _messenger;
 
         public ImageViewModel()
         {
             SelectionManager = new SelectionManagerViewModel<TemplateItem>();
             SelectionManager.PropertyChanged += (s, e) =>
             {
-                // 選択状態が変更されたときに、各アイテムのIsSelectedプロパティを更新
                 if (e.PropertyName == nameof(SelectionManagerViewModel<TemplateItem>.SelectedCount))
                 {
                     if (Images != null)
@@ -84,44 +98,164 @@ namespace Pivot.ViewModels
                 }
             };
 
-            // 設定変更を監視してBorderThicknessを更新
             try
             {
-                var settings = App.Current.Services.GetService<SettingsService>();
-                if (settings != null)
+                var services = App.Current.Services;
+                _settings = services.GetService<SettingsService>();
+                _directorySettings = services.GetService<DirectorySettingsService>();
+                _messenger = services.GetService<IMessenger>();
+
+                if (_messenger != null)
                 {
-                    SelectionBorderThickness = settings.GetImageSelectionBorderThickness();
-                    // 設定変更を監視するために、定期的にチェックするか、イベントを購読する
-                    // ここでは簡易的に初期値を設定し、ページ側で更新する
+                    _messenger.RegisterAll(this);
+                }
+
+                if (_settings != null)
+                {
+                    SelectionBorderThickness = _settings.GetImageSelectionBorderThickness();
+                    
+                    // Load persisted layout and sort settings
+                    CurrentLayout = _settings.GetImageLayoutMode();
+                    CurrentSortField = _settings.GetImageSortField();
+                    CurrentSortDirection = _settings.GetImageSortDirection();
                 }
             }
             catch { }
 
-            Images = new ObservableCollection<TemplateItem>
-            {
-                new TemplateItem { Name = "Test Image 1", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/160x120?text=Image+1" },
-                new TemplateItem { Name = "Test Image 2", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/300x260?text=Image+2" },
-                new TemplateItem { Name = "Test Image 3", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/200x180?text=Image+3" },
-                new TemplateItem { Name = "Test Image 4", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/400x140?text=Image+4" },
-                new TemplateItem { Name = "Test Image 5", Kind = AssetKind.Image, ThumbnailPath = "https://via.placeholder.com/120x200?text=Image+5" }
-            };
-
-            BuildMasonryColumns();
+            LayoutIcon = _layoutService.GetLayoutIcon(CurrentLayout);
+            SortIcon = _sortService.GetSortIcon(CurrentSortField);
+            SortDirectionIcon = _sortService.GetDirectionIcon(CurrentSortDirection);
+            
             UseTextListMode = _currentLayout == LayoutType.List;
             ShowThumbnails = !UseTextListMode;
         }
 
-        partial void OnCurrentLayoutChanged(LayoutType value)
+        [RelayCommand]
+        private void ToggleLayout()
         {
-            UseTextListMode = value == LayoutType.List;
-            ShowThumbnails = !UseTextListMode;
+            CurrentLayout = _layoutService.GetNextLayout(CurrentLayout);
         }
 
-        public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 200)
+        [RelayCommand]
+        private void SetSortField(object parameter)
+        {
+            SortField field;
+            if (parameter is SortField sf)
+            {
+                field = sf;
+            }
+            else if (parameter is string s && Enum.TryParse<SortField>(s, out var parsed))
+            {
+                field = parsed;
+            }
+            else
+            {
+                return;
+            }
+
+            if (CurrentSortField == field)
+            {
+                CurrentSortDirection = CurrentSortDirection == SortDirection.Ascending 
+                    ? SortDirection.Descending 
+                    : SortDirection.Ascending;
+            }
+            else
+            {
+                CurrentSortField = field;
+                CurrentSortDirection = SortDirection.Ascending;
+            }
+            ApplySort();
+            
+            // Persist settings
+            _ = _settings?.SetImageSortFieldAsync(CurrentSortField);
+            _ = _settings?.SetImageSortDirectionAsync(CurrentSortDirection);
+        }
+
+        [RelayCommand]
+        private void ToggleSortDirection()
+        {
+            CurrentSortDirection = CurrentSortDirection == SortDirection.Ascending 
+                ? SortDirection.Descending 
+                : SortDirection.Ascending;
+            ApplySort();
+            
+            // Persist settings
+            _ = _settings?.SetImageSortDirectionAsync(CurrentSortDirection);
+        }
+
+        private void ApplySort()
+        {
+            SortIcon = _sortService.GetSortIcon(CurrentSortField);
+            SortDirectionIcon = _sortService.GetDirectionIcon(CurrentSortDirection);
+
+            SortDirectionIcon = _sortService.GetDirectionIcon(CurrentSortDirection);
+
+            // Sort current displayed images
+            var sorted = _sortService.Sort(Images, CurrentSortField, CurrentSortDirection).ToList();
+            Images.Clear();
+            foreach (var item in sorted)
+            {
+                Images.Add(item);
+            }
+            
+
+        }
+
+        private void FilterImages()
+        {
+            // Filter based on selected folder
+            IEnumerable<TemplateItem> filtered;
+            
+            if (SelectedFolder == null)
+            {
+                filtered = _allImages;
+            }
+            else
+            {
+                // Simple starts-with check for directory path
+                var folderPath = SelectedFolder.FullPath;
+                filtered = _allImages.Where(i => 
+                    i.Path.StartsWith(folderPath, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Apply Sort
+            var sorted = _sortService.Sort(filtered, CurrentSortField, CurrentSortDirection).ToList();
+
+            Images.Clear();
+            foreach (var item in sorted)
+            {
+                Images.Add(item);
+            }
+
+
+        }
+
+        partial void OnCurrentLayoutChanged(LayoutType value)
+        {
+            LayoutIcon = _layoutService.GetLayoutIcon(value);
+            UseTextListMode = value == LayoutType.List;
+            ShowThumbnails = !UseTextListMode;
+            
+            // Persist settings
+            _ = _settings?.SetImageLayoutModeAsync(value);
+        }
+
+        public async void Receive(DirectoryChangedMessage message)
+        {
+            if (message.Value.Category == DirectoryCategory.Image && _directorySettings != null)
+            {
+                // Reload on directory change
+                 await LoadFromDirectoriesAsync(_directorySettings.ImageDirectories);
+            }
+        }
+
+        public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 100000)
         {
             if (directories == null) return;
             var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
             var files = new List<string>();
+            
+            // Fast file scan on background thread
             await Task.Run(() =>
             {
                 foreach (var d in directories)
@@ -149,6 +283,7 @@ namespace Pivot.ViewModels
             var ct = _loadCts.Token;
 
             Images.Clear();
+            _allImages.Clear(); // Clear cache
             var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
             try
             {
@@ -161,90 +296,114 @@ namespace Pivot.ViewModels
             }
             catch { }
 
-            foreach (var f in files)
+            // Parallel loading in chunks
+            int chunkSize = 50;
+            var chunks = files.Chunk(chunkSize);
+            
+            foreach (var chunk in chunks)
             {
-                var item = new TemplateItem
-                {
-                    Kind = AssetKind.Image,
-                    Path = f,
-                    Name = Path.GetFileName(f)
-                };
-                try
-                {
-                    if (thumbService != null)
-                    {
-                        var cached = thumbService.TryGetCachedThumbnailPath(f, 300, 200);
-                        if (!string.IsNullOrWhiteSpace(cached))
-                        {
-                            item.ThumbnailPath = new System.Uri(cached).AbsoluteUri;
-                        }
-                    }
-                }
-                catch { }
-                Images.Add(item);
+                if (ct.IsCancellationRequested) break;
+                
+                var tasks = chunk.Select(f => CreateTemplateItemAsync(f, thumbService));
+                var items = await Task.WhenAll(tasks);
+                
+                _allImages.AddRange(items);
             }
 
-            BuildMasonryColumns();
+            // Build Directory Tree from root directories
+            BuildDirectoryTree(directories);
+
+            // Initial Filter (Show All)
+            FilterImages();
+        }
+
+        private async Task<TemplateItem> CreateTemplateItemAsync(string f, IThumbnailService? thumbService)
+        {
+            long fileSize = 0;
+            DateTime lastMod = DateTime.MinValue;
+            try
+            {
+                var fi = new FileInfo(f);
+                fileSize = fi.Length;
+                lastMod = fi.LastWriteTime;
+            }
+            catch { }
+            
+            var item = new TemplateItem
+            {
+                Kind = AssetKind.Image,
+                Path = f,
+                Name = Path.GetFileName(f),
+                Size = fileSize,
+                LastModified = lastMod
+            };
+
+            // Calculate Aspect Ratio (async)
+            try
+            {
+                // Note: Windows.Storage API usage in WinUI 3 Desktop
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(f);
+                var props = await file.Properties.GetImagePropertiesAsync();
+                
+                item.PixelWidth = (int)props.Width;
+                item.PixelHeight = (int)props.Height;
+                if (item.PixelHeight > 0)
+                {
+                    item.AspectRatio = (double)item.PixelWidth / item.PixelHeight;
+                }
+            }
+            catch 
+            {
+                // Fallback or ignore
+            }
 
             try
             {
-                var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-                if (thumbService == null) return;
-
-                var tasks = new List<Task>();
-                foreach (var item in Images.ToList())
+                if (thumbService != null)
                 {
-                    var originalPath = item.Path;
-                    if (string.IsNullOrWhiteSpace(originalPath) || !File.Exists(originalPath)) continue;
-                    tasks.Add(Task.Run(async () =>
+                    var cached = thumbService.TryGetCachedThumbnailPath(f, 300, 200);
+                    if (!string.IsNullOrWhiteSpace(cached))
                     {
-                        try
-                        {
-                            var thumbPath = await thumbService.GetOrCreateThumbnailAsync(originalPath, 300, 200, ct).ConfigureAwait(false);
-                            var thumbUri = new System.Uri(thumbPath).AbsoluteUri;
-                            if (dispatcher != null)
-                            {
-                                dispatcher.TryEnqueue(() => item.ThumbnailPath = thumbUri);
-                            }
-                            else
-                            {
-                                item.ThumbnailPath = thumbUri;
-                            }
-                        }
-                        catch { }
-                    }));
+                        item.ThumbnailPath = new System.Uri(cached).AbsoluteUri;
+                    }
                 }
-
-                try { await Task.WhenAll(tasks).ConfigureAwait(false); } catch { }
             }
             catch { }
+            return item;
         }
 
-        public void BuildMasonryColumns()
+        private void BuildDirectoryTree(IEnumerable<string> rootDirectories)
         {
-            MasonryColumns.Clear();
-            for (int i = 0; i < MasonryColumnCount; i++)
+            FolderTree.Clear();
+            // Add "All" node or just root folders? User request implies directory tree.
+            // Let's add root folders directly.
+            foreach (var dir in rootDirectories)
             {
-                MasonryColumns.Add(new ObservableCollection<TemplateItem>());
-            }
-
-            var columnHeights = new int[MasonryColumnCount];
-            foreach (var item in Images)
-            {
-                int h = EstimateHeightFromUrl(item.ThumbnailPath);
-                int minIndex = 0;
-                for (int i = 1; i < MasonryColumnCount; i++)
+                if (Directory.Exists(dir))
                 {
-                    if (columnHeights[i] < columnHeights[minIndex]) minIndex = i;
+                    var node = new FolderNode(new DirectoryInfo(dir).Name, dir);
+                    BuildDirectoryTreeRecursive(node);
+                    FolderTree.Add(node);
                 }
-                MasonryColumns[minIndex].Add(item);
-                columnHeights[minIndex] += h;
             }
         }
 
-// ... existing code ...
+        private void BuildDirectoryTreeRecursive(FolderNode node)
+        {
+            try
+            {
+                var subDirs = Directory.GetDirectories(node.FullPath);
+                foreach (var dir in subDirs)
+                {
+                    var subNode = new FolderNode(new DirectoryInfo(dir).Name, dir);
+                    BuildDirectoryTreeRecursive(subNode);
+                    node.Children.Add(subNode);
+                }
+            }
+            catch { }
 
-// ... existing code ...
+
+        }
 
         public void CancelLoads()
         {
@@ -255,7 +414,6 @@ namespace Pivot.ViewModels
         {
             if (item == null) return;
 
-            // Shift+Click: 範囲選択
             if (isShift && SelectionManager.LastSelectedItem != null)
             {
                 var start = Images.IndexOf(SelectionManager.LastSelectedItem);
@@ -267,7 +425,6 @@ namespace Pivot.ViewModels
                     int low = Math.Min(start, end);
                     int high = Math.Max(start, end);
 
-                    // 範囲内のアイテムを取得
                     for (int i = low; i <= high; i++)
                     {
                         if (i < Images.Count)
@@ -276,25 +433,14 @@ namespace Pivot.ViewModels
                         }
                     }
 
-                    // 範囲選択を実行（既存の選択に追加）
                     SelectionManager.SelectRange(range);
                     return;
                 }
             }
 
-            // 通常のクリックまたはCtrl+Click
             SelectionManager.SelectItem(item, isCtrl, isShift);
         }
 
-        private static int EstimateHeightFromUrl(string? url)
-        {
-            if (string.IsNullOrEmpty(url)) return 180;
-            var m = Regex.Match(url, "(\\d+)x(\\d+)");
-            if (m.Success && int.TryParse(m.Groups[2].Value, out int h))
-            {
-                return h;
-            }
-            return 180;
-        }
+
     }
 }

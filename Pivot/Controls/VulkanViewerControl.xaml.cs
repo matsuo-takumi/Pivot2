@@ -176,7 +176,8 @@ namespace Pivot.Controls
                 var elapsed = _fpsStopwatch.Elapsed.TotalSeconds;
                 if (elapsed - _lastFpsUpdate >= 1.0)
                 {
-                    var fps = _frameCount / (elapsed - _lastFpsUpdate);
+                    double timeDiff = elapsed - _lastFpsUpdate;
+                    var fps = timeDiff > 0.001 ? _frameCount / timeDiff : 0;
                     UpdateDebugFps(fps);
                     _frameCount = 0;
                     _lastFpsUpdate = elapsed;

@@ -18,6 +18,7 @@ using Windows.Storage.Streams;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
+using Pivot.Controls;
 
 namespace Pivot.Views
 {
@@ -25,7 +26,8 @@ namespace Pivot.Views
     {
         public ImageViewModel ViewModel { get; set; }
 
-        private TemplateItem? _lastSelectedItemForRange;
+        private MasonryLayout _masonryLayout;
+        private DataTemplate _defaultItemTemplate;
 
         private const double DragActivationThresholdSquared = 16.0;
         private bool _isPointerDown = false;
@@ -39,9 +41,22 @@ namespace Pivot.Views
         public ImagePage()
         {
             this.InitializeComponent();
+            
+            _masonryLayout = new MasonryLayout 
+            { 
+                ColumnWidth = 220, 
+                ColumnSpacing = 8, 
+                RowSpacing = 8 
+            };
+            
+            
+            // Capture default template (Grid/List)
+            _defaultItemTemplate = ItemsRepeaterMain.ItemTemplate as DataTemplate;
+
             ViewModel = new ImageViewModel();
             this.DataContext = ViewModel;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+            ViewModel.FolderTree.CollectionChanged += FolderTree_CollectionChanged;
 
             // responsive handlers
             SizeChanged += ImagePage_SizeChanged;
@@ -49,16 +64,26 @@ namespace Pivot.Views
             // 初期レイアウトを適用
             ApplyLayout(ViewModel.CurrentLayout);
 
-            // 自動ロード: 設定に保存された ImageDirectories があればテスト用に読み込む（安全策: try/catch）
+            // 自動ロード
             try
             {
                 var settings = App.Current.Services.GetService<SettingsService>();
-                if (settings != null)
+                var dirSettings = App.Current.Services.GetService<DirectorySettingsService>();
+                if (dirSettings != null)
                 {
+                    // Use ImageDirectories from DirectorySettingsService
+                    if (dirSettings.ImageDirectories != null && dirSettings.ImageDirectories.Count > 0)
+                    {
+                         _ = ViewModel.LoadFromDirectoriesAsync(dirSettings.ImageDirectories);
+                    }
+                }
+                else if (settings != null)
+                {
+                    // Fallback
                     var dirs = settings.GetUserSettings().ImageDirectories;
                     if (dirs != null && dirs.Count > 0)
                     {
-                        _ = ViewModel.LoadFromDirectoriesAsync(dirs, 300);
+                        _ = ViewModel.LoadFromDirectoriesAsync(dirs);
                     }
                 }
             }
@@ -93,11 +118,20 @@ namespace Pivot.Views
                 });
             }
         }
-        
 
+
+
+        private void FolderTreeView_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+        {
+            if (args.InvokedItem is FolderNode node)
+            {
+                ViewModel.SelectedFolder = node;
+            }
+        }
 
         private void ImagePage_Unloaded(object sender, RoutedEventArgs e)
         {
+            try { ViewModel.FolderTree.CollectionChanged -= FolderTree_CollectionChanged; } catch { }
             try { ViewModel?.CancelLoads(); } catch { }
             // Clean up message registration
             try { WeakReferenceMessenger.Default.UnregisterAll(this); } catch { }
@@ -110,32 +144,12 @@ namespace Pivot.Views
             UpdateResponsive(e.NewSize.Width);
         }
 
-        private System.Threading.CancellationTokenSource? _resizeCts;
-
         private void UpdateResponsive(double width)
         {
-            if (width <= 0) return;
-            try { _resizeCts?.Cancel(); } catch { }
-            _resizeCts = new System.Threading.CancellationTokenSource();
-            var ct = _resizeCts.Token;
-            _ = System.Threading.Tasks.Task.Run(async () =>
-            {
-                try
-                {
-                    await System.Threading.Tasks.Task.Delay(150, ct);
-                    if (ct.IsCancellationRequested) return;
-                    var columns = (int)System.Math.Max(1, System.Math.Floor((width - 48) / 220));
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        if (ViewModel == null) return;
-                        if (columns != ViewModel.MasonryColumnCount)
-                        {
-                            ViewModel.MasonryColumnCount = columns;
-                        }
-                    });
-                }
-                catch { }
-            });
+             if (ViewModel?.CurrentLayout == LayoutType.Masonry)
+             {
+                 _masonryLayout.Invalidate();
+             }
         }
 
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -147,45 +161,40 @@ namespace Pivot.Views
                     ApplyLayout(ViewModel.CurrentLayout);
                 }
             }
+            else if (e.PropertyName == nameof(ImageViewModel.IsSidebarOpen))
+            {
+                // Re-calculate layout when sidebar toggles (especially for Masonry)
+                if (ViewModel != null && ViewModel.CurrentLayout == LayoutType.Masonry)
+                {
+                    UpdateResponsive(ActualWidth);
+                }
+            }
         }
 
         private void ApplyLayout(LayoutType layout)
         {
+            if (ItemsRepeaterMain == null) return;
+            
+            // Ensure Repeater is visible
+            ItemsRepeaterMain.Visibility = Visibility.Visible;
+
             switch (layout)
             {
                 case LayoutType.List:
                     ItemsRepeaterMain.Layout = new StackLayout() { Orientation = Orientation.Vertical };
-                    ItemsRepeaterMain.Visibility = Visibility.Visible;
-                    MasonryColumnsControl.Visibility = Visibility.Collapsed;
-                    break;
-
-                case LayoutType.Grid:
-                    ItemsRepeaterMain.Layout = new UniformGridLayout
-                    {
-                        MinItemWidth = 220,
-                        MinItemHeight = 170,
-                        MinRowSpacing = 8,
-                        MinColumnSpacing = 8
-                    };
-                    ItemsRepeaterMain.Visibility = Visibility.Visible;
-                    MasonryColumnsControl.Visibility = Visibility.Collapsed;
+                    ItemsRepeaterMain.ItemTemplate = _defaultItemTemplate;
                     break;
 
                 case LayoutType.Masonry:
-                    UpdateResponsive(ActualWidth);
-                    if (ViewModel != null)
+                    ItemsRepeaterMain.Layout = _masonryLayout;
+                    if (Resources.TryGetValue("MasonryItemTemplate", out var t))
                     {
-                        double available = System.Math.Max(0, ActualWidth - 48);
-                        int cols = ViewModel.MasonryColumnCount > 0 ? ViewModel.MasonryColumnCount : 1;
-                        if (cols <= 0) cols = 1;
-                        ViewModel.MasonryColumnWidth = System.Math.Floor(available / cols) - 16;
-                        ViewModel.BuildMasonryColumns();
+                        ItemsRepeaterMain.ItemTemplate = t as DataTemplate;
                     }
-                    ItemsRepeaterMain.Visibility = Visibility.Collapsed;
-                    MasonryColumnsControl.Visibility = Visibility.Visible;
+                    UpdateResponsive(ActualWidth);
                     break;
 
-                
+                case LayoutType.Grid:
                 default:
                     ItemsRepeaterMain.Layout = new UniformGridLayout
                     {
@@ -194,10 +203,68 @@ namespace Pivot.Views
                         MinRowSpacing = 8,
                         MinColumnSpacing = 8
                     };
-                    ItemsRepeaterMain.Visibility = Visibility.Visible;
-                    MasonryColumnsControl.Visibility = Visibility.Collapsed;
+                    ItemsRepeaterMain.ItemTemplate = _defaultItemTemplate;
                     break;
             }
+        }
+
+        // ... Existing Pointer Handlers ...
+
+        private void FolderTree_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            DispatcherQueue.TryEnqueue(() => SyncFolderTree());
+        }
+
+        private void SyncFolderTree()
+        {
+            try
+            {
+                FolderTreeView.RootNodes.Clear();
+                foreach (var node in ViewModel.FolderTree)
+                {
+                    var tvNode = CreateTreeViewNode(node);
+                    FolderTreeView.RootNodes.Add(tvNode);
+                }
+            }
+            catch { }
+        }
+
+        private TreeViewNode CreateTreeViewNode(FolderNode node)
+        {
+            // Update: Manually create UI to ensure text visibility
+            var stack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Padding = new Microsoft.UI.Xaml.Thickness(0, 4, 0, 4) };
+            
+            // Icon
+            var icon = new FontIcon 
+            { 
+                Glyph = "\uE8B7", 
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe MDL2 Assets"), 
+                FontSize = 16 
+            };
+            // Try to get Accent color, fallback to default
+            if (Application.Current.Resources.TryGetValue("SystemAccentColor", out var accentColor))
+            {
+               // resource is usually Color, need Brush
+               icon.Foreground = new SolidColorBrush((Windows.UI.Color)accentColor);
+            }
+            
+            stack.Children.Add(icon);
+
+            // Text
+            var textBlock = new TextBlock 
+            { 
+                Text = node.Name, 
+                VerticalAlignment = VerticalAlignment.Center 
+            };
+            stack.Children.Add(textBlock);
+
+            var tvNode = new TreeViewNode() { Content = stack, IsExpanded = node.IsExpanded };
+            
+            foreach (var child in node.Children)
+            {
+                tvNode.Children.Add(CreateTreeViewNode(child));
+            }
+            return tvNode;
         }
 
         private void ImageItem_PointerPressed(object sender, PointerRoutedEventArgs e)

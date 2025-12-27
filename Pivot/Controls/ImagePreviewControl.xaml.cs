@@ -21,12 +21,69 @@ namespace Pivot.Controls
         private double _currentZoomFactor = 1.0;
         private bool _isPanning = false;
         private Windows.Foundation.Point _lastMousePosition;
+        private bool _isPatternPreviewEnabled = false;
 
         public ImagePreviewControl()
         {
             this.InitializeComponent();
             this.SizeChanged += ImagePreviewControl_SizeChanged;
             ImagePreviewScrollViewer.ViewChanged += ImagePreviewScrollViewer_ViewChanged;
+        }
+
+        private void PatternPreviewToggle_Click(object sender, RoutedEventArgs e)
+        {
+            _isPatternPreviewEnabled = PatternPreviewToggle.IsChecked == true;
+            UpdatePatternPreview();
+        }
+
+        private void UpdatePatternPreview()
+        {
+            if (_isPatternPreviewEnabled && _currentPreviewBitmap != null)
+            {
+                // Show pattern grid, hide single image
+                ImagePreviewImage.Visibility = Visibility.Collapsed;
+                PatternGrid.Visibility = Visibility.Visible;
+                
+                // Set same image source to all 9 pattern images
+                PatternImage00.Source = _currentPreviewBitmap;
+                PatternImage01.Source = _currentPreviewBitmap;
+                PatternImage02.Source = _currentPreviewBitmap;
+                PatternImage10.Source = _currentPreviewBitmap;
+                PatternImage11.Source = _currentPreviewBitmap;
+                PatternImage12.Source = _currentPreviewBitmap;
+                PatternImage20.Source = _currentPreviewBitmap;
+                PatternImage21.Source = _currentPreviewBitmap;
+                PatternImage22.Source = _currentPreviewBitmap;
+                
+                // Zoom out to show entire 3x3 pattern
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        var imgWidth = _currentPreviewBitmap.PixelWidth * 3;
+                        var imgHeight = _currentPreviewBitmap.PixelHeight * 3;
+                        var viewWidth = ImagePreviewScrollViewer.ViewportWidth;
+                        var viewHeight = ImagePreviewScrollViewer.ViewportHeight;
+                        
+                        if (viewWidth > 0 && viewHeight > 0 && imgWidth > 0 && imgHeight > 0)
+                        {
+                            var zoomX = viewWidth / imgWidth;
+                            var zoomY = viewHeight / imgHeight;
+                            var fitZoom = Math.Min(zoomX, zoomY) * 0.9; // 90% to leave some margin
+                            fitZoom = Math.Max(fitZoom, ImagePreviewScrollViewer.MinZoomFactor);
+                            fitZoom = Math.Min(fitZoom, ImagePreviewScrollViewer.MaxZoomFactor);
+                            ImagePreviewScrollViewer.ChangeView(null, null, (float)fitZoom, false);
+                        }
+                    }
+                    catch { }
+                });
+            }
+            else
+            {
+                // Show single image, hide pattern grid
+                ImagePreviewImage.Visibility = Visibility.Visible;
+                PatternGrid.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void ImagePreviewScrollViewer_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -288,6 +345,12 @@ namespace Pivot.Controls
                 CleanupCurrentBitmap();
                 _currentZoomFactor = 1.0;
                 _previewImageAspectRatio = 0; // 0でリセット
+                
+                // Reset pattern preview
+                _isPatternPreviewEnabled = false;
+                PatternPreviewToggle.IsChecked = false;
+                PatternGrid.Visibility = Visibility.Collapsed;
+                ImagePreviewImage.Visibility = Visibility.Visible;
             }
             catch (Exception ex)
             {

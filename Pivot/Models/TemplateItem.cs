@@ -21,6 +21,10 @@ namespace Pivot.Models
 		public long Size { get; set; }
 		public DateTime LastModified { get; set; }
 
+		public double AspectRatio { get; set; } = 1.0;
+		public int PixelWidth { get; set; }
+		public int PixelHeight { get; set; }
+
 		private string? _thumbnailPath;
 		public string? ThumbnailPath
 		{
