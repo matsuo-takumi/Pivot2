@@ -161,14 +161,6 @@ namespace Pivot.Views
                     ApplyLayout(ViewModel.CurrentLayout);
                 }
             }
-            else if (e.PropertyName == nameof(ImageViewModel.IsSidebarOpen))
-            {
-                // Re-calculate layout when sidebar toggles (especially for Masonry)
-                if (ViewModel != null && ViewModel.CurrentLayout == LayoutType.Masonry)
-                {
-                    UpdateResponsive(ActualWidth);
-                }
-            }
         }
 
         private void ApplyLayout(LayoutType layout)
@@ -201,7 +193,8 @@ namespace Pivot.Views
                         MinItemWidth = 220,
                         MinItemHeight = 170,
                         MinRowSpacing = 8,
-                        MinColumnSpacing = 8
+                        MinColumnSpacing = 8,
+                        ItemsStretch = UniformGridLayoutItemsStretch.Fill
                     };
                     ItemsRepeaterMain.ItemTemplate = _defaultItemTemplate;
                     break;
@@ -212,63 +205,87 @@ namespace Pivot.Views
 
         private void FolderTree_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
-            DispatcherQueue.TryEnqueue(() => SyncFolderTree());
+            DispatcherQueue.TryEnqueue(() => BuildNavigationMenuItems());
         }
 
-        private void SyncFolderTree()
+        private void BuildNavigationMenuItems()
         {
             try
             {
-                FolderTreeView.RootNodes.Clear();
+                FolderNavigationView.MenuItems.Clear();
                 foreach (var node in ViewModel.FolderTree)
                 {
-                    var tvNode = CreateTreeViewNode(node);
-                    FolderTreeView.RootNodes.Add(tvNode);
+                    var navItem = CreateNavigationViewItem(node);
+                    FolderNavigationView.MenuItems.Add(navItem);
                 }
             }
             catch { }
         }
 
-        private TreeViewNode CreateTreeViewNode(FolderNode node)
+        private NavigationViewItem CreateNavigationViewItem(FolderNode node)
         {
-            // Update: Manually create UI to ensure text visibility
-            var stack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Padding = new Microsoft.UI.Xaml.Thickness(0, 4, 0, 4) };
-            
-            // Icon
-            var icon = new FontIcon 
-            { 
-                Glyph = "\uE8B7", 
-                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe MDL2 Assets"), 
-                FontSize = 16 
+            var item = new NavigationViewItem
+            {
+                Content = node.Name,
+                Tag = node
             };
-            // Try to get Accent color, fallback to default
+
+            var icon = new FontIcon
+            {
+                Glyph = "\uE8B7",
+                FontFamily = new FontFamily("Segoe MDL2 Assets")
+            };
+
             if (Application.Current.Resources.TryGetValue("SystemAccentColor", out var accentColor))
             {
-               // resource is usually Color, need Brush
-               icon.Foreground = new SolidColorBrush((Windows.UI.Color)accentColor);
+                icon.Foreground = new SolidColorBrush((Windows.UI.Color)accentColor);
             }
-            
-            stack.Children.Add(icon);
 
-            // Text
-            var textBlock = new TextBlock 
-            { 
-                Text = node.Name, 
-                VerticalAlignment = VerticalAlignment.Center 
-            };
-            stack.Children.Add(textBlock);
+            item.Icon = icon;
 
-            var tvNode = new TreeViewNode() { Content = stack, IsExpanded = node.IsExpanded };
-            
+            // Recursively add children
             foreach (var child in node.Children)
             {
-                tvNode.Children.Add(CreateTreeViewNode(child));
+                item.MenuItems.Add(CreateNavigationViewItem(child));
             }
-            return tvNode;
+
+            return item;
         }
+
+        private void FolderNavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+        {
+            if (args.SelectedItem is NavigationViewItem item && item.Tag is FolderNode node)
+            {
+                ViewModel.SelectedFolder = node;
+            }
+        }
+
+        // ダブルクリック判定用
+        private long _lastPointerPressedTime = 0;
+        private object? _lastPointerPressedSender = null;
 
         private void ImageItem_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            try
+            {
+                // 手動ダブルクリック判定（Masonryレイアウト対策）
+                var now = DateTime.Now.Ticks;
+                // 500ms以内
+                if (sender == _lastPointerPressedSender && (now - _lastPointerPressedTime) < 5000000)
+                {
+                    if (sender is FrameworkElement elm && elm.DataContext is TemplateItem itm)
+                    {
+                        _ = PreviewControl.ShowAsync(itm);
+                        e.Handled = true;
+                        _lastPointerPressedSender = null; // リセット
+                        return;
+                    }
+                }
+                _lastPointerPressedTime = now;
+                _lastPointerPressedSender = sender;
+            }
+            catch { }
+
             try
             {
                 if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
@@ -406,7 +423,6 @@ namespace Pivot.Views
                 System.Diagnostics.Debug.WriteLine($"ImageItem_RightTapped error: {ex.Message}");
             }
         }
-
 
     }
 }

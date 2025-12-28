@@ -23,18 +23,10 @@ namespace Pivot.ViewModels
 
         public ObservableCollection<TemplateItem> Images { get; set; } = new();
 
+
         // Navigation
         public ObservableCollection<FolderNode> FolderTree { get; } = new();
         private List<TemplateItem> _allImages = new();
-
-        [ObservableProperty]
-        private bool _isSidebarOpen = true;
-
-        [RelayCommand]
-        private void ToggleSidebar()
-        {
-            IsSidebarOpen = !IsSidebarOpen;
-        }
 
         [ObservableProperty]
         private FolderNode? _selectedFolder;

@@ -1,0 +1,68 @@
+<UserControl
+    x:Class="Pivot.Controls.RadialMenuControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Width="350" Height="200">
+
+    <Canvas x:Name="RootCanvas" Background="Transparent">
+        <!-- Layout Button (leftmost) -->
+        <Button x:Name="LayoutButton"
+                Canvas.Left="10" Canvas.Top="70"
+                Width="100" Height="60"
+                CornerRadius="8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                Click="LayoutButton_Click"
+                PointerEntered="MenuButton_PointerEntered"
+                PointerExited="MenuButton_PointerExited">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon x:Name="LayoutIcon" Glyph="&#xE8A9;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
+                <TextBlock Text="Layout" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Button>
+        
+        <!-- Sort Button (middle) -->
+        <Button x:Name="SortButton"
+                Canvas.Left="118" Canvas.Top="70"
+                Width="100" Height="60"
+                CornerRadius="8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                Click="SortButton_Click"
+                PointerEntered="MenuButton_PointerEntered"
+                PointerExited="MenuButton_PointerExited">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon x:Name="SortIcon" Glyph="&#xE8CB;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
+                <TextBlock Text="Sort" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Button>
+        
+        <!-- Order Button (rightmost, before trigger) -->
+        <Button x:Name="OrderButton"
+                Canvas.Left="226" Canvas.Top="70"
+                Width="100" Height="60"
+                CornerRadius="8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                Click="OrderButton_Click"
+                PointerEntered="MenuButton_PointerEntered"
+                PointerExited="MenuButton_PointerExited">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon x:Name="OrderIcon" Glyph="&#xE74A;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
+                <TextBlock Text="Order" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Button>
+        
+        <!-- Trigger indicator (right side) -->
+        <Ellipse Width="8" Height="8" 
+                 Canvas.Left="340" Canvas.Top="98"
+                 Fill="{ThemeResource AccentFillColorDefaultBrush}"
+                 Opacity="0.8"/>
+    </Canvas>
+</UserControl>

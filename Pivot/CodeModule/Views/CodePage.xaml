@@ -16,7 +16,7 @@
         <common:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </Page.Resources>
 
-    <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="12" PointerPressed="Root_PointerPressed">
+    <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="0,12,12,12" PointerPressed="Root_PointerPressed">
         <!-- Header row removed - tab title shown in main window -->
 
         <!-- NavigationView hosts the left pane and the main content to avoid gaps in Compact mode -->

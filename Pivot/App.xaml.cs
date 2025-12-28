@@ -35,6 +35,8 @@ namespace Pivot
 		{
 			// Initialize settings early
 			try { await Services.GetRequiredService<SettingsService>().InitializeAsync(); } catch { }
+			// Load directory settings (must be done before pages that use them are constructed)
+			try { await Services.GetRequiredService<DirectorySettingsService>().LoadAsync(); } catch { }
 			// Ensure text color resources are initialized before preferences are shown
 			try { _ = Services.GetRequiredService<ITextColorResourceManager>(); } catch { }
 			// Kick main view model initialization (auto-scan if possible)
