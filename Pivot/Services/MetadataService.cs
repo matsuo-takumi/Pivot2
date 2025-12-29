@@ -1,4 +1,4 @@
-#if false
+
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
@@ -1568,19 +1568,13 @@ namespace Pivot.Services
         // - プリセット検証メソッド（互換性チェック）
     }
 }
-#endif
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using Pivot.Models;
+
+
 
 namespace Pivot.Services
 {
-	public class MetadataService : IDisposable
+	public class MetadataService_Deprecated : IDisposable
 	{
 		private readonly ILogger<MetadataService> _logger;
 		private readonly object _lock = new object();
@@ -1589,7 +1583,7 @@ namespace Pivot.Services
 		private readonly Dictionary<string, ScanCacheEntry> _scanCacheByPath = new Dictionary<string, ScanCacheEntry>(StringComparer.OrdinalIgnoreCase);
 		private readonly Dictionary<string, PreferenceEntry> _preferences = new Dictionary<string, PreferenceEntry>(StringComparer.OrdinalIgnoreCase);
 
-		public MetadataService(ILogger<MetadataService> logger, IConfiguration configuration)
+		public MetadataService_Deprecated(ILogger<MetadataService> logger, IConfiguration configuration)
 		{
 			_logger = logger;
 		}

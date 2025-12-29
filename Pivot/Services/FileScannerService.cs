@@ -13,6 +13,7 @@ using Pivot.Models;
 using Pivot.Messages;
 using System.Timers;
 using Microsoft.Extensions.Configuration;
+using SixLabors.ImageSharp;
 
 namespace Pivot.Services
 {
@@ -21,6 +22,7 @@ namespace Pivot.Services
 		private readonly ILogger<FileScannerService> _logger;
 		private readonly MetadataService _metadataService;
 		private readonly ICatalogService? _catalogService; // scanモード用
+		private readonly IThumbnailService? _thumbnailService;
 		private readonly bool _useScanMode;
 		private readonly IMessenger _messenger;
 		private FileSystemWatcher? _watcher;
@@ -69,11 +71,12 @@ namespace Pivot.Services
 		private const int AssetFlushIntervalMs = 300; // Phase 6: move to config
 		private const int AssetFlushBatchMax = 100;   // Phase 6: move to config
 
-		public FileScannerService(ILogger<FileScannerService> logger, MetadataService metadataService, IMessenger messenger, IConfiguration? configuration = null, ICatalogService? catalogService = null)
+		public FileScannerService(ILogger<FileScannerService> logger, MetadataService metadataService, IMessenger messenger, IConfiguration? configuration = null, ICatalogService? catalogService = null, IThumbnailService? thumbnailService = null)
 		{
 			_logger = logger;
 			_metadataService = metadataService;
 			_messenger = messenger;
+			_thumbnailService = thumbnailService;
 			_useScanMode = bool.TryParse(configuration?["AppSettings:UseScanMode"], out var flag) && flag;
 			_catalogService = catalogService;
 
@@ -121,19 +124,9 @@ namespace Pivot.Services
 				}
 				_currentRootPath = rootPath; // 現在のスキャン対象パスを保持
 
-				// Probe throughput and configure per-root parallelism
-				double mbps = 0;
-				try
-				{
-					mbps = await ProbeThroughputMbPerSecAsync(rootPath, cancellationToken);
-				}
-				catch (Exception ex)
-				{
-					_logger.LogWarning(ex, "Probe failed for {rootPath}, falling back to defaults", rootPath);
-					mbps = 0;
-				}
-
-				ConfigureForRoot(mbps, out int scanDop, out int hashDop);
+				// Configure concurrency (Simplified for speed)
+				int scanDop = Math.Max(2, Environment.ProcessorCount - 1); // Use multiple cores for enumeration/processing
+				int hashDop = Math.Max(1, Environment.ProcessorCount / 2); // Limit concurrent hashing
 				_fileOpenSemaphore = new SemaphoreSlim(DefaultMaxOpenFiles);
 				_hashSemaphore = new SemaphoreSlim(hashDop);
 
@@ -444,13 +437,11 @@ namespace Pivot.Services
 					// Quick check: compare size and mtime to skip unnecessary hashing
 					FileEntry? existingFileEntry = null;
 					bool needsHash = true;
-					if (UseQuickCheck)
+					// Quick check: compare size and mtime to skip unnecessary hashing
+					existingFileEntry = await _metadataService.GetFileEntryByPathAsync(path);
+					if (existingFileEntry != null && existingFileEntry.Size == fileInfo.Length && existingFileEntry.UpdatedAt == fileInfo.LastWriteTimeUtc)
 					{
-						existingFileEntry = await _metadataService.GetFileEntryByPathAsync(path);
-						if (existingFileEntry != null && existingFileEntry.Size == fileInfo.Length && existingFileEntry.UpdatedAt == fileInfo.LastWriteTimeUtc)
-						{
-							needsHash = false; // no content change
-						}
+						needsHash = false; // no content change
 					}
 
 					// Ensure semaphores exist (for watcher-triggered events)
@@ -528,6 +519,25 @@ namespace Pivot.Services
 									existingAsset.Size = fileInfo.Length;
 									existingAsset.Hash = hash;
 									existingAsset.File = fileEntry;
+									
+									// Fix missing dimensions on existing assets
+									if (ImageExtensions.Contains(ext) && existingAsset.PixelWidth == 0)
+									{
+										try
+										{
+											var imageInfo = await Image.IdentifyAsync(path);
+											if (imageInfo != null)
+											{
+												existingAsset.PixelWidth = imageInfo.Width;
+												existingAsset.PixelHeight = imageInfo.Height;
+											}
+										}
+										catch (Exception dimEx)
+										{
+											_logger.LogDebug(dimEx, "Failed to read image dimensions for existing asset: {Path}", path);
+										}
+									}
+									
 									existingAsset.UpdatedAt = DateTime.UtcNow;
 									await _metadataService.UpdateAssetEntryAsync(existingAsset);
 									// enqueue bulk update and keep legacy single message
@@ -536,6 +546,42 @@ namespace Pivot.Services
 								}
 								else
 								{
+									// Generate thumbnail for image files
+									string? thumbnailCachePath = null;
+									int pixelWidth = 0;
+									int pixelHeight = 0;
+									
+									if (ImageExtensions.Contains(ext))
+									{
+										// Extract image dimensions (fast header-only read)
+										try
+										{
+											var imageInfo = await Image.IdentifyAsync(path);
+											if (imageInfo != null)
+											{
+												pixelWidth = imageInfo.Width;
+												pixelHeight = imageInfo.Height;
+											}
+										}
+										catch (Exception dimEx)
+										{
+											_logger.LogDebug(dimEx, "Failed to read image dimensions for: {Path}", path);
+										}
+										
+										// Generate thumbnail
+										if (_thumbnailService != null)
+										{
+											try
+											{
+												thumbnailCachePath = await _thumbnailService.GetOrCreateThumbnailAsync(path, 300, 200);
+											}
+											catch (Exception thumbEx)
+											{
+												_logger.LogDebug(thumbEx, "Failed to generate thumbnail for: {Path}", path);
+											}
+										}
+									}
+									
 									var newAsset = new AssetEntry
 									{
 										Name = Path.GetFileName(path),
@@ -544,6 +590,9 @@ namespace Pivot.Services
 										Size = fileInfo.Length,
 										Hash = hash,
 										File = fileEntry,
+										ThumbnailCachePath = thumbnailCachePath,
+										PixelWidth = pixelWidth,
+										PixelHeight = pixelHeight,
 										CreatedAt = DateTime.UtcNow,
 										UpdatedAt = DateTime.UtcNow
 									};
@@ -648,17 +697,9 @@ namespace Pivot.Services
 				_currentRootPath = rootPath;
 				_logger.LogInformation("Starting scan with cache optimization for: {RootPath}", rootPath);
 
-				double mbps = 0;
-				try
-				{
-					mbps = await ProbeThroughputMbPerSecAsync(rootPath, cancellationToken);
-				}
-				catch (Exception ex)
-				{
-					_logger.LogWarning(ex, "Probe failed for {rootPath}, falling back to defaults", rootPath);
-				}
-
-				ConfigureForRoot(mbps, out int scanDop, out int hashDop);
+				// Configure concurrency (Simplified for speed)
+				int scanDop = Math.Max(2, Environment.ProcessorCount - 1);
+				int hashDop = Math.Max(1, Environment.ProcessorCount / 2);
 				_fileOpenSemaphore = new SemaphoreSlim(DefaultMaxOpenFiles);
 				_hashSemaphore = new SemaphoreSlim(hashDop);
 
@@ -910,54 +951,10 @@ namespace Pivot.Services
 			}
 		}
 
-		// Probe throughput (MB/s) by reading a small chunk of a representative file
-		private static async Task<double> ProbeThroughputMbPerSecAsync(string rootPath, CancellationToken ct)
-		{
-			// Avoid full recursive enumeration just to find one file.
-			var file = FindCandidateFile(rootPath);
-			if (file == null) return 0;
-			
-			try
-			{
-				var readBytes = 256 * 1024; // 256KB
-				var sw = Stopwatch.StartNew();
-				await using var s = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-				var buffer = new byte[readBytes];
-				int got = await s.ReadAsync(buffer.AsMemory(0, readBytes), ct);
-				sw.Stop();
-				if (got == 0) return 0;
-				return (got / 1024.0 / 1024.0) / Math.Max(0.0001, sw.Elapsed.TotalSeconds);
-			}
-			catch { return 0; }
-		}
 
-		private static string? FindCandidateFile(string rootPath)
-		{
-			try
-			{
-				// Try top level first
-				foreach (var f in Directory.EnumerateFiles(rootPath))
-				{
-					if (new FileInfo(f).Length >= 65536) return f;
-				}
-				// Try one level deeper if needed, but don't go full recursive
-				foreach (var d in Directory.EnumerateDirectories(rootPath))
-				{
-					foreach (var f in Directory.EnumerateFiles(d))
-					{
-						if (new FileInfo(f).Length >= 65536) return f;
-					}
-				}
-			}
-			catch { }
-			return null;
-		}
 
-		private static void ConfigureForRoot(double mbps, out int scanDop, out int hashDop)
-		{
-			if (mbps >= 100) { scanDop = Math.Min(64, Environment.ProcessorCount * 4); hashDop = Math.Max(1, Environment.ProcessorCount * 2); }
-			else if (mbps >= 20) { scanDop = Math.Min(32, Environment.ProcessorCount * 2); hashDop = Math.Max(1, Environment.ProcessorCount); }
-			else { scanDop = 4; hashDop = Math.Max(1, Environment.ProcessorCount / 2); }
-		}
+
+
+
 	}
 }

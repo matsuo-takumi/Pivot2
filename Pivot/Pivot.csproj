@@ -76,6 +76,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="LiteDB" Version="5.0.21" />
     
     <!-- EF Core / SQLite for CodeModule -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />

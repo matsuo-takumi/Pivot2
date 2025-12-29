@@ -27,7 +27,7 @@ namespace Pivot.Views
         public ImageViewModel ViewModel { get; set; }
 
         private MasonryLayout _masonryLayout;
-        private DataTemplate _defaultItemTemplate;
+        private DataTemplate _defaultItemTemplate = null!;
 
         private const double DragActivationThresholdSquared = 16.0;
         private bool _isPointerDown = false;
@@ -51,7 +51,7 @@ namespace Pivot.Views
             
             
             // Capture default template (Grid/List)
-            _defaultItemTemplate = ItemsRepeaterMain.ItemTemplate as DataTemplate;
+            _defaultItemTemplate = (ItemsRepeaterMain.ItemTemplate as DataTemplate)!;
 
             ViewModel = new ImageViewModel();
             this.DataContext = ViewModel;
@@ -74,7 +74,7 @@ namespace Pivot.Views
                     // Use ImageDirectories from DirectorySettingsService
                     if (dirSettings.ImageDirectories != null && dirSettings.ImageDirectories.Count > 0)
                     {
-                         _ = ViewModel.LoadFromDirectoriesAsync(dirSettings.ImageDirectories);
+                         _ = ViewModel.LoadAsync(dirSettings.ImageDirectories);
                     }
                 }
                 else if (settings != null)
@@ -83,7 +83,7 @@ namespace Pivot.Views
                     var dirs = settings.GetUserSettings().ImageDirectories;
                     if (dirs != null && dirs.Count > 0)
                     {
-                        _ = ViewModel.LoadFromDirectoriesAsync(dirs);
+                        _ = ViewModel.LoadAsync(dirs);
                     }
                 }
             }

@@ -16,6 +16,7 @@
         <conv:FileSizeConverter x:Key="FileSizeConverter"/>
         <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:BitmapImageDecodeConverter x:Key="BitmapDecode"/>
+        <conv:CachedBitmapImageConverter x:Key="CachedBitmapDecode"/>
         <conv:KindToVisibilityConverter x:Key="KindToVisibility"/>
         <conv:SelectionToBorderBrushConverter x:Key="SelectionToBorderBrushConverter"/>
         <conv:SelectionToBorderThicknessConverter x:Key="SelectionToBorderThicknessConverter"/>
@@ -24,12 +25,12 @@
         <conv:DateTimeFormatConverter x:Key="DateTimeConverter"/>
 
         <DataTemplate x:Key="MasonryItemTemplate" x:DataType="models:TemplateItem">
-            <Border BorderBrush="{Binding IsSelected, Converter={StaticResource SelectionToBorderBrushConverter}}" 
-                    BorderThickness="{Binding IsSelected, Converter={StaticResource SelectionToBorderThicknessConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
+            <Border BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBorderBrushConverter}}" 
+                    BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBorderThicknessConverter}}" 
                     CornerRadius="6" 
-                    Padding="{Binding IsSelected, Converter={StaticResource SelectionToPaddingConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
+                    Padding="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToPaddingConverter}}" 
                     Margin="4" 
-                    Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
+                    Background="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBackgroundConverter}}"
                     CanDrag="True"
                     PointerPressed="ImageItem_PointerPressed"
                     PointerMoved="ImageItem_PointerMoved"
@@ -47,7 +48,7 @@
                     <Grid Grid.Row="0" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" x:Phase="0" Tag="{x:Bind}"/>
                     
                     <!-- Phase 1: Image -->
-                    <Image Grid.Row="0" Stretch="Uniform" Source="{x:Bind ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}" x:Phase="1"/>
+                    <Image Grid.Row="0" Stretch="Uniform" Source="{x:Bind ThumbnailPath, Converter={StaticResource CachedBitmapDecode}, ConverterParameter=300}" x:Phase="1"/>
                     
                     <!-- Text Footer -->
                     <TextBlock Grid.Row="1" Text="{x:Bind Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
@@ -99,12 +100,12 @@
                                     </ItemsRepeater.Layout>
                                     <ItemsRepeater.ItemTemplate>
                                         <DataTemplate x:DataType="models:TemplateItem">
-                                            <Border BorderBrush="{Binding IsSelected, Converter={StaticResource SelectionToBorderBrushConverter}}" 
-                                                    BorderThickness="{Binding IsSelected, Converter={StaticResource SelectionToBorderThicknessConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
+                                            <Border BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBorderBrushConverter}}" 
+                                                    BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBorderThicknessConverter}}" 
                                                     CornerRadius="6" 
-                                                    Padding="{Binding IsSelected, Converter={StaticResource SelectionToPaddingConverter}, ConverterParameter={Binding DataContext.SelectionBorderThickness, ElementName=ImagePageRoot}}" 
+                                                    Padding="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToPaddingConverter}}" 
                                                     Margin="4" 
-                                                    Background="{Binding IsSelected, Converter={StaticResource SelectionToBackgroundConverter}}"
+                                                    Background="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBackgroundConverter}}"
                                                     CanDrag="True"
                                                     PointerPressed="ImageItem_PointerPressed"
                                                     PointerMoved="ImageItem_PointerMoved"
@@ -113,6 +114,7 @@
                                                     DoubleTapped="ImageItem_DoubleTapped"
                                                     RightTapped="ImageItem_RightTapped">
                                                 <Grid>
+                                                    <!-- List Mode (Phase 1: Text) -->
                                                     <Grid Visibility="{Binding DataContext.UseTextListMode, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" ColumnSpacing="12" Padding="4,6">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto"/>
@@ -121,16 +123,21 @@
                                                             <ColumnDefinition Width="130"/>
                                                         </Grid.ColumnDefinitions>
                                                         <FontIcon Grid.Column="0" Glyph="&#xE7B3;" FontSize="16" Foreground="{ThemeResource SystemAccentColor}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="2" Text="{Binding Size, Converter={StaticResource FileSizeConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                                        <TextBlock Grid.Column="3" Text="{Binding LastModified, Converter={StaticResource DateTimeConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" x:Phase="1"/>
+                                                        <TextBlock Grid.Column="2" Text="{x:Bind Size, Converter={StaticResource FileSizeConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" x:Phase="1"/>
+                                                        <TextBlock Grid.Column="3" Text="{x:Bind LastModified, Converter={StaticResource DateTimeConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" x:Phase="1"/>
                                                     </Grid>
 
+                                                    <!-- Grid Mode (Phase 2: Image) -->
                                                     <StackPanel Visibility="{Binding DataContext.ShowThumbnails, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" MaxWidth="200">
                                                         <Grid Width="200" Height="120" Background="Transparent">
-                                                            <Image Stretch="UniformToFill" Source="{Binding ThumbnailPath, Converter={StaticResource BitmapDecode}, ConverterParameter=300}"/>
+                                                            <!-- Phase 0: Placeholder background -->
+                                                            <Rectangle Fill="Transparent" />
+                                                            <!-- Phase 2: Heavy Image Loading -->
+                                                            <Image Stretch="UniformToFill" Source="{x:Bind ThumbnailPath, Converter={StaticResource CachedBitmapDecode}, ConverterParameter=300}" x:Phase="2"/>
                                                         </Grid>
-                                                        <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Stretch" MinHeight="18"/>
+                                                        <!-- Phase 1: Name Text -->
+                                                        <TextBlock Text="{x:Bind Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Stretch" MinHeight="18" x:Phase="1"/>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>

@@ -13,16 +13,26 @@ using Pivot.Services;
 
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Messages;
+using Microsoft.UI.Dispatching;
 
 namespace Pivot.ViewModels
 {
-    public partial class ImageViewModel : ObservableObject, IRecipient<DirectoryChangedMessage>
+    public partial class ImageViewModel : ObservableObject, 
+        IRecipient<DirectoryChangedMessage>,
+        IRecipient<AssetChangedMessage>,
+        IRecipient<BulkItemsChangedMessage<AssetEntry>>
     {
         private readonly LayoutService _layoutService = new();
         private readonly SortService _sortService = new();
+        private readonly DispatcherQueue _dispatcherQueue;
+        
+        private static readonly HashSet<string> _imageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp"
+        };
 
-        public ObservableCollection<TemplateItem> Images { get; set; } = new();
-
+        [ObservableProperty]
+        private Utils.RangeObservableCollection<TemplateItem> _images = new();
 
         // Navigation
         public ObservableCollection<FolderNode> FolderTree { get; } = new();
@@ -33,10 +43,8 @@ namespace Pivot.ViewModels
 
         partial void OnSelectedFolderChanged(FolderNode? value)
         {
-            FilterImages();
+            _dispatcherQueue.TryEnqueue(() => FilterImages());
         }
-
-
 
         [ObservableProperty]
         private LayoutType _currentLayout = LayoutType.Grid;
@@ -66,12 +74,22 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private string _sortDirectionIcon = "\uE74A";
 
+        [ObservableProperty]
+        private bool _isLoading = false;
+
+        [ObservableProperty]
+        private int _totalAssetCount = 0;
+
         public SelectionManagerViewModel<TemplateItem> SelectionManager { get; }
 
         private System.Threading.CancellationTokenSource? _loadCts;
         private SettingsService? _settings;
         private DirectorySettingsService? _directorySettings;
         private readonly IMessenger? _messenger;
+        private readonly MetadataService? _metadataService;
+        private readonly IThumbnailService? _thumbnailService;
+        private IEnumerable<string>? _currentDirectories;
+        private bool _thumbnailServiceInitialized = false;
 
         public ImageViewModel()
         {
@@ -96,7 +114,11 @@ namespace Pivot.ViewModels
                 _settings = services.GetService<SettingsService>();
                 _directorySettings = services.GetService<DirectorySettingsService>();
                 _messenger = services.GetService<IMessenger>();
+                _metadataService = services.GetService<MetadataService>();
+                _thumbnailService = services.GetService<IThumbnailService>();
 
+                _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+            
                 if (_messenger != null)
                 {
                     _messenger.RegisterAll(this);
@@ -180,22 +202,17 @@ namespace Pivot.ViewModels
             SortIcon = _sortService.GetSortIcon(CurrentSortField);
             SortDirectionIcon = _sortService.GetDirectionIcon(CurrentSortDirection);
 
-            SortDirectionIcon = _sortService.GetDirectionIcon(CurrentSortDirection);
-
-            // Sort current displayed images
-            var sorted = _sortService.Sort(Images, CurrentSortField, CurrentSortDirection).ToList();
-            Images.Clear();
-            foreach (var item in sorted)
-            {
-                Images.Add(item);
-            }
+            // Sort _allImages in place
+            var sorted = _sortService.Sort(_allImages, CurrentSortField, CurrentSortDirection).ToList();
+            _allImages.Clear();
+            _allImages.AddRange(sorted);
             
-
+            // Refresh filter to apply new sort order
+            FilterImages();
         }
 
         private void FilterImages()
         {
-            // Filter based on selected folder
             IEnumerable<TemplateItem> filtered;
             
             if (SelectedFolder == null)
@@ -204,22 +221,71 @@ namespace Pivot.ViewModels
             }
             else
             {
-                // Simple starts-with check for directory path
                 var folderPath = SelectedFolder.FullPath;
                 filtered = _allImages.Where(i => 
                     i.Path.StartsWith(folderPath, StringComparison.OrdinalIgnoreCase));
             }
 
-            // Apply Sort
-            var sorted = _sortService.Sort(filtered, CurrentSortField, CurrentSortDirection).ToList();
+            var newItems = _sortService.Sort(filtered, CurrentSortField, CurrentSortDirection).ToList();
 
-            Images.Clear();
-            foreach (var item in sorted)
+            // Optimized update: only modify what changed
+            SynchronizeCollection(Images, newItems);
+        }
+        
+        /// <summary>
+        /// Synchronize collection by only adding/removing changed items.
+        /// This prevents unnecessary UI updates and flickering.
+        /// </summary>
+        private void SynchronizeCollection(Utils.RangeObservableCollection<TemplateItem> target, List<TemplateItem> source)
+        {
+            // Quick path: if both empty, do nothing
+            if (source.Count == 0 && target.Count == 0) return;
+            
+            // Quick path: if target empty, add all
+            if (target.Count == 0)
             {
-                Images.Add(item);
+                target.AddRange(source);
+                return;
             }
-
-
+            
+            // Quick path: if source empty, clear all
+            if (source.Count == 0)
+            {
+                target.Clear();
+                return;
+            }
+            
+            // Create lookup for fast comparison
+            var targetSet = new HashSet<TemplateItem>(target);
+            var sourceSet = new HashSet<TemplateItem>(source);
+            
+            // Remove items not in source
+            var toRemove = target.Where(item => !sourceSet.Contains(item)).ToList();
+            foreach (var item in toRemove)
+            {
+                target.Remove(item);
+            }
+            
+            // Add items not in target
+            var toAdd = source.Where(item => !targetSet.Contains(item)).ToList();
+            if (toAdd.Any())
+            {
+                target.AddRange(toAdd);
+            }
+            
+            // Reorder if needed (only if items are same but order differs)
+            if (target.Count == source.Count && toRemove.Count == 0 && toAdd.Count == 0)
+            {
+                for (int i = 0; i < source.Count; i++)
+                {
+                    if (!ReferenceEquals(target[i], source[i]))
+                    {
+                        // Order differs, need to re-sync
+                        target.ReplaceRange(source);
+                        break;
+                    }
+                }
+            }
         }
 
         partial void OnCurrentLayoutChanged(LayoutType value)
@@ -228,7 +294,6 @@ namespace Pivot.ViewModels
             UseTextListMode = value == LayoutType.List;
             ShowThumbnails = !UseTextListMode;
             
-            // Persist settings
             _ = _settings?.SetImageLayoutModeAsync(value);
         }
 
@@ -236,18 +301,268 @@ namespace Pivot.ViewModels
         {
             if (message.Value.Category == DirectoryCategory.Image && _directorySettings != null)
             {
-                // Reload on directory change
-                 await LoadFromDirectoriesAsync(_directorySettings.ImageDirectories);
+                await LoadAsync(_directorySettings.ImageDirectories);
             }
         }
 
+        public void Receive(AssetChangedMessage message)
+        {
+             // Handle single update
+             if (message.Value.Type == AssetChangedMessageData.ChangeType.Added)
+             {
+                 /* Add logic */ 
+                 // Simplified for safety: just relying on Bulk or Refresh for now usually, 
+                 // but for responsiveness we should handle it.
+             }
+        }
+
+        public void Receive(BulkItemsChangedMessage<AssetEntry> message)
+        {
+            // Skip reactive updates during initial load to prevent flickering
+            if (IsLoading) return;
+            
+            _dispatcherQueue.TryEnqueue(() => 
+            {
+                // Handle bulk update from Scanner
+                foreach (var change in message.Value)
+                {
+                    // Check extension
+                    var path = change.Item?.Path ?? (change.Item?.Name); // fallback
+                    if (path == null) continue;
+                    var ext = Path.GetExtension(path);
+                    if (string.IsNullOrEmpty(ext) || !_imageExtensions.Contains(ext)) continue;
+
+                    if (change.Type == ItemChangeData<AssetEntry>.ChangeType.Added || change.Type == ItemChangeData<AssetEntry>.ChangeType.Updated)
+                    {
+                        var asset = change.Item;
+                        if (asset == null) continue;
+                        
+                        var existing = _allImages.FirstOrDefault(i => i.Path == asset.Path);
+                        if (existing == null)
+                        {
+                           var newItem = new TemplateItem { 
+                               Kind = AssetKind.Image, Path = asset.Path, Name = asset.Name, Size = asset.Size, LastModified = asset.UpdatedAt 
+                           };
+                           _allImages.Add(newItem);
+                        }
+                        else
+                        {
+                           existing.Size = asset.Size;
+                           existing.LastModified = asset.UpdatedAt;
+                           existing.PixelWidth = asset.PixelWidth;
+                           existing.PixelHeight = asset.PixelHeight;
+                           existing.AspectRatio = asset.PixelHeight > 0 ? (double)asset.PixelWidth / asset.PixelHeight : 1.0;
+                        }
+                    }
+                    else if (change.Type == ItemChangeData<AssetEntry>.ChangeType.Deleted)
+                    {
+                        var existing = _allImages.FirstOrDefault(i => i.Path == change.Item.Path);
+                        if (existing != null) _allImages.Remove(existing);
+                    }
+                }
+                FilterImages(); // Refresh UI
+            });
+        }
+
+        // Legacy: AssetFileChangedMessage receiver (commented out - use BulkItemsChangedMessage instead)
+        /*
+        public void Receive(AssetFileChangedMessage message)
+        {
+            _dispatcherQueue.TryEnqueue(() => 
+            {
+                try
+                {
+                    switch (message.Type)
+                    {
+                        case AssetFileChangedMessage.ChangeType.Added:
+                            if (message.Asset != null)
+                            {
+                                // var item = AssetToTemplateItem(message.Asset);
+                                // _allImages.Add(item);
+                                // FilterImages();
+                            }
+                            break;
+                        case AssetFileChangedMessage.ChangeType.Updated:
+                            if (message.Asset != null)
+                            {
+                                var existing = _allImages.FirstOrDefault(i => 
+                                    i.Path.Equals(message.FilePath, StringComparison.OrdinalIgnoreCase));
+                                if (existing != null)
+                                {
+                                    // UpdateTemplateItemFromAsset(existing, message.Asset);
+                                }
+                            }
+                            break;
+                        case AssetFileChangedMessage.ChangeType.Deleted:
+                            var toRemove = _allImages.FirstOrDefault(i => 
+                                i.Path.Equals(message.FilePath, StringComparison.OrdinalIgnoreCase));
+                            if (toRemove != null)
+                            {
+                                _allImages.Remove(toRemove);
+                                Images.Remove(toRemove);
+                            }
+                            break;
+                    }
+                }
+                catch { }
+            });
+        }
+        */
+
+        /// <summary>
+        /// Main load method. DB-first, fallback to filesystem.
+        /// </summary>
+        public async Task LoadAsync(IEnumerable<string> directories)
+        {
+            if (directories == null) return;
+            _currentDirectories = directories.ToList();
+
+            // Phase 3: Load from DB immediately
+            await LoadFromDatabaseAsync();
+            
+            // Note: Background scanning is handled by MainViewModel -> FileScannerService.
+            // Updates will arrive via Messenger (AssetChangedMessage / BulkItemsChangedMessage).
+        }
+
+        public async Task LoadFromDatabaseAsync()
+        {
+            if (_metadataService == null) return;
+            _dispatcherQueue.TryEnqueue(() => IsLoading = true);
+            try
+            {
+                // Initialize thumbnail service if needed
+                if (_thumbnailService != null && !_thumbnailServiceInitialized)
+                {
+                    var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    var cacheDir = Path.Combine(local, "Pivot", "cache", "thumbnails");
+                    await _thumbnailService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
+                    _thumbnailServiceInitialized = true;
+                }
+                
+                // Collect items in batches to avoid flickering
+                var allItems = new List<TemplateItem>();
+                var missingDimensions = new List<TemplateItem>();
+                
+                await foreach (var asset in _metadataService.StreamAssetEntriesAsync(200))
+                {
+                   var ext = Path.GetExtension(asset.Path);
+                   if (string.IsNullOrEmpty(ext) || !_imageExtensions.Contains(ext)) continue;
+
+                   // Resolve thumbnail path: use cached if exists, otherwise check cache
+                   string? thumbnailPath = null;
+                   if (!string.IsNullOrEmpty(asset.ThumbnailCachePath) && File.Exists(asset.ThumbnailCachePath))
+                   {
+                       thumbnailPath = new Uri(asset.ThumbnailCachePath).AbsoluteUri;
+                   }
+                   else if (_thumbnailService != null)
+                   {
+                       var cached = _thumbnailService.TryGetCachedThumbnailPath(asset.Path, 300, 200);
+                       if (!string.IsNullOrEmpty(cached))
+                       {
+                           thumbnailPath = new Uri(cached).AbsoluteUri;
+                       }
+                   }
+
+                   var item = new TemplateItem 
+                   {
+                       Kind = AssetKind.Image,
+                       Path = asset.Path,
+                       Name = asset.Name,
+                       Size = asset.Size,
+                       LastModified = asset.UpdatedAt,
+                       PixelWidth = asset.PixelWidth,
+                       PixelHeight = asset.PixelHeight,
+                       AspectRatio = asset.PixelHeight > 0 ? (double)asset.PixelWidth / asset.PixelHeight : 1.0,
+                       ThumbnailPath = thumbnailPath
+                   };
+                   
+                   // Fallback: If dimensions missing, track for on-the-fly resolution
+                   if (item.PixelWidth == 0 && File.Exists(item.Path))
+                   {
+                       missingDimensions.Add(item);
+                   }
+                   
+                   allItems.Add(item);
+                }
+                
+                // Start background resolution for missing dimensions (fire and forget)
+                if (missingDimensions.Any())
+                {
+                    _ = ResolveMissingDimensionsAsync(missingDimensions);
+                }
+                
+                // Single UI update - replace entire collection (1 notification instead of N)
+                _dispatcherQueue.TryEnqueue(() => 
+                {
+                    _allImages.Clear();
+                    _allImages.AddRange(allItems);
+                    
+                    // Sort and filter items
+                    var sorted = _sortService.Sort(allItems, CurrentSortField, CurrentSortDirection)
+                        .Where(item => _selectedFolder == null || item.Path.StartsWith(_selectedFolder.FullPath, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    
+                    // Use ReplaceRange for flicker-free update
+                    Images.ReplaceRange(sorted);
+                    
+                    // Update sort icons
+                    SortIcon = _sortService.GetSortIcon(CurrentSortField);
+                    SortDirectionIcon = _sortService.GetDirectionIcon(CurrentSortDirection);
+                    
+                    // Build directory tree for left column
+                    if (_currentDirectories != null && _currentDirectories.Any())
+                    {
+                        BuildDirectoryTree(_currentDirectories);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+               // Fallback to legacy
+               await LoadFromDirectoriesAsync(_currentDirectories ?? Enumerable.Empty<string>());
+            }
+            finally
+            {
+                _dispatcherQueue.TryEnqueue(() => IsLoading = false);
+            }
+        }
+        
+        private async Task ResolveMissingDimensionsAsync(List<TemplateItem> items)
+        {
+            await Task.Run(async () => 
+            {
+                foreach (var item in items)
+                {
+                    try 
+                    {
+                        // Use ImageSharp to identify dimensions quickly
+                        var info = await SixLabors.ImageSharp.Image.IdentifyAsync(item.Path);
+                        if (info != null && info.Width > 0 && info.Height > 0)
+                        {
+                            _dispatcherQueue.TryEnqueue(() => 
+                            {
+                                item.PixelWidth = info.Width;
+                                item.PixelHeight = info.Height;
+                                item.AspectRatio = (double)info.Width / info.Height;
+                            });
+                        }
+                    }
+                    catch { /* Ignore errors during background resolution */ }
+                }
+            });
+        }
+
+
+
+        /// <summary>
+        /// Legacy filesystem scan (fallback)
+        /// </summary>
         public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 100000)
         {
             if (directories == null) return;
-            var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase){ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".tif", ".tiff", ".webp" };
+            // Use class member _imageExtensions instead of local var
             var files = new List<string>();
             
-            // Fast file scan on background thread
             await Task.Run(() =>
             {
                 foreach (var d in directories)
@@ -257,7 +572,7 @@ namespace Pivot.ViewModels
                         if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
                         foreach (var f in Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
                         {
-                            if (exts.Contains(Path.GetExtension(f)))
+                            if (_imageExtensions.Contains(Path.GetExtension(f)))
                             {
                                 files.Add(f);
                                 if (files.Count >= maxFiles) return;
@@ -274,21 +589,23 @@ namespace Pivot.ViewModels
             _loadCts = new System.Threading.CancellationTokenSource();
             var ct = _loadCts.Token;
 
-            Images.Clear();
-            _allImages.Clear(); // Clear cache
-            var thumbService = App.Current.Services.GetService<Pivot.Services.IThumbnailService>();
+            _dispatcherQueue.TryEnqueue(() => 
+            {
+                Images.Clear();
+                _allImages.Clear();
+            });
+            var thumbService = App.Current.Services.GetService<IThumbnailService>();
             try
             {
                 if (thumbService != null)
                 {
                     var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                    var cacheDir = System.IO.Path.Combine(local, "Pivot", "cache", "thumbnails");
+                    var cacheDir = Path.Combine(local, "Pivot", "cache", "thumbnails");
                     await thumbService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
                 }
             }
             catch { }
 
-            // Parallel loading in chunks
             int chunkSize = 50;
             var chunks = files.Chunk(chunkSize);
             
@@ -299,14 +616,14 @@ namespace Pivot.ViewModels
                 var tasks = chunk.Select(f => CreateTemplateItemAsync(f, thumbService));
                 var items = await Task.WhenAll(tasks);
                 
-                _allImages.AddRange(items);
+                _dispatcherQueue.TryEnqueue(() => _allImages.AddRange(items));
             }
 
-            // Build Directory Tree from root directories
-            BuildDirectoryTree(directories);
-
-            // Initial Filter (Show All)
-            FilterImages();
+            _dispatcherQueue.TryEnqueue(() => 
+            {
+                BuildDirectoryTree(directories);
+                FilterImages();
+            });
         }
 
         private async Task<TemplateItem> CreateTemplateItemAsync(string f, IThumbnailService? thumbService)
@@ -330,10 +647,8 @@ namespace Pivot.ViewModels
                 LastModified = lastMod
             };
 
-            // Calculate Aspect Ratio (async)
             try
             {
-                // Note: Windows.Storage API usage in WinUI 3 Desktop
                 var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(f);
                 var props = await file.Properties.GetImagePropertiesAsync();
                 
@@ -344,10 +659,7 @@ namespace Pivot.ViewModels
                     item.AspectRatio = (double)item.PixelWidth / item.PixelHeight;
                 }
             }
-            catch 
-            {
-                // Fallback or ignore
-            }
+            catch { }
 
             try
             {
@@ -356,7 +668,7 @@ namespace Pivot.ViewModels
                     var cached = thumbService.TryGetCachedThumbnailPath(f, 300, 200);
                     if (!string.IsNullOrWhiteSpace(cached))
                     {
-                        item.ThumbnailPath = new System.Uri(cached).AbsoluteUri;
+                        item.ThumbnailPath = new Uri(cached).AbsoluteUri;
                     }
                 }
             }
@@ -367,8 +679,6 @@ namespace Pivot.ViewModels
         private void BuildDirectoryTree(IEnumerable<string> rootDirectories)
         {
             FolderTree.Clear();
-            // Add "All" node or just root folders? User request implies directory tree.
-            // Let's add root folders directly.
             foreach (var dir in rootDirectories)
             {
                 if (Directory.Exists(dir))
@@ -393,8 +703,6 @@ namespace Pivot.ViewModels
                 }
             }
             catch { }
-
-
         }
 
         public void CancelLoads()
@@ -432,7 +740,5 @@ namespace Pivot.ViewModels
 
             SelectionManager.SelectItem(item, isCtrl, isShift);
         }
-
-
     }
 }

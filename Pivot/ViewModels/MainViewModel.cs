@@ -208,11 +208,16 @@ namespace Pivot.ViewModels
         {
             _logger.LogInformation("MainViewModel: Initializing asynchronously...");
             LoadScanDirectories();
+            
+            // 1. DB初期化（LiteDBを開く）
+            try { await _metadataService.InitializeDatabase(); } catch (Exception ex) { _logger.LogError(ex, "DB Init failed"); }
+            
             _logger.LogInformation("MainViewModel: LoadScanDirectories completed in InitializeAsync. Count: {Count}", ScanDirectories.Count);
 
             // 起動直後はDBにある既存データを即時表示（UIブロックを避けつつ逐次追加）
             try
             {
+                // UIスレッドで要素を追加するため、もし大量にある場合はバッチ処理が必要だが、StreamAsyncならある程度分散される
                 await foreach (var f in _metadataService.StreamFilesAsync(200))
                 {
                     Files.Add(f);
@@ -225,9 +230,8 @@ namespace Pivot.ViewModels
 
             if (CanStartScan())
             {
-                _logger.LogInformation("MainViewModel: Auto-scan triggered from InitializeAsync.");
-                _messenger.Send(new ScanStartedMessage(true));
-                // スキャンはバックグラウンドで開始（起動をブロックしない）
+                _logger.LogInformation("MainViewModel: Triggering background scan.");
+                // スキャンはバックグラウンドで開始（起動をブロックしない - Fire and Forget）
                 _ = ScanAsync();
             }
             else
@@ -236,22 +240,7 @@ namespace Pivot.ViewModels
             }
         }
 
-		private async Task InitializeAndAutoScanAsync()
-		{
-			try
-			{
-				await Task.Delay(500); // UI 初期化を待つ
-				if (CanStartScan())
-				{
-					_messenger.Send(new ScanStartedMessage(true));
-					await ScanAsync();
-				}
-			}
-			catch (Exception)
-			{
-				//_logger?.LogError(ex, "Auto scan failed");
-			}
-		}
+
 
 		private bool CanStartScan()
 		{

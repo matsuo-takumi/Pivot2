@@ -111,11 +111,20 @@ namespace Pivot
                 Directory.CreateDirectory(dbDir);
                 var dbPath = Path.Combine(dbDir, "codehub.db");
 
+                // DbContextFactory for efficient scoped context creation
+                sc.AddDbContextFactory<SQLiteDbContext>(options =>
+                    options.UseSqlite($"Data Source={dbPath}"));
+
+                // Legacy DbContext registration for backward compatibility
                 sc.AddDbContext<SQLiteDbContext>(options =>
                     options.UseSqlite($"Data Source={dbPath}"));
 
                 sc.AddTransient<ICodeRepository, CodeRepository>();
                 sc.AddTransient<CodeViewModel>();
+
+                // Asset management services (DB-driven)
+                sc.AddSingleton<IAssetRepository, AssetRepository>();
+                sc.AddSingleton<AssetIndexerService>();
             }
             catch (Exception ex)
             {
@@ -156,6 +165,11 @@ namespace Pivot
 					try
 					{
 						ctx.Database.EnsureCreated();
+
+                        // Ensure AssetFiles table exists (for existing databases before this feature)
+                        // AssetFiles table creation removed as we are no longer using DB for images
+                        System.Diagnostics.Debug.WriteLine("ConfigureServices: Skipped AssetFiles table creation.");
+
                         // Ensure Tags column exists in CodeFiles table; if missing, add it (SQLite ALTER TABLE ADD COLUMN)
                         try
                         {

@@ -40,6 +40,15 @@ namespace Pivot.Controls
             set => SetValue(RowSpacingProperty, value);
         }
 
+        public static readonly DependencyProperty FooterHeightProperty =
+            DependencyProperty.Register(nameof(FooterHeight), typeof(double), typeof(MasonryLayout), new PropertyMetadata(32.0, OnPropertyChanged));
+
+        public double FooterHeight
+        {
+            get => (double)GetValue(FooterHeightProperty);
+            set => SetValue(FooterHeightProperty, value);
+        }
+
         private static void OnPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var layout = (MasonryLayout)d;
@@ -166,7 +175,7 @@ namespace Pivot.Controls
                     aspect = item.AspectRatio;
                 }
                 
-                double h = actualColumnWidth / aspect;
+                double h = (actualColumnWidth / aspect) + FooterHeight;
                 
                 // 3. Set Position
                 double x = minCol * (actualColumnWidth + ColumnSpacing);

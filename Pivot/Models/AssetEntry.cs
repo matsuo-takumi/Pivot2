@@ -17,6 +17,13 @@ namespace Pivot.Models
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 
+        // Thumbnail cache path (method 1: store file path reference)
+        public string? ThumbnailCachePath { get; set; }
+        
+        // Image dimensions for aspect ratio calculation
+        public int PixelWidth { get; set; }
+        public int PixelHeight { get; set; }
+
         // 関連するプロジェクト（多対多はIDリストやブリッジテーブルで管理することを推奨）
         public List<ProjectEntry> Projects { get; set; } = new List<ProjectEntry>();
 
