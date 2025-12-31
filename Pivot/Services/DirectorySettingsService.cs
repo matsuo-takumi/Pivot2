@@ -226,5 +226,14 @@ namespace Pivot.Services
             }
             catch { }
         }
+        public Task<List<string>> GetAllDirectoriesAsync()
+        {
+            var allDirs = new List<string>();
+            allDirs.AddRange(_assetDirectories);
+            allDirs.AddRange(_imageDirectories);
+            allDirs.AddRange(_projectDirectories);
+            allDirs.AddRange(_codeDirectories);
+            return Task.FromResult(allDirs.Distinct().ToList());
+        }
     }
 }

@@ -12,9 +12,8 @@ namespace Pivot.Models
 
     public enum MenuDisplayMode
     {
+        Auto,
         Compact,
         Wide
     }
 }
-
-

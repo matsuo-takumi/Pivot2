@@ -22,22 +22,34 @@ namespace Pivot.Messages
     }
 
     /// <summary>
-    /// 個別アセットファイルの変更を通知するメッセージ
+    /// 個別アセットの変更を通知するメッセージ (AssetEntity統一版)
     /// </summary>
-    public class AssetFileChangedMessage
+    public class AssetEntityChangedMessage
     {
         public enum ChangeType { Added, Updated, Deleted }
         
-        public AssetFile? Asset { get; }
+        public AssetEntity? Asset { get; }
         public string FilePath { get; }
         public ChangeType Type { get; }
 
-        public AssetFileChangedMessage(AssetFile? asset, string filePath, ChangeType type)
+        public AssetEntityChangedMessage(AssetEntity? asset, string filePath, ChangeType type)
         {
             Asset = asset;
             FilePath = filePath;
             Type = type;
         }
     }
-}
 
+    /// <summary>
+    /// 一括アセット変更を通知するメッセージ
+    /// </summary>
+    public class BulkAssetsChangedMessage
+    {
+        public System.Collections.Generic.List<ItemChangeData<AssetEntity>> Changes { get; }
+
+        public BulkAssetsChangedMessage(System.Collections.Generic.List<ItemChangeData<AssetEntity>> changes)
+        {
+            Changes = changes;
+        }
+    }
+}

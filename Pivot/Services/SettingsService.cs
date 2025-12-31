@@ -24,6 +24,12 @@ namespace Pivot.Services
         private readonly ISettingsStore _settingsStore;
         private readonly DirectorySettingsService _directorySettings;
         private readonly ThemeSettingsService _themeSettings;
+        private readonly FilterSettingsService _filterSettings;
+        private readonly ViewportSettingsService _viewportSettings;
+        private readonly MaterialSettingsService _materialSettings;
+        private readonly ImageDisplaySettingsService _imageDisplaySettings;
+        private readonly AssetDisplaySettingsService _assetDisplaySettings;
+        private readonly CodeSettingsService _codeSettings;
 
         // In-memory cache to avoid sync-over-async and improve UI responsiveness
         private UserSettings _cache; // Settingsをメモリにキャッシュ
@@ -34,6 +40,12 @@ namespace Pivot.Services
             IMessenger messenger, 
             DirectorySettingsService directorySettings,
             ThemeSettingsService themeSettings,
+            FilterSettingsService filterSettings,
+            ViewportSettingsService viewportSettings,
+            MaterialSettingsService materialSettings,
+            ImageDisplaySettingsService imageDisplaySettings,
+            AssetDisplaySettingsService assetDisplaySettings,
+            CodeSettingsService codeSettings,
             ISettingsStore? settingsStore = null)
         {
             _logger = logger;
@@ -41,6 +53,12 @@ namespace Pivot.Services
             _messenger = messenger;
             _directorySettings = directorySettings;
             _themeSettings = themeSettings;
+            _filterSettings = filterSettings;
+            _viewportSettings = viewportSettings;
+            _materialSettings = materialSettings;
+            _imageDisplaySettings = imageDisplaySettings;
+            _assetDisplaySettings = assetDisplaySettings;
+            _codeSettings = codeSettings;
             _settingsStore = settingsStore ?? new JsonSettingsStore();
             _cache = new UserSettings(); // 初期キャッシュ
         }
@@ -54,6 +72,12 @@ namespace Pivot.Services
             // Initialize sub-services
             await _directorySettings.LoadAsync();
             await _themeSettings.LoadAsync();
+            await _filterSettings.LoadAsync();
+            await _viewportSettings.LoadAsync();
+            await _materialSettings.LoadAsync();
+            await _imageDisplaySettings.LoadAsync();
+            await _assetDisplaySettings.LoadAsync();
+            await _codeSettings.LoadAsync();
             
             await LoadSettingsFromStoreAsync();
             
@@ -108,397 +132,51 @@ namespace Pivot.Services
 
         private async Task LoadSettingsFromStoreAsync()
         {
-            _logger.LogInformation("SettingsService: Loading settings from JSON store...");
+            _logger.LogInformation("SettingsService: Loading settings from sub-services...");
 
-            // AssetDirectories, ImageDirectories, ProjectDirectories, CodeDirectories, OutputDirectory, CodeFormat
-            // are now handled by DirectorySettingsService and initialized in InitializeAsync.
-            // SyncDirectoriesFromService() ensures _cache is populated.
+            // All settings are now loaded by their respective sub-services in InitializeAsync.
+            // This method syncs the legacy _cache from sub-services for backward compatibility.
 
-            // Code save output directory
-            CodeSaveOutputDirectoryLogic_Migrated_To_Service();
-            
-            // Code export format (migrated from Export.CodeFormat)
-            try
-            {
-                var codeFmt = await _settingsStore.GetAsync("Code.Save.Format");
-                if (string.IsNullOrWhiteSpace(codeFmt))
-                {
-                    codeFmt = await _settingsStore.GetAsync("Export.CodeFormat");
-                }
-                if (!string.IsNullOrWhiteSpace(codeFmt))
-                {
-                    _cache.CodeExportFormat = codeFmt;
-                }
-                else
-                {
-                    _cache.CodeExportFormat = "Json";
-                }
-                _logger.LogInformation("SettingsService: Loaded Code.Save.Format: {Fmt}", _cache.CodeExportFormat);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load Code.Save.Format. Using default Json.");
-                _cache.CodeExportFormat = "Json";
-            }
-            // Overlay, TextColor, and Theme settings are now loaded by ThemeSettingsService
-            // and synced via SyncThemeFromService().
+            // Sync from DirectorySettingsService
+            SyncDirectoriesFromService();
 
+            // Sync from ThemeSettingsService
+            SyncThemeFromService();
 
+            // Sync from FilterSettingsService
+            _cache.AssetFilters = _filterSettings.GetAssetFilters();
+            _cache.CodeFilters = _filterSettings.GetCodeFilters();
+            _cache.CodeCategories = _filterSettings.GetCodeCategories();
+            // Note: VisibleFiltersByTab and SelectedFiltersByTab are managed by FilterSettingsService
 
+            // Sync from ImageDisplaySettingsService
+            _cache.ImageLayoutMode = _imageDisplaySettings.GetLayoutMode();
+            _cache.ImageSortField = _imageDisplaySettings.GetSortField().ToString();
+            _cache.ImageSortDirection = _imageDisplaySettings.GetSortDirection().ToString();
 
+            // Sync from ViewportSettingsService
+            _cache.ViewportCameraGesture = _viewportSettings.GetCameraGesture();
 
-            // Last selected snippet id
-            try
-            {
-                var lastIdStr = await _settingsStore.GetAsync("Code.LastSelectedSnippetId");
-                if (!string.IsNullOrWhiteSpace(lastIdStr) && Guid.TryParse(lastIdStr, out var lid))
-                {
-                    _cache.LastSelectedSnippetId = lid;
-                }
-                else
-                {
-                    _cache.LastSelectedSnippetId = Guid.Empty;
-                }
-            }
-            catch { _cache.LastSelectedSnippetId = Guid.Empty; }
-
-
-
-            // Asset 表示モード
-            try
-            {
-                var modeStr = await _settingsStore.GetAsync("AssetDisplayMode");
-                if (Enum.TryParse<AssetDisplayMode>(modeStr, out var mode))
-                {
-                    _cache.AssetDisplayMode = mode;
-                }
-                else
-                {
-                    _cache.AssetDisplayMode = AssetDisplayMode.List;
-                }
-                _logger.LogInformation("SettingsService: Loaded AssetDisplayMode: {Mode}", _cache.AssetDisplayMode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load AssetDisplayMode. Using default.");
-                _cache.AssetDisplayMode = AssetDisplayMode.List;
-            }
-
-            // Asset メタデータ表示
-            try
-            {
-                var showMetaStr = await _settingsStore.GetAsync("ShowAssetMetadata");
-                if (bool.TryParse(showMetaStr, out var show))
-                {
-                    _cache.ShowAssetMetadata = show;
-                }
-                else
-                {
-                    _cache.ShowAssetMetadata = true;
-                }
-                _logger.LogInformation("SettingsService: Loaded ShowAssetMetadata: {Show}", _cache.ShowAssetMetadata);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load ShowAssetMetadata. Using default.");
-                _cache.ShowAssetMetadata = true;
-            }
-
-            // スキャン戦略: ForceFullScan
-            try
-            {
-                var forceFullStr = await _settingsStore.GetAsync("Scan.ForceFull");
-                if (bool.TryParse(forceFullStr, out var force))
-                {
-                    _cache.ForceFullScan = force;
-                }
-                else
-                {
-                    _cache.ForceFullScan = false;
-                }
-                _logger.LogInformation("SettingsService: Loaded ForceFullScan: {Force}", _cache.ForceFullScan);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load ForceFullScan. Using default (false).");
-                _cache.ForceFullScan = false;
-            }
-
-            // メニュー表示モード
-            try
-            {
-                var modeStr = await _settingsStore.GetAsync("MenuDisplayMode");
-                if (Enum.TryParse<MenuDisplayMode>(modeStr, out var mode))
-                {
-                    _cache.MenuDisplayMode = mode;
-                }
-                else
-                {
-                    _cache.MenuDisplayMode = MenuDisplayMode.Compact;
-                }
-                _logger.LogInformation("SettingsService: Loaded MenuDisplayMode: {Mode}", _cache.MenuDisplayMode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load MenuDisplayMode. Using default (Compact).");
+            // Sync from AssetDisplaySettingsService
+            if (Enum.TryParse<AssetDisplayMode>(_assetDisplaySettings.GetDisplayMode(), out var mode))
+                _cache.AssetDisplayMode = mode;
+            else
+                _cache.AssetDisplayMode = AssetDisplayMode.Grid;
+            _cache.ShowAssetMetadata = _assetDisplaySettings.GetShowMetadata();
+            _cache.ForceFullScan = _assetDisplaySettings.GetForceFullScan();
+            if (Enum.TryParse<MenuDisplayMode>(_assetDisplaySettings.GetMenuDisplayMode(), out var menuMode))
+                _cache.MenuDisplayMode = menuMode;
+            else
                 _cache.MenuDisplayMode = MenuDisplayMode.Compact;
-            }
 
-            // Image layout mode
-            try
-            {
-                var layoutStr = await _settingsStore.GetAsync("Image.LayoutMode");
-                if (Enum.TryParse<LayoutType>(layoutStr, out var layout))
-                {
-                    _cache.ImageLayoutMode = layout;
-                }
-                else
-                {
-                    _cache.ImageLayoutMode = LayoutType.Grid;
-                }
-            }
-            catch { _cache.ImageLayoutMode = LayoutType.Grid; }
+            // Sync from CodeSettingsService
+            _cache.CodeExportFormat = _codeSettings.GetCodeExportFormat();
+            _cache.LastSelectedSnippetId = _codeSettings.GetLastSelectedSnippetId() ?? Guid.Empty;
 
-            // Image sort field
-            try
-            {
-                var sortFieldStr = await _settingsStore.GetAsync("Image.SortField");
-                if (!string.IsNullOrWhiteSpace(sortFieldStr))
-                {
-                    _cache.ImageSortField = sortFieldStr;
-                }
-                else
-                {
-                    _cache.ImageSortField = "Name";
-                }
-            }
-            catch { _cache.ImageSortField = "Name"; }
-
-            // Image sort direction
-            try
-            {
-                var sortDirStr = await _settingsStore.GetAsync("Image.SortDirection");
-                if (!string.IsNullOrWhiteSpace(sortDirStr))
-                {
-                    _cache.ImageSortDirection = sortDirStr;
-                }
-                else
-                {
-                    _cache.ImageSortDirection = "Ascending";
-                }
-            }
-            catch { _cache.ImageSortDirection = "Ascending"; }
-
-            // Viewport camera gesture preset
-            try
-            {
-                var gestureStr = await _settingsStore.GetAsync("Viewport.CameraGesture");
-                if (Enum.TryParse<CameraGesturePreset>(gestureStr, out var gesture))
-                {
-                    _cache.ViewportCameraGesture = gesture;
-                }
-                else
-                {
-                    _cache.ViewportCameraGesture = CameraGesturePreset.Maya;
-                }
-                _logger.LogInformation("SettingsService: Loaded ViewportCameraGesture: {Gesture}", _cache.ViewportCameraGesture);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load ViewportCameraGesture. Using default (Maya).");
-                _cache.ViewportCameraGesture = CameraGesturePreset.Maya;
-            }
-
-            // Asset Filters (customizable filter groups)
-            try
-            {
-                var filtersJson = await _settingsStore.GetAsync("AssetFilters");
-                if (!string.IsNullOrWhiteSpace(filtersJson) && LooksLikeJsonArray(filtersJson))
-                {
-                    try
-                    {
-                        var filters = JsonSerializer.Deserialize<List<Pivot.Models.CustomFilter>>(filtersJson);
-                        if (filters != null && filters.Count > 0)
-                        {
-                            _cache.AssetFilters = filters;
-                        }
-                        else
-                        {
-                            // initialize defaults if deserialization yields nothing
-                            _cache.AssetFilters = GetDefaultAssetFilters();
-                            await _settingsStore.UpsertAsync("AssetFilters", JsonSerializer.Serialize(_cache.AssetFilters));
-                        }
-                    }
-                    catch
-                    {
-                        _cache.AssetFilters = GetDefaultAssetFilters();
-                        await _settingsStore.UpsertAsync("AssetFilters", JsonSerializer.Serialize(_cache.AssetFilters));
-                    }
-                }
-                else
-                {
-                    _cache.AssetFilters = GetDefaultAssetFilters();
-                    await _settingsStore.UpsertAsync("AssetFilters", JsonSerializer.Serialize(_cache.AssetFilters));
-                }
-                _logger.LogInformation("SettingsService: Loaded AssetFilters: {Count}", _cache.AssetFilters.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load AssetFilters. Using defaults.");
-                _cache.AssetFilters = GetDefaultAssetFilters();
-            }
-
-            // Code Filters (customizable filter groups)
-            try
-            {
-                var codeFiltersJson = await _settingsStore.GetAsync("CodeFilters");
-                if (!string.IsNullOrWhiteSpace(codeFiltersJson) && LooksLikeJsonArray(codeFiltersJson))
-                {
-                    try
-                    {
-                        var filters = JsonSerializer.Deserialize<List<Pivot.Models.CustomFilter>>(codeFiltersJson);
-                        if (filters != null && filters.Count > 0)
-                        {
-                            _cache.CodeFilters = filters;
-                        }
-                        else
-                        {
-                            // initialize defaults if deserialization yields nothing
-                            _cache.CodeFilters = GetDefaultCodeFilters();
-                            await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
-                        }
-                    }
-                    catch
-                    {
-                        _cache.CodeFilters = GetDefaultCodeFilters();
-                        await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
-                    }
-                }
-                else
-                {
-                    _cache.CodeFilters = GetDefaultCodeFilters();
-                    await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
-                }
-                _logger.LogInformation("SettingsService: Loaded CodeFilters: {Count}", _cache.CodeFilters.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load CodeFilters. Using defaults.");
-                _cache.CodeFilters = GetDefaultCodeFilters();
-            }
-
-            // Code Categories (groups for Code tab navigation)
-            try
-            {
-                var codeCategoriesJson = await _settingsStore.GetAsync("CodeCategories");
-                if (!string.IsNullOrWhiteSpace(codeCategoriesJson) && codeCategoriesJson.TrimStart().StartsWith("["))
-                {
-                    try
-                    {
-                        var cats = JsonSerializer.Deserialize<List<Pivot.Models.CodeCategory>>(codeCategoriesJson);
-                        if (cats != null)
-                        {
-                            _cache.CodeCategories = cats;
-                        }
-                        else
-                        {
-                            InitializeDefaultCodeCategories();
-                        }
-                    }
-                    catch
-                    {
-                        InitializeDefaultCodeCategories();
-                    }
-                }
-                else
-                {
-                    InitializeDefaultCodeCategories();
-                }
-                _logger.LogInformation("SettingsService: Loaded CodeCategories: {Count}", _cache.CodeCategories?.Count ?? 0);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load CodeCategories. Using defaults.");
-                InitializeDefaultCodeCategories();
-            }
-
-            // Visible filters per tab
-            try
-            {
-                var visibleJson = await _settingsStore.GetAsync("VisibleFiltersByTab");
-                if (!string.IsNullOrWhiteSpace(visibleJson))
-                {
-                    try
-                    {
-                        var dict = JsonSerializer.Deserialize<Dictionary<string, List<Guid>>>(visibleJson);
-                        if (dict != null)
-                        {
-                            _cache.VisibleFiltersByTab = dict;
-                        }
-                        else
-                        {
-                            // default: make all asset filters visible on Asset tab
-                            _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>> { { "Asset", _cache.AssetFilters.Select(f => f.Id).ToList() } };
-                            await _settingsStore.UpsertAsync("VisibleFiltersByTab", JsonSerializer.Serialize(_cache.VisibleFiltersByTab));
-                        }
-                    }
-                    catch
-                    {
-                        _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>> { { "Asset", _cache.AssetFilters.Select(f => f.Id).ToList() } };
-                        await _settingsStore.UpsertAsync("VisibleFiltersByTab", JsonSerializer.Serialize(_cache.VisibleFiltersByTab));
-                    }
-                }
-                else
-                {
-                    _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>> { { "Asset", _cache.AssetFilters.Select(f => f.Id).ToList() } };
-                    await _settingsStore.UpsertAsync("VisibleFiltersByTab", JsonSerializer.Serialize(_cache.VisibleFiltersByTab));
-                }
-                _logger.LogInformation("SettingsService: Loaded VisibleFiltersByTab for {Count} tabs", _cache.VisibleFiltersByTab.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load VisibleFiltersByTab. Using defaults.");
-                _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>> { { "Asset", _cache.AssetFilters.Select(f => f.Id).ToList() } };
-            }
-
-            // Selected filters per tab (restore selection state)
-            try
-            {
-                var selJson = await _settingsStore.GetAsync("SelectedFiltersByTab");
-                if (!string.IsNullOrWhiteSpace(selJson))
-                {
-                    try
-                    {
-                        var dict = JsonSerializer.Deserialize<Dictionary<string, List<Guid>>>(selJson);
-                        if (dict != null)
-                        {
-                            _cache.SelectedFiltersByTab = dict;
-                        }
-                        else
-                        {
-                            _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
-                            await _settingsStore.UpsertAsync("SelectedFiltersByTab", JsonSerializer.Serialize(_cache.SelectedFiltersByTab));
-                        }
-                    }
-                    catch
-                    {
-                        _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
-                        await _settingsStore.UpsertAsync("SelectedFiltersByTab", JsonSerializer.Serialize(_cache.SelectedFiltersByTab));
-                    }
-                }
-                else
-                {
-                    _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
-                    await _settingsStore.UpsertAsync("SelectedFiltersByTab", JsonSerializer.Serialize(_cache.SelectedFiltersByTab));
-                }
-                _logger.LogInformation("SettingsService: Loaded SelectedFiltersByTab for {Count} tabs", _cache.SelectedFiltersByTab.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to load SelectedFiltersByTab. Using defaults.");
-                _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
-            }
+            _logger.LogInformation("SettingsService: Settings synced from sub-services.");
         }
+
+
 
         private static bool LooksLikeJsonArray(string value)
         {
@@ -561,70 +239,52 @@ namespace Pivot.Services
 
         public Pivot.Models.CodeExportFormat GetCodeExportFormat()
         {
-            try
-            {
-                if (Enum.TryParse<Pivot.Models.CodeExportFormat>(_cache.CodeExportFormat, out var fmt)) return fmt;
-            }
-            catch { }
+            var fmt = _codeSettings.GetCodeExportFormat();
+            if (Enum.TryParse<Pivot.Models.CodeExportFormat>(fmt, out var result)) return result;
             return Pivot.Models.CodeExportFormat.Json;
         }
 
         public async Task SetCodeExportFormatAsync(Pivot.Models.CodeExportFormat format)
         {
-            _cache.CodeExportFormat = format.ToString();
-            try
-            {
-                // Persist under the Code.Save namespace
-                await _settingsStore.UpsertAsync("Code.Save.Format", _cache.CodeExportFormat);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Export.CodeFormat.");
-            }
+            await _codeSettings.SetCodeExportFormatAsync(format.ToString());
         }
 
         public Guid GetLastSelectedSnippetId()
         {
-            try { return _cache.LastSelectedSnippetId; } catch { return Guid.Empty; }
+            return _codeSettings.GetLastSelectedSnippetId() ?? Guid.Empty;
         }
 
         public async Task SetLastSelectedSnippetIdAsync(Guid id)
         {
-            _cache.LastSelectedSnippetId = id;
-            try
-            {
-                await _settingsStore.UpsertAsync("Code.LastSelectedSnippetId", id.ToString());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Code.LastSelectedSnippetId.");
-            }
+            await _codeSettings.SetLastSelectedSnippetIdAsync(id);
         }
 
         // Asset 表示モード/メタ表示 設定
-        public AssetDisplayMode GetAssetDisplayMode() => _cache.AssetDisplayMode;
+        public AssetDisplayMode GetAssetDisplayMode()
+        {
+            var mode = _assetDisplaySettings.GetDisplayMode();
+            if (Enum.TryParse<AssetDisplayMode>(mode, out var result)) return result;
+            return AssetDisplayMode.Grid;
+        }
 
         public async Task SetAssetDisplayModeAsync(AssetDisplayMode mode)
         {
-            _cache.AssetDisplayMode = mode;
-            await _settingsStore.UpsertAsync("AssetDisplayMode", mode.ToString());
+            await _assetDisplaySettings.SetDisplayModeAsync(mode.ToString());
         }
 
-        public bool GetShowAssetMetadata() => _cache.ShowAssetMetadata;
+        public bool GetShowAssetMetadata() => _assetDisplaySettings.GetShowMetadata();
 
         public async Task SetShowAssetMetadataAsync(bool show)
         {
-            _cache.ShowAssetMetadata = show;
-            await _settingsStore.UpsertAsync("ShowAssetMetadata", show.ToString());
+            await _assetDisplaySettings.SetShowMetadataAsync(show);
         }
 
         // スキャン戦略設定
-        public bool GetForceFullScan() => _cache.ForceFullScan;
+        public bool GetForceFullScan() => _assetDisplaySettings.GetForceFullScan();
 
         public async Task SetForceFullScanAsync(bool force)
         {
-            _cache.ForceFullScan = force;
-            await _settingsStore.UpsertAsync("Scan.ForceFull", force.ToString());
+            await _assetDisplaySettings.SetForceFullScanAsync(force);
         }
 
         public async Task AddDirectoryAsync(DirectoryCategory category, string path)
@@ -675,221 +335,47 @@ namespace Pivot.Services
             catch { _cache.CodeCategories = new List<Pivot.Models.CodeCategory>(); }
         }
 
+        // =============== Filter Settings (delegated to FilterSettingsService) ===============
+        
         // AssetFilters accessors
-        public List<Pivot.Models.CustomFilter> GetAssetFilters() => _cache.AssetFilters;
-
-        public async Task SetAssetFiltersAsync(List<Pivot.Models.CustomFilter> filters)
-        {
-            _cache.AssetFilters = filters ?? new List<Pivot.Models.CustomFilter>();
-            try
-            {
-                await _settingsStore.UpsertAsync("AssetFilters", JsonSerializer.Serialize(_cache.AssetFilters));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist AssetFilters.");
-            }
-        }
+        public List<Pivot.Models.CustomFilter> GetAssetFilters() => _filterSettings.GetAssetFilters();
+        public Task SetAssetFiltersAsync(List<Pivot.Models.CustomFilter> filters) => _filterSettings.SetAssetFiltersAsync(filters);
 
         // CodeFilters accessors
-        public List<Pivot.Models.CustomFilter> GetCodeFilters() => _cache.CodeFilters;
-
-        public async Task SetCodeFiltersAsync(List<Pivot.Models.CustomFilter> filters)
-        {
-            _cache.CodeFilters = filters ?? new List<Pivot.Models.CustomFilter>();
-            try
-            {
-                await _settingsStore.UpsertAsync("CodeFilters", JsonSerializer.Serialize(_cache.CodeFilters));
-                _messenger?.Send(new Messages.CodeFiltersUpdatedMessage(_cache.CodeFilters));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist CodeFilters.");
-            }
-        }
+        public List<Pivot.Models.CustomFilter> GetCodeFilters() => _filterSettings.GetCodeFilters();
+        public Task SetCodeFiltersAsync(List<Pivot.Models.CustomFilter> filters) => _filterSettings.SetCodeFiltersAsync(filters);
 
         // CodeCategories accessors
-        public List<Pivot.Models.CodeCategory> GetCodeCategories() => _cache.CodeCategories ?? new List<Pivot.Models.CodeCategory>();
+        public List<Pivot.Models.CodeCategory> GetCodeCategories() => _filterSettings.GetCodeCategories();
+        public Task SetCodeCategoriesAsync(List<Pivot.Models.CodeCategory> categories) => _filterSettings.SetCodeCategoriesAsync(categories);
 
-        public async Task SetCodeCategoriesAsync(List<Pivot.Models.CodeCategory> categories)
-        {
-            _cache.CodeCategories = categories ?? new List<Pivot.Models.CodeCategory>();
-            try
-            {
-                await _settingsStore.UpsertAsync("CodeCategories", JsonSerializer.Serialize(_cache.CodeCategories));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist CodeCategories.");
-            }
-        }
-
-        public string GetFilterNameById(Guid filterId)
-        {
-            // Check AssetFilters first
-            var assetFilter = _cache.AssetFilters.FirstOrDefault(f => f.Id == filterId);
-            if (assetFilter != null) return assetFilter.Name;
-
-            // If not found in AssetFilters, check CodeFilters
-            var codeFilter = _cache.CodeFilters.FirstOrDefault(f => f.Id == filterId);
-            if (codeFilter != null) return codeFilter.Name;
-
-            return string.Empty; // Return empty if not found in either
-        }
-
-        /// <summary>
-        /// Updates a filter name by its ID and returns the old name.
-        /// </summary>
-        public async Task<string?> UpdateFilterNameAsync(Guid filterId, string newName)
-        {
-            if (string.IsNullOrWhiteSpace(newName)) return null;
-
-            try
-            {
-                var filter = _cache.CodeFilters.FirstOrDefault(f => f.Id == filterId);
-                if (filter == null) return null;
-
-                var oldName = filter.Name;
-                filter.Name = newName.Trim();
-                await SetCodeFiltersAsync(_cache.CodeFilters);
-                return oldName;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to update filter name.");
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Deletes a filter by its ID and returns the old name.
-        /// </summary>
-        public async Task<string?> DeleteFilterAsync(Guid filterId)
-        {
-            try
-            {
-                var filter = _cache.CodeFilters.FirstOrDefault(f => f.Id == filterId);
-                if (filter == null) return null;
-
-                var oldName = filter.Name;
-                _cache.CodeFilters.Remove(filter);
-                await SetCodeFiltersAsync(_cache.CodeFilters);
-                return oldName;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to delete filter.");
-                return null;
-            }
-        }
+        public string GetFilterNameById(Guid filterId) => _filterSettings.GetFilterNameById(filterId);
+        public Task<string?> UpdateFilterNameAsync(Guid filterId, string newName) => _filterSettings.UpdateFilterNameAsync(filterId, newName);
+        public Task<string?> DeleteFilterAsync(Guid filterId) => _filterSettings.DeleteFilterAsync(filterId);
 
         // Visible filters per tab accessors
-        public List<Guid> GetVisibleFiltersForTab(string tabId)
-        {
-            if (string.IsNullOrWhiteSpace(tabId)) return new List<Guid>();
-            if (_cache.VisibleFiltersByTab != null && _cache.VisibleFiltersByTab.TryGetValue(tabId, out var list)) return list;
-            return new List<Guid>();
-        }
+        public List<Guid> GetVisibleFiltersForTab(string tabId) => _filterSettings.GetVisibleFiltersForTab(tabId);
+        public Task SetVisibleFiltersForTabAsync(string tabId, List<Guid> filterIds) => _filterSettings.SetVisibleFiltersForTabAsync(tabId, filterIds);
 
-        public async Task SetVisibleFiltersForTabAsync(string tabId, List<Guid> filterIds)
-        {
-            if (string.IsNullOrWhiteSpace(tabId)) return;
-            if (_cache.VisibleFiltersByTab == null) _cache.VisibleFiltersByTab = new Dictionary<string, List<Guid>>();
-            _cache.VisibleFiltersByTab[tabId] = filterIds ?? new List<Guid>();
-            try
-            {
-                await _settingsStore.UpsertAsync("VisibleFiltersByTab", JsonSerializer.Serialize(_cache.VisibleFiltersByTab));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist VisibleFiltersByTab.");
-            }
-        }
+        public List<Guid> GetSelectedFiltersForTab(string tabId) => _filterSettings.GetSelectedFiltersForTab(tabId);
+        public Task SetSelectedFiltersForTabAsync(string tabId, List<Guid> filterIds) => _filterSettings.SetSelectedFiltersForTabAsync(tabId, filterIds);
 
-        public List<Guid> GetSelectedFiltersForTab(string tabId)
-        {
-            if (string.IsNullOrWhiteSpace(tabId)) return new List<Guid>();
-            if (_cache.SelectedFiltersByTab != null && _cache.SelectedFiltersByTab.TryGetValue(tabId, out var list)) return list;
-            return new List<Guid>();
-        }
+        // Overlay tint accessors - delegated to ThemeSettingsService
+        public string GetOverlayTintColor() => _themeSettings.OverlayTintColor ?? "#0000FF";
 
-        public async Task SetSelectedFiltersForTabAsync(string tabId, List<Guid> filterIds)
-        {
-            if (string.IsNullOrWhiteSpace(tabId)) return;
-            if (_cache.SelectedFiltersByTab == null) _cache.SelectedFiltersByTab = new Dictionary<string, List<Guid>>();
-            _cache.SelectedFiltersByTab[tabId] = filterIds ?? new List<Guid>();
-            try
-            {
-                await _settingsStore.UpsertAsync("SelectedFiltersByTab", JsonSerializer.Serialize(_cache.SelectedFiltersByTab));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist SelectedFiltersByTab.");
-            }
-        }
+        public Task SetOverlayTintColorAsync(string color) => _themeSettings.SetOverlayTintColorAsync(color);
 
-        // Overlay tint accessors
-        public string GetOverlayTintColor() => _cache.OverlayTintColor ?? "#0000FF";
+        public double GetOverlayTintOpacity() => _themeSettings.OverlayTintOpacity;
 
-        public async Task SetOverlayTintColorAsync(string color)
-        {
-            _cache.OverlayTintColor = color ?? "#0000FF";
-            try
-            {
-                await _settingsStore.UpsertAsync("Color.OverlayTintColor", _cache.OverlayTintColor);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintColor.");
-            }
-        }
-        public double GetOverlayTintOpacity() => _cache.OverlayTintOpacity;
+        public Task SetOverlayTintOpacityAsync(double value) => _themeSettings.SetOverlayTintOpacityAsync(value);
 
-        public async Task SetOverlayTintOpacityAsync(double value)
-        {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.OverlayTintOpacity = clamped;
-            try
-            {
-                await _settingsStore.UpsertAsync("Color.OverlayTintOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintOpacity.");
-            }
-        }
+        public double GetOverlayTintLuminosityOpacity() => _themeSettings.OverlayTintLuminosityOpacity;
 
-        public double GetOverlayTintLuminosityOpacity() => _cache.OverlayTintLuminosityOpacity;
+        public Task SetOverlayTintLuminosityOpacityAsync(double value) => _themeSettings.SetOverlayTintLuminosityOpacityAsync(value);
 
-        public async Task SetOverlayTintLuminosityOpacityAsync(double value)
-        {
-            var clamped = Math.Clamp(value, 0.0, 1.0);
-            _cache.OverlayTintLuminosityOpacity = clamped;
-            try
-            {
-                await _settingsStore.UpsertAsync("Color.OverlayTintLuminosityOpacity", clamped.ToString("G", CultureInfo.InvariantCulture));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintLuminosityOpacity.");
-            }
-        }
+        public int GetOverlayTintTransitionDurationMs() => _themeSettings.OverlayTintTransitionDurationMs;
 
-        public int GetOverlayTintTransitionDurationMs() => _cache.OverlayTintTransitionDurationMs;
-
-        public async Task SetOverlayTintTransitionDurationMsAsync(int milliseconds)
-        {
-            var clamped = Math.Max(0, milliseconds);
-            _cache.OverlayTintTransitionDurationMs = clamped;
-            try
-            {
-                await _settingsStore.UpsertAsync("Color.OverlayTintTransitionMs", clamped.ToString(CultureInfo.InvariantCulture));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Color.OverlayTintTransitionMs.");
-            }
-        }
+        public Task SetOverlayTintTransitionDurationMsAsync(int milliseconds) => _themeSettings.SetOverlayTintTransitionDurationMsAsync(milliseconds);
 
 
 
@@ -1033,186 +519,68 @@ namespace Pivot.Services
             SyncThemeFromService();
         }
 
-        // Image selection highlight settings
-        public string GetImageSelectionColor() => _cache.ImageSelectionColor;
-        public async Task SetImageSelectionColorAsync(string color)
-        {
-            await _themeSettings.SetImageSelectionColorAsync(color);
-            SyncThemeFromService();
-        }
+        // Image selection highlight settings - delegated to ThemeSettingsService
+        public string GetImageSelectionColor() => _themeSettings.ImageSelectionColor;
+        public Task SetImageSelectionColorAsync(string color) => _themeSettings.SetImageSelectionColorAsync(color);
 
-        public double GetImageSelectionOpacity() => _cache.ImageSelectionOpacity;
-        public async Task SetImageSelectionOpacityAsync(double opacity)
-        {
-            await _themeSettings.SetImageSelectionOpacityAsync(opacity);
-            SyncThemeFromService();
-        }
+        public double GetImageSelectionOpacity() => _themeSettings.ImageSelectionOpacity;
+        public Task SetImageSelectionOpacityAsync(double opacity) => _themeSettings.SetImageSelectionOpacityAsync(opacity);
 
-        public double GetImageSelectionBorderThickness() => _cache.ImageSelectionBorderThickness;
-        public async Task SetImageSelectionBorderThicknessAsync(double thickness)
-        {
-            await _themeSettings.SetImageSelectionBorderThicknessAsync(thickness);
-            SyncThemeFromService();
-        }
+        public double GetImageSelectionBorderThickness() => _themeSettings.ImageSelectionBorderThickness;
+        public Task SetImageSelectionBorderThicknessAsync(double thickness) => _themeSettings.SetImageSelectionBorderThicknessAsync(thickness);
 
-        public string GetImageDragSelectionColor() => _cache.ImageDragSelectionColor;
-        public async Task SetImageDragSelectionColorAsync(string color)
-        {
-            await _themeSettings.SetImageDragSelectionColorAsync(color);
-            SyncThemeFromService();
-        }
+        public string GetImageDragSelectionColor() => _themeSettings.ImageDragSelectionColor;
+        public Task SetImageDragSelectionColorAsync(string color) => _themeSettings.SetImageDragSelectionColorAsync(color);
 
-        public double GetImageDragSelectionOpacity() => _cache.ImageDragSelectionOpacity;
-        public async Task SetImageDragSelectionOpacityAsync(double opacity)
-        {
-            await _themeSettings.SetImageDragSelectionOpacityAsync(opacity);
-            SyncThemeFromService();
-        }
+        public double GetImageDragSelectionOpacity() => _themeSettings.ImageDragSelectionOpacity;
+        public Task SetImageDragSelectionOpacityAsync(double opacity) => _themeSettings.SetImageDragSelectionOpacityAsync(opacity);
 
-        // Image layout and sort settings
-        public LayoutType GetImageLayoutMode() => _cache.ImageLayoutMode;
-        public async Task SetImageLayoutModeAsync(LayoutType layout)
-        {
-            _cache.ImageLayoutMode = layout;
-            try
-            {
-                await _settingsStore.UpsertAsync("Image.LayoutMode", layout.ToString());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.LayoutMode.");
-            }
-        }
+        // Image layout and sort settings - delegated to ImageDisplaySettingsService
+        public LayoutType GetImageLayoutMode() => _imageDisplaySettings.GetLayoutMode();
+        public Task SetImageLayoutModeAsync(LayoutType layout) => _imageDisplaySettings.SetLayoutModeAsync(layout);
 
-        public SortField GetImageSortField()
-        {
-            if (Enum.TryParse<SortField>(_cache.ImageSortField, out var field))
-                return field;
-            return SortField.Name;
-        }
-        public async Task SetImageSortFieldAsync(SortField field)
-        {
-            _cache.ImageSortField = field.ToString();
-            try
-            {
-                await _settingsStore.UpsertAsync("Image.SortField", field.ToString());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SortField.");
-            }
-        }
+        public SortField GetImageSortField() => _imageDisplaySettings.GetSortField();
+        public Task SetImageSortFieldAsync(SortField field) => _imageDisplaySettings.SetSortFieldAsync(field);
 
-        public SortDirection GetImageSortDirection()
-        {
-            if (Enum.TryParse<SortDirection>(_cache.ImageSortDirection, out var dir))
-                return dir;
-            return SortDirection.Ascending;
-        }
-        public async Task SetImageSortDirectionAsync(SortDirection direction)
-        {
-            _cache.ImageSortDirection = direction.ToString();
-            try
-            {
-                await _settingsStore.UpsertAsync("Image.SortDirection", direction.ToString());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Image.SortDirection.");
-            }
-        }
+        public SortDirection GetImageSortDirection() => _imageDisplaySettings.GetSortDirection();
+        public Task SetImageSortDirectionAsync(SortDirection direction) => _imageDisplaySettings.SetSortDirectionAsync(direction);
 
-        // Viewport settings
-        public CameraGesturePreset GetViewportCameraGesture() => _cache.ViewportCameraGesture;
+        // =============== Viewport Settings (delegated to ViewportSettingsService) ===============
         
-        public async Task SetViewportCameraGestureAsync(CameraGesturePreset preset)
-        {
-            _cache.ViewportCameraGesture = preset;
-            try
-            {
-                await _settingsStore.UpsertAsync("Viewport.CameraGesture", preset.ToString());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Viewport.CameraGesture.");
-            }
-        }
+        public CameraGesturePreset GetViewportCameraGesture() => _viewportSettings.GetCameraGesture();
+        public Task SetViewportCameraGestureAsync(CameraGesturePreset preset) => _viewportSettings.SetCameraGestureAsync(preset);
 
         // Viewport Info Display - Model Stats
-        public bool GetShowPolygonCount() => GetBoolSetting("Viewport.ShowPolygonCount", true);
-        public async Task SetShowPolygonCountAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowPolygonCount", value);
-        
-        public bool GetShowVertexCount() => GetBoolSetting("Viewport.ShowVertexCount", true);
-        public async Task SetShowVertexCountAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowVertexCount", value);
-        
-        public bool GetShowUVSetCount() => GetBoolSetting("Viewport.ShowUVSetCount", false);
-        public async Task SetShowUVSetCountAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowUVSetCount", value);
-        
-        public bool GetShowMaterialCount() => GetBoolSetting("Viewport.ShowMaterialCount", false);
-        public async Task SetShowMaterialCountAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowMaterialCount", value);
-        
-        public bool GetShowBoundingBox() => GetBoolSetting("Viewport.ShowBoundingBox", false);
-        public async Task SetShowBoundingBoxAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowBoundingBox", value);
+        public bool GetShowPolygonCount() => _viewportSettings.GetShowPolygonCount();
+        public Task SetShowPolygonCountAsync(bool value) => _viewportSettings.SetShowPolygonCountAsync(value);
+        public bool GetShowVertexCount() => _viewportSettings.GetShowVertexCount();
+        public Task SetShowVertexCountAsync(bool value) => _viewportSettings.SetShowVertexCountAsync(value);
+        public bool GetShowUVSetCount() => _viewportSettings.GetShowUVSetCount();
+        public Task SetShowUVSetCountAsync(bool value) => _viewportSettings.SetShowUVSetCountAsync(value);
+        public bool GetShowMaterialCount() => _viewportSettings.GetShowMaterialCount();
+        public Task SetShowMaterialCountAsync(bool value) => _viewportSettings.SetShowMaterialCountAsync(value);
+        public bool GetShowBoundingBox() => _viewportSettings.GetShowBoundingBox();
+        public Task SetShowBoundingBoxAsync(bool value) => _viewportSettings.SetShowBoundingBoxAsync(value);
 
         // Viewport Info Display - Viewport Stats
-        public bool GetShowFPS() => GetBoolSetting("Viewport.ShowFPS", true);
-        public async Task SetShowFPSAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowFPS", value);
-        
-        public bool GetShowResolution() => GetBoolSetting("Viewport.ShowResolution", false);
-        public async Task SetShowResolutionAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowResolution", value);
-        
-        public bool GetShowViewportSize() => GetBoolSetting("Viewport.ShowViewportSize", false);
-        public async Task SetShowViewportSizeAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowViewportSize", value);
-        
-        public bool GetShowCameraInfo() => GetBoolSetting("Viewport.ShowCameraInfo", false);
-        public async Task SetShowCameraInfoAsync(bool value) => await SetBoolSettingAsync("Viewport.ShowCameraInfo", value);
+        public bool GetShowFPS() => _viewportSettings.GetShowFPS();
+        public Task SetShowFPSAsync(bool value) => _viewportSettings.SetShowFPSAsync(value);
+        public bool GetShowResolution() => _viewportSettings.GetShowResolution();
+        public Task SetShowResolutionAsync(bool value) => _viewportSettings.SetShowResolutionAsync(value);
+        public bool GetShowViewportSize() => _viewportSettings.GetShowViewportSize();
+        public Task SetShowViewportSizeAsync(bool value) => _viewportSettings.SetShowViewportSizeAsync(value);
+        public bool GetShowCameraInfo() => _viewportSettings.GetShowCameraInfo();
+        public Task SetShowCameraInfoAsync(bool value) => _viewportSettings.SetShowCameraInfoAsync(value);
 
         // Rendering settings
-        public bool GetBackfaceCulling() => GetBoolSetting("Viewport.BackfaceCulling", true);
-        public async Task SetBackfaceCullingAsync(bool value) => await SetBoolSettingAsync("Viewport.BackfaceCulling", value);
+        public bool GetBackfaceCulling() => _viewportSettings.GetBackfaceCulling();
+        public Task SetBackfaceCullingAsync(bool value) => _viewportSettings.SetBackfaceCullingAsync(value);
 
         // Viewport background settings
-        public ViewportBackgroundMode GetViewportBackgroundMode()
-        {
-            try
-            {
-                var value = _settingsStore.GetAsync("Viewport.BackgroundMode").GetAwaiter().GetResult();
-                if (Enum.TryParse<ViewportBackgroundMode>(value, out var mode))
-                    return mode;
-            }
-            catch { }
-            return _cache.ViewportBackgroundMode;
-        }
-
-        public async Task SetViewportBackgroundModeAsync(ViewportBackgroundMode mode)
-        {
-            _cache.ViewportBackgroundMode = mode;
-            try
-            {
-                await _settingsStore.UpsertAsync("Viewport.BackgroundMode", mode.ToString());
-                _messenger?.Send(new Messages.SettingsChangedMessage("Viewport.BackgroundMode"));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Viewport.BackgroundMode.");
-            }
-        }
-
-        public string GetViewportBackgroundColor() => _cache.ViewportBackgroundColor ?? "#3399CC";
-
-        public async Task SetViewportBackgroundColorAsync(string hexColor)
-        {
-            _cache.ViewportBackgroundColor = hexColor ?? "#3399CC";
-            try
-            {
-                await _settingsStore.UpsertAsync("Viewport.BackgroundColor", _cache.ViewportBackgroundColor);
-                _messenger?.Send(new Messages.SettingsChangedMessage("Viewport.BackgroundColor"));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "SettingsService: Failed to persist Viewport.BackgroundColor.");
-            }
-        }
+        public ViewportBackgroundMode GetViewportBackgroundMode() => _viewportSettings.GetBackgroundMode();
+        public Task SetViewportBackgroundModeAsync(ViewportBackgroundMode mode) => _viewportSettings.SetBackgroundModeAsync(mode);
+        public string GetViewportBackgroundColor() => _viewportSettings.GetBackgroundColor();
+        public Task SetViewportBackgroundColorAsync(string hexColor) => _viewportSettings.SetBackgroundColorAsync(hexColor);
 
         // Helper methods for bool settings
         private bool GetBoolSetting(string key, bool defaultValue)

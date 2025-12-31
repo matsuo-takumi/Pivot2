@@ -20,7 +20,7 @@ namespace Pivot.ViewModels
     public partial class ImageViewModel : ObservableObject, 
         IRecipient<DirectoryChangedMessage>,
         IRecipient<AssetChangedMessage>,
-        IRecipient<BulkItemsChangedMessage<AssetEntry>>
+        IRecipient<BulkItemsChangedMessage<AssetEntity>>
     {
         private readonly LayoutService _layoutService = new();
         private readonly SortService _sortService = new();
@@ -316,7 +316,7 @@ namespace Pivot.ViewModels
              }
         }
 
-        public void Receive(BulkItemsChangedMessage<AssetEntry> message)
+        public void Receive(BulkItemsChangedMessage<AssetEntity> message)
         {
             // Skip reactive updates during initial load to prevent flickering
             if (IsLoading) return;
@@ -327,36 +327,36 @@ namespace Pivot.ViewModels
                 foreach (var change in message.Value)
                 {
                     // Check extension
-                    var path = change.Item?.Path ?? (change.Item?.Name); // fallback
+                    var path = change.Item?.FilePath;
                     if (path == null) continue;
                     var ext = Path.GetExtension(path);
                     if (string.IsNullOrEmpty(ext) || !_imageExtensions.Contains(ext)) continue;
 
-                    if (change.Type == ItemChangeData<AssetEntry>.ChangeType.Added || change.Type == ItemChangeData<AssetEntry>.ChangeType.Updated)
+                    if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Added || change.Type == ItemChangeData<AssetEntity>.ChangeType.Updated)
                     {
                         var asset = change.Item;
                         if (asset == null) continue;
                         
-                        var existing = _allImages.FirstOrDefault(i => i.Path == asset.Path);
+                        var existing = _allImages.FirstOrDefault(i => i.Path == asset.FilePath);
                         if (existing == null)
                         {
                            var newItem = new TemplateItem { 
-                               Kind = AssetKind.Image, Path = asset.Path, Name = asset.Name, Size = asset.Size, LastModified = asset.UpdatedAt 
+                               Kind = AssetKind.Image, Path = asset.FilePath, Name = asset.FileName, Size = asset.FileSize, LastModified = asset.UpdatedAt 
                            };
                            _allImages.Add(newItem);
                         }
                         else
                         {
-                           existing.Size = asset.Size;
+                           existing.Size = asset.FileSize;
                            existing.LastModified = asset.UpdatedAt;
-                           existing.PixelWidth = asset.PixelWidth;
-                           existing.PixelHeight = asset.PixelHeight;
-                           existing.AspectRatio = asset.PixelHeight > 0 ? (double)asset.PixelWidth / asset.PixelHeight : 1.0;
+                           existing.PixelWidth = asset.Width ?? 0;
+                           existing.PixelHeight = asset.Height ?? 0;
+                           existing.AspectRatio = (asset.Height ?? 0) > 0 ? (double)(asset.Width ?? 0) / (asset.Height ?? 0) : 1.0;
                         }
                     }
-                    else if (change.Type == ItemChangeData<AssetEntry>.ChangeType.Deleted)
+                    else if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Deleted)
                     {
-                        var existing = _allImages.FirstOrDefault(i => i.Path == change.Item.Path);
+                        var existing = _allImages.FirstOrDefault(i => i.Path == change.Item?.FilePath);
                         if (existing != null) _allImages.Remove(existing);
                     }
                 }
@@ -443,20 +443,20 @@ namespace Pivot.ViewModels
                 var allItems = new List<TemplateItem>();
                 var missingDimensions = new List<TemplateItem>();
                 
-                await foreach (var asset in _metadataService.StreamAssetEntriesAsync(200))
+                await foreach (var asset in _metadataService.StreamAssetsAsync(200))
                 {
-                   var ext = Path.GetExtension(asset.Path);
+                   var ext = Path.GetExtension(asset.FilePath);
                    if (string.IsNullOrEmpty(ext) || !_imageExtensions.Contains(ext)) continue;
 
                    // Resolve thumbnail path: use cached if exists, otherwise check cache
                    string? thumbnailPath = null;
-                   if (!string.IsNullOrEmpty(asset.ThumbnailCachePath) && File.Exists(asset.ThumbnailCachePath))
+                   if (!string.IsNullOrEmpty(asset.ThumbnailPath) && File.Exists(asset.ThumbnailPath))
                    {
-                       thumbnailPath = new Uri(asset.ThumbnailCachePath).AbsoluteUri;
+                       thumbnailPath = new Uri(asset.ThumbnailPath).AbsoluteUri;
                    }
                    else if (_thumbnailService != null)
                    {
-                       var cached = _thumbnailService.TryGetCachedThumbnailPath(asset.Path, 300, 200);
+                       var cached = _thumbnailService.TryGetCachedThumbnailPath(asset.FilePath, 300, 200);
                        if (!string.IsNullOrEmpty(cached))
                        {
                            thumbnailPath = new Uri(cached).AbsoluteUri;
@@ -466,13 +466,13 @@ namespace Pivot.ViewModels
                    var item = new TemplateItem 
                    {
                        Kind = AssetKind.Image,
-                       Path = asset.Path,
-                       Name = asset.Name,
-                       Size = asset.Size,
+                       Path = asset.FilePath,
+                       Name = asset.FileName,
+                       Size = asset.FileSize,
                        LastModified = asset.UpdatedAt,
-                       PixelWidth = asset.PixelWidth,
-                       PixelHeight = asset.PixelHeight,
-                       AspectRatio = asset.PixelHeight > 0 ? (double)asset.PixelWidth / asset.PixelHeight : 1.0,
+                       PixelWidth = asset.Width ?? 0,
+                       PixelHeight = asset.Height ?? 0,
+                       AspectRatio = (asset.Height ?? 0) > 0 ? (double)(asset.Width ?? 0) / (asset.Height ?? 0) : 1.0,
                        ThumbnailPath = thumbnailPath
                    };
                    

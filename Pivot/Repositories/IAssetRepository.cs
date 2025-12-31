@@ -1,0 +1,34 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Pivot.Models;
+
+namespace Pivot.Repositories
+{
+    public interface IAssetRepository
+    {
+        Task<List<AssetEntity>> GetPagedAsync(
+            AssetKind? kind = null,
+            string? directory = null,
+            string? sortField = "LastModifiedUtc",
+            bool ascending = false,
+            int skip = 0,
+            int take = 100,
+            CancellationToken ct = default);
+
+        Task<int> GetCountAsync(
+            AssetKind? kind = null,
+            string? directory = null,
+            CancellationToken ct = default);
+
+        Task<AssetEntity?> GetByPathAsync(string filePath, CancellationToken ct = default);
+
+        Task UpsertAsync(AssetEntity asset, CancellationToken ct = default);
+
+        Task MarkDeletedAsync(string filePath, CancellationToken ct = default);
+
+        Task<List<string>> GetAllDirectoriesAsync(
+            AssetKind? kind = null,
+            CancellationToken ct = default);
+    }
+}

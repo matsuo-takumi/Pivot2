@@ -3,16 +3,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Pivot.Models
 {
-	public enum AssetKind
-	{
-		Image,
-		Model,
-		Video,
-		Audio,
-		Script,
-		Other
-	}
-
 	public sealed class TemplateItem : ObservableObject
 	{
 		public AssetKind Kind { get; set; } = AssetKind.Other;

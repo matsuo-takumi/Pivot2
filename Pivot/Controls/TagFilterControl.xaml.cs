@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Pivot.Services;
 using Pivot.ViewModels;
 using Pivot.CodeModule.Models;
@@ -56,20 +57,22 @@ namespace Pivot.Controls
                         return;
                     }
 
-                    // Fallback: try code repository and derive tags from snippets
-                    var repo = App.Current.Services.GetService(typeof(Pivot.CodeModule.Services.ICodeRepository)) as Pivot.CodeModule.Services.ICodeRepository;
-                    if (repo == null)
+                    // Fallback: try code service and derive tags from snippets
+                    var codeService = App.Current.Services.GetService(typeof(Pivot.Services.CodeService)) as Pivot.Services.CodeService;
+                    if (codeService == null)
                     {
                         TagItems.ItemsSource = null;
                         return;
                     }
 
-                    var tags = repo.GetAllTags().Select(t => new TagItem { Name = t.Name, IsSelected = false }).ToList();
+                    // CodeRepository is removed, so we fallback to deriving tags from all snippets directly.
+                    List<TagItem> tags = null;
                     if (tags == null || tags.Count == 0)
                     {
                         try
                         {
-                            var all = repo.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>();
+                            // Synchronously calling async method is not ideal but acceptable for fallback loading
+                            var all = Task.Run(async () => await codeService.GetAllSnippetsAsync()).Result;
                             var derived = all.SelectMany(f => (f.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()))
                                 .Where(s => !string.IsNullOrWhiteSpace(s))
                                 .Distinct(StringComparer.OrdinalIgnoreCase)

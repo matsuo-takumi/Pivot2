@@ -27,6 +27,13 @@ namespace Pivot.CodeModule.Models
             set => SetProperty(ref _id, value);
         }
 
+        private string _filePath = string.Empty;
+        public string FilePath
+        {
+            get => _filePath;
+            set => SetProperty(ref _filePath, value);
+        }
+
         public string Title
         {
             get => _title;

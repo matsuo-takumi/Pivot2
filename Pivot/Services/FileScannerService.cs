@@ -20,7 +20,7 @@ namespace Pivot.Services
 	public class FileScannerService : IDisposable
 	{
 		private readonly ILogger<FileScannerService> _logger;
-		private readonly MetadataService _metadataService;
+		private readonly Pivot.Repositories.IAssetRepository _repository;
 		private readonly ICatalogService? _catalogService; // scanモード用
 		private readonly IThumbnailService? _thumbnailService;
 		private readonly bool _useScanMode;
@@ -66,15 +66,15 @@ namespace Pivot.Services
 		private SemaphoreSlim? _hashSemaphore;
 
 		// ===== Phase 2: Buffers & periodic flush =====
-		private readonly ConcurrentQueue<ItemChangeData<AssetEntry>> _assetChangeBuffer = new();
+		private readonly ConcurrentQueue<ItemChangeData<AssetEntity>> _assetChangeBuffer = new();
 		private System.Timers.Timer? _assetFlushTimer;
 		private const int AssetFlushIntervalMs = 300; // Phase 6: move to config
 		private const int AssetFlushBatchMax = 100;   // Phase 6: move to config
 
-		public FileScannerService(ILogger<FileScannerService> logger, MetadataService metadataService, IMessenger messenger, IConfiguration? configuration = null, ICatalogService? catalogService = null, IThumbnailService? thumbnailService = null)
+		public FileScannerService(ILogger<FileScannerService> logger, Pivot.Repositories.IAssetRepository repository, IMessenger messenger, IConfiguration? configuration = null, ICatalogService? catalogService = null, IThumbnailService? thumbnailService = null)
 		{
 			_logger = logger;
-			_metadataService = metadataService;
+			_repository = repository;
 			_messenger = messenger;
 			_thumbnailService = thumbnailService;
 			_useScanMode = bool.TryParse(configuration?["AppSettings:UseScanMode"], out var flag) && flag;
@@ -148,7 +148,7 @@ namespace Pivot.Services
 				{
 					try
 					{
-						await ProcessFileChange(path, WatcherChangeTypes.Created, null, ct);
+						await ProcessFileChangeAsync(path, ct);
 					}
 					catch (Exception ex)
 					{
@@ -400,393 +400,186 @@ namespace Pivot.Services
 			}
 		}
 
-		private async Task ProcessFileChange(string path, WatcherChangeTypes changeType, string? newPath = null, CancellationToken cancellationToken = default)
+		
+	// ===== NEW SIMPLIFIED FILE PROCESSING =====
+	
+	/// <summary>
+	/// Simplified file processing for initial scan (no watcher events)
+	/// </summary>
+	private async Task ProcessFileChangeAsync(string path, CancellationToken ct)
+	{
+		try
 		{
-			try
+			if (!File.Exists(path))
 			{
-				_logger.LogInformation("File system event: {ChangeType} - {Path}", changeType, path);
+				_logger.LogWarning("File not found: {Path}", path);
+				return;
+			}
 
-				if (changeType == WatcherChangeTypes.Deleted)
+			var fileInfo = new FileInfo(path);
+			string ext = fileInfo.Extension ?? string.Empty;
+
+			// Determine asset kind
+			var kind = FileScannerExtensions.DetermineAssetKind(ext);
+			if (kind == AssetKind.General)
+				return; // Skip non-asset files
+
+			// Quick check: skip if unchanged
+			var existing = await _repository.GetByPathAsync(path, ct);
+			if (existing != null && 
+			    existing.FileSize == fileInfo.Length && 
+			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc)
+			{
+				return; // No change
+			}
+
+			// Hash calculation
+			string? hash = existing?.Hash;
+			if (existing == null || existing.FileSize != fileInfo.Length)
+			{
+				_hashSemaphore ??= new SemaphoreSlim(Math.Max(1, Environment.ProcessorCount - 1));
+				await _hashSemaphore.WaitAsync(ct);
+				try
 				{
-					await _metadataService.DeleteFileAsync(path);
-					_logger.LogInformation("Deleted metadata for: {Path}", path);
-					// enqueue for bulk
-					_assetChangeBuffer.Enqueue(new ItemChangeData<AssetEntry>(ItemChangeData<AssetEntry>.ChangeType.Deleted, new AssetEntry { Path = path }));
-					// keep legacy single message for backward compatibility (AssetViewModel already supports it)
-					_messenger.Send(new AssetChangedMessage(new AssetChangedMessageData(AssetChangedMessageData.ChangeType.Deleted, path)));
+					hash = await ComputeXxHash64Async(path, ct);
 				}
-				else // Created, Changed, Renamed
+				finally
 				{
-					// Renamedの場合、古いパスのメタデータを削除し、新しいパスで作成/更新
-					if (changeType == WatcherChangeTypes.Renamed && newPath != null)
-					{
-						await _metadataService.DeleteFileAsync(path); // 古いパスを削除
-						path = newPath; // 新しいパスで処理を続行
-					}
-
-					if (!File.Exists(path))
-					{
-						_logger.LogWarning("File not found after event: {Path}", path);
-						return; // ファイルが存在しない場合はスキップ
-					}
-
-					var fileInfo = new FileInfo(path);
-					string ext = fileInfo.Extension ?? string.Empty;
-					string type = GuessMime(ext);
-
-					// Quick check: compare size and mtime to skip unnecessary hashing
-					FileEntry? existingFileEntry = null;
-					bool needsHash = true;
-					// Quick check: compare size and mtime to skip unnecessary hashing
-					existingFileEntry = await _metadataService.GetFileEntryByPathAsync(path);
-					if (existingFileEntry != null && existingFileEntry.Size == fileInfo.Length && existingFileEntry.UpdatedAt == fileInfo.LastWriteTimeUtc)
-					{
-						needsHash = false; // no content change
-					}
-
-					// Ensure semaphores exist (for watcher-triggered events)
-					_fileOpenSemaphore ??= new SemaphoreSlim(DefaultMaxOpenFiles);
-					_hashSemaphore ??= new SemaphoreSlim(Math.Max(1, Environment.ProcessorCount - 1));
-
-					string hash = existingFileEntry?.Hash ?? string.Empty;
-					if (needsHash)
-					{
-						// Acquire semaphores to limit open files and concurrent hash CPU usage
-						await _fileOpenSemaphore.WaitAsync(cancellationToken);
-						try
-						{
-							await _hashSemaphore.WaitAsync(cancellationToken);
-							try
-							{
-								int tries = 0;
-								while (true)
-								{
-									try
-									{
-										hash = await ComputeXxHash64Async(path, cancellationToken);
-										break;
-									}
-									catch (IOException) when (++tries <= DefaultRetryCount)
-									{
-										await Task.Delay(DefaultRetryDelayMs, cancellationToken);
-									}
-								}
-							}
-							finally
-							{
-								_hashSemaphore.Release();
-							}
-						}
-						finally
-						{
-							_fileOpenSemaphore.Release();
-						}
-					}
-
-					await _metadataService.UpsertFileAsync(path, type, fileInfo.Length, fileInfo.LastWriteTimeUtc, hash);
-					_logger.LogInformation("Upserted metadata for: {Path}", path);
-
-					// Update scan cache
-					try
-					{
-						// 複数ルート対応: このパスに合致するルートを推定
-						string rootForPath = _currentRootPath ?? string.Empty;
-						if (_roots.Count > 0)
-						{
-							rootForPath = _roots.FirstOrDefault(r => path.StartsWith(r, StringComparison.OrdinalIgnoreCase)) ?? rootForPath;
-						}
-						var cacheEntry = new ScanCacheEntry(path, hash, fileInfo.Length, fileInfo.LastWriteTimeUtc, rootForPath);
-						await _metadataService.UpsertScanCacheAsync(cacheEntry);
-					}
-					catch (Exception ex)
-					{
-						_logger.LogError(ex, "Failed to update scan cache for: {Path}", path);
-					}
-
-					// Asset integration: create or update AssetEntry when file looks like an asset
-					try
-					{
-						if (IsAssetExtension(ext))
-						{
-							var fileEntry = await _metadataService.GetFileEntryByPathAsync(path);
-							if (fileEntry != null)
-							{
-								var existingAsset = await _metadataService.GetAssetEntryByPathAsync(path);
-								if (existingAsset != null)
-								{
-									existingAsset.Name = Path.GetFileName(path);
-									existingAsset.Type = type;
-									existingAsset.Size = fileInfo.Length;
-									existingAsset.Hash = hash;
-									existingAsset.File = fileEntry;
-									
-									// Fix missing dimensions on existing assets
-									if (ImageExtensions.Contains(ext) && existingAsset.PixelWidth == 0)
-									{
-										try
-										{
-											var imageInfo = await Image.IdentifyAsync(path);
-											if (imageInfo != null)
-											{
-												existingAsset.PixelWidth = imageInfo.Width;
-												existingAsset.PixelHeight = imageInfo.Height;
-											}
-										}
-										catch (Exception dimEx)
-										{
-											_logger.LogDebug(dimEx, "Failed to read image dimensions for existing asset: {Path}", path);
-										}
-									}
-									
-									existingAsset.UpdatedAt = DateTime.UtcNow;
-									await _metadataService.UpdateAssetEntryAsync(existingAsset);
-									// enqueue bulk update and keep legacy single message
-									_assetChangeBuffer.Enqueue(new ItemChangeData<AssetEntry>(ItemChangeData<AssetEntry>.ChangeType.Updated, existingAsset));
-									_messenger.Send(new AssetChangedMessage(new AssetChangedMessageData(AssetChangedMessageData.ChangeType.Updated, path)));
-								}
-								else
-								{
-									// Generate thumbnail for image files
-									string? thumbnailCachePath = null;
-									int pixelWidth = 0;
-									int pixelHeight = 0;
-									
-									if (ImageExtensions.Contains(ext))
-									{
-										// Extract image dimensions (fast header-only read)
-										try
-										{
-											var imageInfo = await Image.IdentifyAsync(path);
-											if (imageInfo != null)
-											{
-												pixelWidth = imageInfo.Width;
-												pixelHeight = imageInfo.Height;
-											}
-										}
-										catch (Exception dimEx)
-										{
-											_logger.LogDebug(dimEx, "Failed to read image dimensions for: {Path}", path);
-										}
-										
-										// Generate thumbnail
-										if (_thumbnailService != null)
-										{
-											try
-											{
-												thumbnailCachePath = await _thumbnailService.GetOrCreateThumbnailAsync(path, 300, 200);
-											}
-											catch (Exception thumbEx)
-											{
-												_logger.LogDebug(thumbEx, "Failed to generate thumbnail for: {Path}", path);
-											}
-										}
-									}
-									
-									var newAsset = new AssetEntry
-									{
-										Name = Path.GetFileName(path),
-										Type = type,
-										Path = path,
-										Size = fileInfo.Length,
-										Hash = hash,
-										File = fileEntry,
-										ThumbnailCachePath = thumbnailCachePath,
-										PixelWidth = pixelWidth,
-										PixelHeight = pixelHeight,
-										CreatedAt = DateTime.UtcNow,
-										UpdatedAt = DateTime.UtcNow
-									};
-									await _metadataService.AddAssetEntryAsync(newAsset);
-									// enqueue bulk add and keep legacy single message
-									_assetChangeBuffer.Enqueue(new ItemChangeData<AssetEntry>(ItemChangeData<AssetEntry>.ChangeType.Added, newAsset));
-									_messenger.Send(new AssetChangedMessage(new AssetChangedMessageData(AssetChangedMessageData.ChangeType.Added, path)));
-								}
-							}
-						}
-					}
-					catch (Exception ex)
-					{
-						_logger.LogError(ex, "Failed to upsert asset entry for: {Path}", path);
-					}
+					_hashSemaphore.Release();
 				}
 			}
-			catch (OperationCanceledException) { /* スキャンキャンセル */ }
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Error processing file system event: {Path}", path);
-			}
-		}
 
-		// Flush asset buffer to bulk message
-		private void FlushAssetBuffer()
-		{
-			var batch = new List<ItemChangeData<AssetEntry>>();
-			while (batch.Count < AssetFlushBatchMax && _assetChangeBuffer.TryDequeue(out var item))
-			{
-				batch.Add(item);
-			}
-			if (batch.Count == 0) return;
-			_messenger.Send(new BulkItemsChangedMessage<AssetEntry>(batch));
-		}
+			// Extract metadata for images
+			int? width = null;
+			int? height = null;
+			double? aspectRatio = null;
+			string? thumbnailPath = null;
+			
+			// Code specific metadata
+			string? language = null;
+			string? tool = null;
+			string? contentIndex = null;
 
-		/// <summary>
-		/// ファイルが前回のスキャン結果と比較して変更されているかチェックします。
-		/// スキャンキャッシュを利用して、重複したハッシュ計算を避けます。
-		/// </summary>
-		private async Task<bool> HasFileChangedAsync(string path, CancellationToken cancellationToken)
-		{
-			try
-			{
-				var fileInfo = new FileInfo(path);
-				var cacheEntry = await _metadataService.GetScanCacheAsync(path);
-
-				if (cacheEntry == null)
-				{
-					_logger.LogDebug("No cache entry found for: {Path}", path);
-					return true; // キャッシュなし = 新規ファイル = 変更あり
-				}
-
-				// サイズと最終更新時刻が同じなら、キャッシュされたハッシュを信頼
-				if (cacheEntry.Size == fileInfo.Length && cacheEntry.LastModifiedUtc == fileInfo.LastWriteTimeUtc)
-				{
-					_logger.LogDebug("File unchanged (cache hit): {Path}", path);
-					return false; // 変更なし
-				}
-
-				_logger.LogDebug("File changed (cache miss): {Path}, Size: {Size} -> {NewSize}, LastModified: {LastMod} -> {NewLastMod}", 
-					path, cacheEntry.Size, fileInfo.Length, cacheEntry.LastModifiedUtc, fileInfo.LastWriteTimeUtc);
-				return true; // 変更あり
-			}
-			catch (Exception ex)
-			{
-				_logger.LogWarning(ex, "Error checking file cache status for: {Path}", path);
-				return true; // エラー時は安全側（変更ありとして処理）
-			}
-		}
-
-		public async Task ScanWithCacheAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
-		{
-			if (_useScanMode)
+			if (kind == AssetKind.Image)
 			{
 				try
 				{
-					var catalog = _catalogService ?? new JsonCatalogService();
-					await catalog.InitializeAsync(rootPaths, cancellationToken);
-					progress?.Report(100);
-					_logger.LogInformation("ScanWithCacheAsync: UseScanMode enabled. Delegated to JsonCatalogService.");
-					return;
+					var imageInfo = await SixLabors.ImageSharp.Image.IdentifyAsync(path);
+					if (imageInfo != null)
+					{
+						width = imageInfo.Width;
+						height = imageInfo.Height;
+						aspectRatio = height > 0 ? (double)width / height : null;
+					}
 				}
-				catch (Exception ex)
+				catch (Exception dimEx)
 				{
-					_logger.LogError(ex, "ScanWithCacheAsync: JsonCatalogService initialization failed in UseScanMode.");
-					// フォールバック: 従来経路
+					_logger.LogDebug(dimEx, "Failed to read image dimensions: {Path}", path);
+				}
+
+				// Generate thumbnail
+				if (_thumbnailService != null)
+				{
+					try
+					{
+						thumbnailPath = await _thumbnailService.GetOrCreateThumbnailAsync(path, 300, 200);
+					}
+					catch (Exception thumbEx)
+					{
+						_logger.LogDebug(thumbEx, "Failed to generate thumbnail: {Path}", path);
+					}
 				}
 			}
-
-			// 既存のWatcherを完全停止（複数対応）
-			StopWatchers();
-
-			foreach (var rootPath in rootPaths)
+			else if (kind == AssetKind.Script || kind == AssetKind.Code)
 			{
-				if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
-				{
-					_logger.LogWarning("Root path invalid: {rootPath}", rootPath);
-					continue;
-				}
-
-				_currentRootPath = rootPath;
-				_logger.LogInformation("Starting scan with cache optimization for: {RootPath}", rootPath);
-
-				// Configure concurrency (Simplified for speed)
-				int scanDop = Math.Max(2, Environment.ProcessorCount - 1);
-				int hashDop = Math.Max(1, Environment.ProcessorCount / 2);
-				_fileOpenSemaphore = new SemaphoreSlim(DefaultMaxOpenFiles);
-				_hashSemaphore = new SemaphoreSlim(hashDop);
-
-				var allFiles = new List<string>();
 				try
 				{
-				    allFiles = Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories).ToList();
+					// Index content for Full Text Search (limit to 1MB to prevent OOM)
+					if (fileInfo.Length < 1024 * 1024) 
+					{
+						contentIndex = await File.ReadAllTextAsync(path, ct);
+					}
+					language = ext.TrimStart('.').ToLowerInvariant();
+					// Tool logic can be refined later
 				}
-				catch (Exception ex)
+				catch (Exception codeEx)
 				{
-				    _logger.LogWarning(ex, "Failed to enumerate files for root: {rootPath}", rootPath);
+					_logger.LogDebug(codeEx, "Failed to read code content: {Path}", path);
 				}
-				
-				int total = allFiles.Count;
-				int processed = 0;
-				int changedCount = 0;
-
-				// First pass: identify changed files using cache
-				var changedFiles = new System.Collections.Concurrent.ConcurrentBag<string>();
-				await Parallel.ForEachAsync(allFiles, new ParallelOptions { MaxDegreeOfParallelism = scanDop, CancellationToken = cancellationToken }, async (path, ct) =>
-				{
-					try
-					{
-						if (await HasFileChangedAsync(path, ct))
-						{
-							changedFiles.Add(path);
-						}
-					}
-					catch (Exception ex)
-					{
-						_logger.LogError(ex, "Error checking cache status for file: {path}", path);
-					}
-					finally
-					{
-						Interlocked.Increment(ref processed);
-						if (total > 0)
-						{
-							int percent = (int)Math.Clamp(processed * 50.0 / total, 0, 50); // First 50% for cache check
-							progress?.Report(percent);
-						}
-					}
-				});
-
-				// Second pass: process changed files
-				changedCount = changedFiles.Count;
-				_logger.LogInformation("Found {ChangedCount} changed files out of {TotalCount}", changedCount, total);
-				processed = 0;
-
-				await Parallel.ForEachAsync(changedFiles, new ParallelOptions { MaxDegreeOfParallelism = scanDop, CancellationToken = cancellationToken }, async (path, ct) =>
-				{
-					try
-					{
-						await ProcessFileChange(path, WatcherChangeTypes.Created, null, ct);
-					}
-					catch (Exception ex)
-					{
-						_logger.LogError(ex, "Failed to process changed file: {path}", path);
-					}
-					finally
-					{
-						Interlocked.Increment(ref processed);
-						if (changedCount > 0)
-						{
-							int percent = (int)Math.Clamp(50 + processed * 50.0 / changedCount, 50, 100); // Second 50% for processing
-							progress?.Report(percent);
-						}
-					}
-				});
-
-				progress?.Report(100);
-				_logger.LogInformation("Scan with cache completed for {rootPath}. Processed {ChangedCount} changed files.", rootPath, changedCount);
 			}
-			// 全ルートのスキャンが終わったら複数ウォッチャーを起動
-			try { EnsureWatchers(rootPaths); } catch (Exception ex) { _logger.LogError(ex, "EnsureWatchers failed"); }
+
+			// Create or update AssetEntity
+			var asset = new AssetEntity
+			{
+				FilePath = path,
+				FileName = Path.GetFileName(path),
+				Directory = Path.GetDirectoryName(path) ?? string.Empty,
+				Extension = ext,
+				FileSize = fileInfo.Length,
+				LastModifiedUtc = fileInfo.LastWriteTimeUtc,
+				Hash = hash,
+				Kind = kind,
+				Width = width,
+				Height = height,
+				AspectRatio = aspectRatio,
+				ThumbnailPath = thumbnailPath,
+				ThumbnailGeneratedAt = thumbnailPath != null ? DateTime.UtcNow : null,
+				Language = language,
+				Tool = tool,
+				ContentIndex = contentIndex
+			};
+
+			await _repository.UpsertAsync(asset, ct);
+
+			// Notify UI
+			var changeType = existing == null 
+				? ItemChangeData<AssetEntity>.ChangeType.Added 
+				: ItemChangeData<AssetEntity>.ChangeType.Updated;
+			_assetChangeBuffer.Enqueue(new ItemChangeData<AssetEntity>(changeType, asset));
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Error processing file: {Path}", path);
+		}
+	}
+
+	/// <summary>
+	/// Old ProcessFileChange for watcher events - needs rewrite
+	/// </summary>
+	private async Task ProcessFileChange(string path, WatcherChangeTypes changeType, string? newPath, CancellationToken ct)
+	{
+		// Handle deletion
+		if (changeType == WatcherChangeTypes.Deleted)
+		{
+			await _repository.MarkDeletedAsync(path, ct);
+			_logger.LogInformation("Marked as deleted: {Path}", path);
+			
+			var deletedEntity = new AssetEntity { FilePath = path };
+			_assetChangeBuffer.Enqueue(new ItemChangeData<AssetEntity>(ItemChangeData<AssetEntity>.ChangeType.Deleted, deletedEntity));
+			return;
 		}
 
-		public void Dispose()
+		// Handle rename
+		if (changeType == WatcherChangeTypes.Renamed && newPath != null)
 		{
-			// 監視を完全停止（複数対応）
-			StopWatchers();
-			foreach (var cts in _delayTokens.Values) cts.Dispose();
-			_delayTokens.Clear();
-			try { _fileOpenSemaphore?.Dispose(); } catch { }
-			try { _hashSemaphore?.Dispose(); } catch { }
-			try { if (_assetFlushTimer != null) { _assetFlushTimer.Dispose(); _assetFlushTimer = null; } } catch { }
-			GC.SuppressFinalize(this);
+			await _repository.MarkDeletedAsync(path, ct);
+			path = newPath;
 		}
+
+		// Process file (reuse scan logic)
+		await ProcessFileChangeAsync(path, ct);
+	}
+
+	private void FlushAssetBuffer()
+	{
+		var batch = new List<ItemChangeData<AssetEntity>>();
+		while (batch.Count < AssetFlushBatchMax && _assetChangeBuffer.TryDequeue(out var item))
+		{
+			batch.Add(item);
+		}
+		if (batch.Count == 0) return;
+		_messenger.Send(new BulkItemsChangedMessage<AssetEntity>(batch));
+	}
 
 		private static string GuessMime(string ext)
 		{
@@ -802,6 +595,20 @@ namespace Pivot.Services
 				case ".usd": return "model/3d";
 				default: return "application/octet-stream";
 			}
+		}
+
+		public void Dispose()
+		{
+			StopWatchers();
+			foreach (var cts in _delayTokens.Values) 
+			{
+				try { cts.Dispose(); } catch { }
+			}
+			_delayTokens.Clear();
+			try { _fileOpenSemaphore?.Dispose(); } catch { }
+			try { _hashSemaphore?.Dispose(); } catch { }
+			try { _assetFlushTimer?.Dispose(); } catch { }
+			GC.SuppressFinalize(this);
 		}
 
 		private static async Task<string> ComputeMD5Async(string path, CancellationToken ct)

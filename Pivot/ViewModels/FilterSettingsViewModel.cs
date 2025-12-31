@@ -189,8 +189,21 @@ namespace Pivot.ViewModels
                 {
                     try
                     {
-                        var repo = App.Current.Services.GetService(typeof(Pivot.CodeModule.Services.ICodeRepository)) as Pivot.CodeModule.Services.ICodeRepository;
-                        repo?.RemoveTagFromAllSnippets(tagName);
+                        // Use CodeService to remove tag from all snippets
+                        var codeService = App.Current.Services.GetService(typeof(Pivot.Services.CodeService)) as Pivot.Services.CodeService;
+                        if (codeService != null)
+                        {
+                            var all = await codeService.GetAllSnippetsAsync();
+                            foreach (var snippet in all.Where(s => s.Tags?.Contains(tagName, StringComparison.OrdinalIgnoreCase) == true))
+                            {
+                                var tags = snippet.Tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                    .Select(t => t.Trim())
+                                    .Where(t => !string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase))
+                                    .Distinct(StringComparer.OrdinalIgnoreCase);
+                                snippet.Tags = string.Join(", ", tags);
+                                await codeService.SaveSnippetAsync(snippet);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {

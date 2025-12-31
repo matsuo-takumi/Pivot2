@@ -9,7 +9,7 @@ using Pivot.ViewModels;
 using Pivot.Messages; // ThemeChangedMessage を使用するために追加
 using Microsoft.EntityFrameworkCore;
 using System.IO;
-using Pivot.CodeModule.Services;
+
 using Pivot.CodeModule.ViewModels;
 
 namespace Pivot
@@ -33,25 +33,40 @@ namespace Pivot
 
 		protected override async void OnLaunched(LaunchActivatedEventArgs args)
 		{
-			// Initialize settings early
-			try { await Services.GetRequiredService<SettingsService>().InitializeAsync(); } catch { }
-			// Load directory settings (must be done before pages that use them are constructed)
+			// Initialize SQLite database with migrations (allows schema evolution without data loss)
+			try
+			{
+				using var scope = Services.CreateScope();
+				var dbContext = scope.ServiceProvider.GetRequiredService<Pivot.Data.PivotDbContext>();
+				dbContext.Database.Migrate();
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Database initialization failed: {ex}");
+			}
+			
+			// Load directory settings
 			try { await Services.GetRequiredService<DirectorySettingsService>().LoadAsync(); } catch { }
-			// Ensure text color resources are initialized before preferences are shown
+			// Initialize SettingsService (loads theme, backdrop, and other settings)
+			try { await Services.GetRequiredService<SettingsService>().InitializeAsync(); } catch { }
+			// Ensure text color resources are initialized
 			try { _ = Services.GetRequiredService<ITextColorResourceManager>(); } catch { }
 			// Kick main view model initialization (auto-scan if possible)
 			try { await Services.GetRequiredService<MainViewModel>().InitializeAsync(); } catch { }
+            
+            // Migrate legacy codehub.db data to pivot.db
+            try { await Services.GetRequiredService<LegacyRescueService>().MigrateToAssetsAsync(); } catch { }
 
 			MainWindow = new MainWindow();
 			MainWindow.Activate();
 
-			// 起動時に保存されたテーマを即座に適用する
+			// Apply theme on startup
 			try
 			{
-				var theme = Services.GetRequiredService<SettingsService>().GetTheme();
+				// Default to System theme
 				if (MainWindow?.Content is FrameworkElement root)
 				{
-					root.RequestedTheme = theme;
+					root.RequestedTheme = ElementTheme.Default;
 				}
 			}
 			catch { }
@@ -74,15 +89,34 @@ namespace Pivot
 
 			// Core stores/services
 			sc.AddSingleton<ISettingsStore, JsonSettingsStore>();
-			sc.AddSingleton<SnippetCacheService>();
-			sc.AddSingleton<SettingsService>();
+			// SnippetCacheService removed (legacy)
+			sc.AddSingleton<MetadataService>(); // Legacy stub for compatibility
+			sc.AddSingleton<SettingsService>(); // Stub for Phase 2
             sc.AddSingleton<DirectorySettingsService>();
             sc.AddSingleton<ThemeSettingsService>();
+            sc.AddSingleton<FilterSettingsService>(); // Extracted from SettingsService
+            sc.AddSingleton<ViewportSettingsService>(); // Extracted from SettingsService
+            sc.AddSingleton<MaterialSettingsService>(); // Extracted from SettingsService
+            sc.AddSingleton<ImageDisplaySettingsService>(); // Extracted from SettingsService
+            sc.AddSingleton<AssetDisplaySettingsService>(); // Extracted from SettingsService
+            sc.AddSingleton<CodeSettingsService>(); // Extracted from SettingsService
             sc.AddSingleton<ITextColorResourceManager, TextColorResourceManager>();
-			sc.AddSingleton<MetadataService>();
-			sc.AddSingleton<ICatalogService, JsonCatalogService>();
+			// Database services (EF Core + SQLite)
+			var dbPath = System.IO.Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+				"Pivot", "pivot.db");
+			sc.AddDbContext<Pivot.Data.PivotDbContext>(options =>
+				options.UseSqlite($"Data Source={dbPath}"));
+			sc.AddScoped<Pivot.Repositories.IAssetRepository, Pivot.Repositories.AssetRepository>();
+			
+			// File scanner service
 			sc.AddSingleton<FileScannerService>();
+			sc.AddSingleton<ICatalogService, JsonCatalogService>();
 			sc.AddSingleton<IThumbnailService, ThumbnailService>();
+            
+            // New Code Logic Layer
+            sc.AddScoped<CodeService>();
+            sc.AddTransient<LegacyRescueService>();
 
 			// Preset services (汎用的なプリセットサービス)
 			sc.AddSingleton<IPresetService<Pivot.Models.TextColorPresetData>>(sp =>
@@ -104,116 +138,15 @@ namespace Pivot
             sc.AddSingleton<FilterService>();
 
             // Code module: SQLite DB and services (lazy local appdata path)
-            try
-            {
-                var localFolder = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                var dbDir = Path.Combine(localFolder, "Pivot");
-                Directory.CreateDirectory(dbDir);
-                var dbPath = Path.Combine(dbDir, "codehub.db");
-
-                // DbContextFactory for efficient scoped context creation
-                sc.AddDbContextFactory<SQLiteDbContext>(options =>
-                    options.UseSqlite($"Data Source={dbPath}"));
-
-                // Legacy DbContext registration for backward compatibility
-                sc.AddDbContext<SQLiteDbContext>(options =>
-                    options.UseSqlite($"Data Source={dbPath}"));
-
-                sc.AddTransient<ICodeRepository, CodeRepository>();
-                sc.AddTransient<CodeViewModel>();
-
-                // Asset management services (DB-driven)
-                sc.AddSingleton<IAssetRepository, AssetRepository>();
-                sc.AddSingleton<AssetIndexerService>();
-            }
-            catch (Exception ex)
-            {
-                // Best-effort registration; if System.IO or EF unavailable at runtime the app should still start.
-                System.Diagnostics.Debug.WriteLine($"ConfigureServices: Code module registration failed: {ex}");
-                // Register a file-based fallback repository so CodeViewModel can still save/export without SQLite.
-                try
-                {
-                    var asm = typeof(Pivot.CodeModule.Services.CodeRepository).Assembly;
-                    var t = asm.GetType("Pivot.CodeModule.Services.FileCodeRepository");
-                    if (t != null)
-                    {
-                        sc.AddTransient(typeof(ICodeRepository), sp => (ICodeRepository)Activator.CreateInstance(t, sp.GetRequiredService<SettingsService>())!);
-                        System.Diagnostics.Debug.WriteLine("ConfigureServices: registered FileCodeRepository fallback via reflection.");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("ConfigureServices: FileCodeRepository type not found in assembly; fallback not registered.");
-                    }
-                }
-                catch (Exception ex2)
-                {
-                    System.Diagnostics.Debug.WriteLine($"ConfigureServices: failed to register FileCodeRepository fallback: {ex2}");
-                }
-            }
-
-            // Ensure CodeViewModel is always registered so UI can still function even if DB registration failed.
+            // Legacy services - will be removed after CodeViewModel migration
+            // Legacy CodeModule services removed
+            // Consolidated into CodeService and PivotDbContext
+            
             sc.AddTransient<CodeViewModel>();
+            
+            Services = sc.BuildServiceProvider();
 
-			Services = sc.BuildServiceProvider();
-			// Ensure SQLite DB is created if possible so EF queries don't fail due to missing tables.
-			try
-			{
-				using var scope = Services.CreateScope();
-				var ctx = scope.ServiceProvider.GetService<SQLiteDbContext>();
-				if (ctx != null)
-				{
-					try
-					{
-						ctx.Database.EnsureCreated();
 
-                        // Ensure AssetFiles table exists (for existing databases before this feature)
-                        // AssetFiles table creation removed as we are no longer using DB for images
-                        System.Diagnostics.Debug.WriteLine("ConfigureServices: Skipped AssetFiles table creation.");
-
-                        // Ensure Tags column exists in CodeFiles table; if missing, add it (SQLite ALTER TABLE ADD COLUMN)
-                        try
-                        {
-                            var conn = ctx.Database.GetDbConnection();
-                            conn.Open();
-                            using (var cmd = conn.CreateCommand())
-                            {
-                                cmd.CommandText = "PRAGMA table_info('CodeFiles');";
-                                using var rdr = cmd.ExecuteReader();
-                                var hasTags = false;
-                                while (rdr.Read())
-                                {
-                                    try
-                                    {
-                                        var name = rdr["name"]?.ToString();
-                                        if (string.Equals(name, "Tags", StringComparison.OrdinalIgnoreCase)) { hasTags = true; break; }
-                                    }
-                                    catch { }
-                                }
-                                rdr.Close();
-                                if (!hasTags)
-                                {
-                                    try
-                                    {
-                                        ctx.Database.ExecuteSqlRaw("ALTER TABLE CodeFiles ADD COLUMN Tags TEXT;");
-                                        System.Diagnostics.Debug.WriteLine("ConfigureServices: added Tags column to CodeFiles table.");
-                                    }
-                                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ConfigureServices: failed to add Tags column: {ex}"); }
-                                }
-                            }
-                            try { conn.Close(); } catch { }
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"ConfigureServices: EnsureTagsColumn check failed: {ex}");
-                        }
-					}
-					catch (Exception ex)
-					{
-						System.Diagnostics.Debug.WriteLine($"ConfigureServices: EnsureCreated failed: {ex}");
-					}
-				}
-			}
-			catch { }
 		}
 
 		public void Receive(ThemeChangedMessage message)
@@ -221,24 +154,7 @@ namespace Pivot
 			if (MainWindow != null && MainWindow.Content is FrameworkElement root)
 			{
 				root.RequestedTheme = message.Value;
-				
-				// Update text colors if customization is disabled (use default theme colors)
-				try
-				{
-					var settings = Services.GetRequiredService<SettingsService>();
-					if (!settings.IsTextColorCustomizationEnabled())
-					{
-						var textColorManager = Services.GetRequiredService<ITextColorResourceManager>();
-						textColorManager.UpdateThemeColors();
-					}
-				}
-				catch (Exception ex)
-				{
-					System.Diagnostics.Debug.WriteLine($"App.Receive(ThemeChangedMessage): Failed to update theme colors: {ex.Message}");
-				}
 			}
 		}
 	}
 }
-
-

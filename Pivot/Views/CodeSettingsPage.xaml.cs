@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
-using Pivot.CodeModule.Services;
+
 
 namespace Pivot.Views
 {

@@ -24,7 +24,7 @@ using Microsoft.UI;
 using Windows.Foundation;
 using Windows.System;
 using System.Collections.Generic;
-using Pivot.CodeModule.Services;
+
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using System.Collections.ObjectModel;
@@ -100,14 +100,12 @@ namespace Pivot.CodeModule.Views
             try
             {
                 var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                if (settings != null && ViewModel != null && repo != null)
+                if (settings != null && ViewModel != null)
                 {
                     var lastId = settings.GetLastSelectedSnippetId();
                     if (lastId != Guid.Empty)
                     {
-                        var all = repo.GetAll() ?? Enumerable.Empty<Pivot.CodeModule.Models.CodeFile>();
-                        var found = all.FirstOrDefault(s => s.Id == lastId);
+                        var found = ViewModel.Snippets.FirstOrDefault(s => s.Id == lastId);
                         if (found != null)
                         {
                             ViewModel.SelectedSnippet = found;
@@ -403,12 +401,8 @@ namespace Pivot.CodeModule.Views
                     catch { }
                 }
                 
-                // Cancel all pending debounced saves in sync service
-                try
-                {
-                    ViewModel?.SyncService?.CancelAllPendingSaves();
-                }
-                catch { }
+                // SyncService removed in architecture consolidation
+                // Saves now happen through CodeService
             }
             catch (Exception ex)
             {
@@ -425,50 +419,20 @@ namespace Pivot.CodeModule.Views
 
         private void OnAddClicked(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         {
-            var newSnippet = new Models.CodeFile { Title = "New Snippet", Language = "Python" };
             try
             {
-                // Persist immediately via repository if available
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                if (repo != null)
+                // Delegate to ViewModel
+                ViewModel?.AddSnippetCommand.Execute(null);
+                
+                if (ViewModel?.SelectedSnippet != null)
                 {
-                    repo.Save(newSnippet);
+                    ViewModel.SelectedSnippet.Title = "New Snippet";
+                    ViewModel.SelectedSnippet.Language = "Python";
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"OnAddClicked: Error saving to repository: {ex.Message}");
-            }
-
-            if (ViewModel != null)
-            {
-                if (ViewModel.Snippets != null)
-                {
-                    var insertIndex = ViewModel.Snippets.Count > 0 && ViewModel.Snippets[0].Id == Guid.Empty ? 1 : 0;
-                    ViewModel.Snippets.Insert(insertIndex, newSnippet);
-                }
-                else
-                {
-                    ViewModel.Snippets = new System.Collections.ObjectModel.ObservableCollection<Models.CodeFile> { newSnippet };
-                }
-                
-                // Ensure ListView is clickable after adding new item
-                try
-                {
-                    EnsureUIElementsCached();
-                    if (_snippetListView != null)
-                    {
-                        _snippetListView.UpdateLayout();
-                        _snippetListView.ScrollIntoView(newSnippet);
-                    }
-                    SetListInteractionEnabled(true);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"OnAddClicked: Error updating ListView: {ex.Message}");
-                }
-                
-                ViewModel.SelectedSnippet = newSnippet;
+                System.Diagnostics.Debug.WriteLine($"OnAddClicked: Error: {ex.Message}");
             }
         }
 
@@ -1599,7 +1563,7 @@ namespace Pivot.CodeModule.Views
             catch { }
         }
 
-        private void CommitQuickAdd()
+        private async void CommitQuickAdd()
         {
             try
             {
@@ -1608,104 +1572,32 @@ namespace Pivot.CodeModule.Views
                 var text = (_quickAddBox.Text ?? string.Empty).Trim();
                 if (string.IsNullOrWhiteSpace(text)) return;
 
-                // Derive title from first non-empty line
-                var lines = text.Replace("\r", "\n").Split(new[] { '\n' }, StringSplitOptions.None);
-                var title = lines.FirstOrDefault(l => !string.IsNullOrWhiteSpace(l)) ?? "Snippet";
-                title = title.Length > 120 ? title.Substring(0, 120) : title;
+                // Use ViewModel to create and save snippet
+                var vm = DataContext as CodeViewModel;
+                if (vm == null) return;
 
-                var newSnippet = new Pivot.CodeModule.Models.CodeFile
-                {
-                    Title = title,
-                    Content = text,
-                    Updated = DateTime.Now
-                };
+                var newSnippet = await vm.CreateSnippetFromTextAsync(text);
 
-                // inherit current left-pane filter as tag (if a specific filter is selected)
-                try
+                // Handle UI updates (scroll into view)
+                if (newSnippet != null)
                 {
-                    var selected = _codeNav?.SelectedItem as NavigationViewItem;
-                    var tagStr = selected?.Tag?.ToString() ?? string.Empty;
-                    if (Guid.TryParse(tagStr, out var fid))
+                    try
                     {
-                        var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                        var tagName = repo?.GetFilterNameById(fid) ?? string.Empty;
-                        if (!string.IsNullOrWhiteSpace(tagName)) newSnippet.Tags = tagName;
-                    }
-                }
-                catch { }
-
-                // Persist via repository
-                try
-                {
-                    var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                    repo?.Save(newSnippet);
-                }
-                catch { }
-
-                // Reflect in UI
-                try
-                {
-                    if (ViewModel != null)
-                    {
-                        if (ViewModel.Snippets != null)
+                        var list = this.FindName("SnippetListView") as ListView;
+                        if (list != null)
                         {
-                            var insertIndex = ViewModel.Snippets.Count > 0 && ViewModel.Snippets[0].Id == Guid.Empty ? 1 : 0;
-                            ViewModel.Snippets.Insert(insertIndex, newSnippet);
-                            
-                            // Ensure ListView is clickable after adding new item
-                            try
-                            {
-                                var list = this.FindName("SnippetListView") as ListView;
-                                if (list != null)
-                                {
-                                    // Force layout update to ensure new item is rendered
-                                    list.UpdateLayout();
-                                    list.ScrollIntoView(newSnippet);
-                                    
-                                    // Ensure clickability is enabled
-                                    list.IsItemClickEnabled = true;
-                                    list.IsHitTestVisible = true;
-                                    list.SelectionMode = ListViewSelectionMode.Single;
-                                    
-                                    // Small delay to ensure layout is complete
-                                    _ = Task.Run(async () =>
-                                    {
-                                        await Task.Delay(100);
-                                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
-                                        {
-                                            try
-                                            {
-                                                if (list != null)
-                                                {
-                                                    list.IsItemClickEnabled = true;
-                                                    list.IsHitTestVisible = true;
-                                                }
-                                            }
-                                            catch { }
-                                        });
-                                    });
-                                }
-                            }
-                            catch { }
-                        }
-                        else
-                        {
-                            ViewModel.Refresh();
+                            list.UpdateLayout();
+                            list.ScrollIntoView(newSnippet);
                         }
                     }
+                    catch { }
                 }
-                catch { }
 
                 // Clear input
                 _quickAddBox.Text = string.Empty;
 
-                // show a brief saved toast (InfoBar)
-                try
-                {
-                    // show small saved overlay at CardPanel bottom-right
-                    ShowCardSavedOverlay();
-                }
-                catch { }
+                // Show saved overlay
+                try { ShowCardSavedOverlay(); } catch { }
             }
             catch { }
         }
@@ -1872,12 +1764,23 @@ namespace Pivot.CodeModule.Views
 
         private void ScratchpadDeleteMenu_Click(object? sender, RoutedEventArgs e)
         {
-            // TODO: implement scratchpad delete handling
+            // Delete the current scratchpad snippet
+            var vm = DataContext as CodeViewModel;
+            if (vm?.SelectedSnippet != null)
+            {
+                vm.DeleteSnippetCommand?.Execute(vm.SelectedSnippet);
+                CloseScratchpadSimple();
+            }
         }
 
         private void ScratchpadCopyMenu_Click(object? sender, RoutedEventArgs e)
         {
-            // TODO: implement duplicate creation
+            // Copy snippet content to clipboard
+            var vm = DataContext as CodeViewModel;
+            if (vm?.SelectedSnippet != null)
+            {
+                vm.CopyToClipboardCommand?.Execute(vm.SelectedSnippet);
+            }
         }
 
         private void ScratchpadHistoryMenu_Click(object? sender, RoutedEventArgs e)
@@ -1932,8 +1835,8 @@ namespace Pivot.CodeModule.Views
                             System.Diagnostics.Debug.WriteLine($"[DEBUG] CloseScratchpadSimple: save returned for snippet id={snip.Id}");
 #endif
                             
-                            // Trigger UI update after save
-                            vm.SyncService?.TriggerUiUpdate(snip);
+                            // UI update - SyncService removed; Refresh handles this
+                            vm.Refresh();
                         }
                         catch { }
                         vm.IsDirty = false;
@@ -2092,20 +1995,20 @@ namespace Pivot.CodeModule.Views
 #endif
                     return;
                 }
-                if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
+                if (ViewModel != null && ViewModel.SelectedSnippet != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newContent = tb.Text ?? string.Empty;
 #if DEBUG
-                    System.Diagnostics.Debug.WriteLine($"[DEBUG] CodeEditor_TextChanged: snippetId={selectedSnippet.Id}, contentLength={newContent.Length}, calling UpdateContentImmediate");
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] CodeEditor_TextChanged: snippetId={selectedSnippet.Id}, contentLength={newContent.Length}");
 #endif
-                    // Use sync service for immediate UI update and debounced SQLite save
-                    ViewModel.SyncService.UpdateContentImmediate(selectedSnippet, newContent);
+                    // SyncService removed - direct property update
+                    selectedSnippet.Content = newContent;
                 }
                 else
                 {
 #if DEBUG
-                    System.Diagnostics.Debug.WriteLine($"[DEBUG] CodeEditor_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}, SyncService={ViewModel?.SyncService != null}");
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] CodeEditor_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}");
 #endif
                 }
             }
@@ -2127,20 +2030,20 @@ namespace Pivot.CodeModule.Views
 #endif
                     return;
                 }
-                if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
+                if (ViewModel != null && ViewModel.SelectedSnippet != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newContent = tb.Text ?? string.Empty;
 #if DEBUG
                     System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadEditor_TextChanged: snippetId={selectedSnippet.Id}, contentLength={newContent.Length}, calling UpdateContentImmediate");
 #endif
-                    // Use sync service for immediate UI update and debounced SQLite save
-                    ViewModel.SyncService.UpdateContentImmediate(selectedSnippet, newContent);
+                    // SyncService removed - direct property update
+                    selectedSnippet.Content = newContent;
                 }
                 else
                 {
 #if DEBUG
-                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadEditor_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}, SyncService={ViewModel?.SyncService != null}");
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadEditor_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}");
 #endif
                 }
             }
@@ -2162,20 +2065,20 @@ namespace Pivot.CodeModule.Views
 #endif
                     return;
                 }
-                if (ViewModel != null && ViewModel.SelectedSnippet != null && ViewModel.SyncService != null)
+                if (ViewModel != null && ViewModel.SelectedSnippet != null)
                 {
                     var selectedSnippet = ViewModel.SelectedSnippet;
                     var newTitle = tb.Text ?? string.Empty;
 #if DEBUG
                     System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadTitleBox_TextChanged: snippetId={selectedSnippet.Id}, newTitle='{newTitle}', calling UpdateTitleImmediate");
 #endif
-                    // Use sync service for immediate UI update and debounced SQLite save
-                    ViewModel.SyncService.UpdateTitleImmediate(selectedSnippet, newTitle);
+                    // SyncService removed - direct property update
+                    selectedSnippet.Title = newTitle;
                 }
                 else
                 {
 #if DEBUG
-                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadTitleBox_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}, SyncService={ViewModel?.SyncService != null}");
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] ScratchpadTitleBox_TextChanged: ViewModel={ViewModel != null}, SelectedSnippet={ViewModel?.SelectedSnippet != null}");
 #endif
                 }
             }
@@ -2216,8 +2119,8 @@ namespace Pivot.CodeModule.Views
                 }
                 if (snippet == null || snippet.Id == Guid.Empty) return; // don't delete placeholder
                 // No confirmation dialog: move snippet to Trash (soft-delete)
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                try { repo?.Delete(snippet.Id); } catch { }
+                var codeService = App.Current.Services.GetService(typeof(Pivot.Services.CodeService)) as Pivot.Services.CodeService;
+                try { if (codeService != null) _ = codeService.DeleteSnippetAsync(snippet); } catch { }
                 try { ViewModel?.Snippets?.Remove(snippet); } catch { }
                 if (ViewModel != null && ViewModel.SelectedSnippet == snippet)
                 {
@@ -2238,8 +2141,8 @@ namespace Pivot.CodeModule.Views
                 var snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == id);
                 if (snippet == null || snippet.Id == Guid.Empty) return;
                 // No confirmation dialog for flyout delete: soft-delete immediately
-                var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                try { repo?.Delete(snippet.Id); } catch { }
+                var codeService = App.Current.Services.GetService(typeof(Pivot.Services.CodeService)) as Pivot.Services.CodeService;
+                try { if (codeService != null) _ = codeService.DeleteSnippetAsync(snippet); } catch { }
                 try { ViewModel?.Snippets?.Remove(snippet); } catch { }
                 if (ViewModel != null && ViewModel.SelectedSnippet == snippet)
                 {
@@ -2252,63 +2155,19 @@ namespace Pivot.CodeModule.Views
 
         private void CardRestoreFlyout_Click(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                if (!(sender is FrameworkElement fe)) return;
-                Guid id = Guid.Empty;
-                try { if (fe.Tag is Guid gid) id = gid; else if (Guid.TryParse(fe.Tag?.ToString(), out var parsed)) id = parsed; } catch { }
-                var snippet = ViewModel?.Snippets?.FirstOrDefault(s => s.Id == id);
-                // If not found in current snippets, try repo
-                if (snippet == null && id != Guid.Empty)
-                {
-                    // Attempt to locate in deleted set via repo (use reflection to avoid compile-time coupling)
-                    var repoObj = App.Current.Services.GetService(typeof(ICodeRepository));
-                    try
-                    {
-                        var getAllDeleted = repoObj?.GetType().GetMethod("GetAllDeleted");
-                        if (getAllDeleted != null)
-                        {
-                            var deletedEnum = getAllDeleted.Invoke(repoObj, null) as System.Collections.IEnumerable;
-                            if (deletedEnum != null)
-                            {
-                                foreach (var o in deletedEnum)
-                                {
-                                    if (o is Pivot.CodeModule.Models.CodeFile cf && cf.Id == id) { snippet = cf; break; }
-                                }
-                            }
-                        }
-                    }
-                    catch { }
-                }
-                if (snippet == null) return;
-
-                try
-                {
-                    var repoObj2 = App.Current.Services.GetService(typeof(ICodeRepository));
-                    var restoreMethod = repoObj2?.GetType().GetMethod("Restore");
-                    restoreMethod?.Invoke(repoObj2, new object[] { snippet.Id });
-                }
-                catch { }
-                // Refresh UI lists
-                try { ViewModel?.Refresh(); } catch { }
-                try { if (ViewModel?.SelectedSnippet == snippet) ViewModel.SelectedSnippet = null; } catch { }
-            }
-            catch { }
+            if (!(sender is FrameworkElement fe)) return;
+            var snippet = fe.DataContext as Pivot.CodeModule.Models.CodeFile;
+            if (snippet == null) return;
+            (DataContext as CodeViewModel)?.RestoreSnippetCommand.Execute(snippet);
         }
 
         // Copy snippet content to clipboard from card
         private void CardCopyButton_Click(object sender, RoutedEventArgs e)
         {
-            try
-            {
-                if (!(sender is FrameworkElement fe)) return;
-                var snippet = fe.DataContext as Pivot.CodeModule.Models.CodeFile;
-                if (snippet == null) return;
-                var dp = new DataPackage();
-                dp.SetText(snippet.Content ?? string.Empty);
-                Clipboard.SetContent(dp);
-            }
-            catch { }
+            if (!(sender is FrameworkElement fe)) return;
+            var snippet = fe.DataContext as Pivot.CodeModule.Models.CodeFile;
+            if (snippet == null) return;
+            (DataContext as CodeViewModel)?.CopyToClipboardCommand.Execute(snippet);
         }
 
         // Open the containing directory for a snippet (select the source file if found)
@@ -2875,83 +2734,14 @@ namespace Pivot.CodeModule.Views
                         if (!string.IsNullOrEmpty(oldName))
                         {
                             // Update all snippets that have this tag
-                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                            if (repo != null)
+                            
+                            // Update all snippets via ViewModel
+                            if (ViewModel != null)
                             {
-                                repo.UpdateTagInAllSnippets(oldName, newName);
-                                
-                                // Update ViewModel's snippets in-place to avoid flickering
-                                if (ViewModel != null)
-                                {
-                                    // Update snippets in _allSnippets and Snippets collection
-                                    var allSnippets = repo.GetAll().ToList();
-                                    
-                                    // Update _allSnippets (using reflection to access private field)
-                                    try
-                                    {
-                                        var allSnippetsField = ViewModel.GetType().GetField("_allSnippets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                                        if (allSnippetsField != null)
-                                        {
-                                            allSnippetsField.SetValue(ViewModel, allSnippets);
-                                        }
-                                    }
-                                    catch { }
-                                    
-                                    // Update visible snippets in-place without clearing the collection
-                                    var dispatcher = App.Current.MainWindow?.DispatcherQueue;
-                                    if (dispatcher != null)
-                                    {
-                                        dispatcher.TryEnqueue(() =>
-                                        {
-                                            try
-                                            {
-                                                // Update existing snippets in-place by updating their properties
-                                                if (ViewModel.Snippets != null)
-                                                {
-                                                    foreach (var snippet in ViewModel.Snippets.ToList())
-                                                    {
-                                                        var updated = allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
-                                                        if (updated != null && updated.Tags != snippet.Tags)
-                                                        {
-                                                            // Update the snippet's tags property directly to avoid UI flickering
-                                                            snippet.Tags = updated.Tags;
-                                                            snippet.Updated = updated.Updated;
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // Also update _allSnippets items
-                                                try
-                                                {
-                                                    var allSnippetsField = ViewModel.GetType().GetField("_allSnippets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                                                    if (allSnippetsField != null && allSnippetsField.GetValue(ViewModel) is List<Pivot.CodeModule.Models.CodeFile> allSnippetsList)
-                                                    {
-                                                        foreach (var snippet in allSnippetsList)
-                                                        {
-                                                            var updated = allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
-                                                            if (updated != null && updated.Tags != snippet.Tags)
-                                                            {
-                                                                snippet.Tags = updated.Tags;
-                                                                snippet.Updated = updated.Updated;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                catch { }
-                                                
-                                                // Ensure ListView is clickable
-                                                var list = this.FindName("SnippetListView") as ListView;
-                                                if (list != null)
-                                                {
-                                                    list.IsHitTestVisible = true;
-                                                    list.IsItemClickEnabled = true;
-                                                }
-                                            }
-                                            catch { }
-                                        });
-                                    }
-                                }
+                                await ViewModel.UpdateTagInAllSnippetsAsync(oldName, newName);
                             }
+
+
 
                             // Refresh the navigation menu
                             BuildNavigationMenu();
@@ -3030,83 +2820,14 @@ namespace Pivot.CodeModule.Views
                         if (!string.IsNullOrEmpty(deletedName))
                         {
                             // Remove tag from all snippets
-                            var repo = App.Current.Services.GetService(typeof(ICodeRepository)) as ICodeRepository;
-                            if (repo != null)
+                            
+                            // Remove tag from all snippets via ViewModel
+                            if (ViewModel != null)
                             {
-                                repo.RemoveTagFromAllSnippets(deletedName);
-                                
-                                // Update ViewModel's snippets in-place to avoid flickering
-                                if (ViewModel != null)
-                                {
-                                    // Update snippets in _allSnippets and Snippets collection
-                                    var allSnippets = repo.GetAll().ToList();
-                                    
-                                    // Update _allSnippets (using reflection to access private field)
-                                    try
-                                    {
-                                        var allSnippetsField = ViewModel.GetType().GetField("_allSnippets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                                        if (allSnippetsField != null)
-                                        {
-                                            allSnippetsField.SetValue(ViewModel, allSnippets);
-                                        }
-                                    }
-                                    catch { }
-                                    
-                                    // Update visible snippets in-place without clearing the collection
-                                    var dispatcher = App.Current.MainWindow?.DispatcherQueue;
-                                    if (dispatcher != null)
-                                    {
-                                        dispatcher.TryEnqueue(() =>
-                                        {
-                                            try
-                                            {
-                                                // Update existing snippets in-place by updating their properties
-                                                if (ViewModel.Snippets != null)
-                                                {
-                                                    foreach (var snippet in ViewModel.Snippets.ToList())
-                                                    {
-                                                        var updated = allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
-                                                        if (updated != null && updated.Tags != snippet.Tags)
-                                                        {
-                                                            // Update the snippet's tags property directly to avoid UI flickering
-                                                            snippet.Tags = updated.Tags;
-                                                            snippet.Updated = updated.Updated;
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // Also update _allSnippets items
-                                                try
-                                                {
-                                                    var allSnippetsField = ViewModel.GetType().GetField("_allSnippets", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                                                    if (allSnippetsField != null && allSnippetsField.GetValue(ViewModel) is List<Pivot.CodeModule.Models.CodeFile> allSnippetsList)
-                                                    {
-                                                        foreach (var snippet in allSnippetsList)
-                                                        {
-                                                            var updated = allSnippets.FirstOrDefault(s => s.Id == snippet.Id);
-                                                            if (updated != null && updated.Tags != snippet.Tags)
-                                                            {
-                                                                snippet.Tags = updated.Tags;
-                                                                snippet.Updated = updated.Updated;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                catch { }
-                                                
-                                                // Ensure ListView is clickable
-                                                var list = this.FindName("SnippetListView") as ListView;
-                                                if (list != null)
-                                                {
-                                                    list.IsHitTestVisible = true;
-                                                    list.IsItemClickEnabled = true;
-                                                }
-                                            }
-                                            catch { }
-                                        });
-                                    }
-                                }
+                                await ViewModel.RemoveTagFromAllSnippetsAsync(deletedName);
+                                // The ViewModel handles saving and refreshing
                             }
+
 
                             // Refresh the navigation menu
                             BuildNavigationMenu();
@@ -3139,29 +2860,15 @@ namespace Pivot.CodeModule.Views
                 // Ensure ListView is clickable even on error
                 try
                 {
-                    var dispatcher = App.Current.MainWindow?.DispatcherQueue;
-                    if (dispatcher != null)
-                    {
-                        dispatcher.TryEnqueue(() =>
-                        {
-                            try
-                            {
-                                var list = this.FindName("SnippetListView") as ListView;
-                                if (list != null)
-                                {
-                                    list.IsHitTestVisible = true;
-                                    list.IsItemClickEnabled = true;
-                                }
-                            }
-                            catch { }
-                        });
-                    }
+                    // Ensure list view is enabled
+                    SetListInteractionEnabled(true);
                 }
                 catch { }
             }
         }
-
     }
+
+
 }
 
 
