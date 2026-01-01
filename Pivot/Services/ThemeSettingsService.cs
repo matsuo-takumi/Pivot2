@@ -53,6 +53,9 @@ namespace Pivot.Services
         private string _imageDragSelectionColor = "#0078D4";
         private double _imageDragSelectionOpacity = 0.3;
 
+        // Menu Display Mode
+        private MenuDisplayMode _menuDisplayMode = MenuDisplayMode.Auto;
+
         // Public Properties
         public ElementTheme AppTheme => _appTheme;
         public BackdropType AppBackdropType => _appBackdropType;
@@ -83,6 +86,7 @@ namespace Pivot.Services
         public double ImageSelectionBorderThickness => _imageSelectionBorderThickness;
         public string ImageDragSelectionColor => _imageDragSelectionColor;
         public double ImageDragSelectionOpacity => _imageDragSelectionOpacity;
+        public MenuDisplayMode MenuDisplayMode => _menuDisplayMode;
 
         public ThemeSettingsService(
             ILogger<ThemeSettingsService> logger,
@@ -149,6 +153,10 @@ namespace Pivot.Services
             _imageSelectionBorderThickness = await LoadDouble("Image.SelectionBorderThickness", 1.0);
             _imageDragSelectionColor = await LoadString("Image.DragSelectionColor", "#0078D4");
             _imageDragSelectionOpacity = await LoadDouble("Image.DragSelectionOpacity", 0.3);
+
+            // Menu Display Mode
+            var menuModeStr = await _settingsStore.GetAsync("MenuDisplayMode");
+            if (Enum.TryParse<MenuDisplayMode>(menuModeStr, out var mm)) _menuDisplayMode = mm;
         }
 
         // Helpers
@@ -301,6 +309,15 @@ namespace Pivot.Services
             await _settingsStore.UpsertAsync("Color.TextOverrides", JsonSerializer.Serialize(_textColorOverrides));
         }
 
+        public string GetTextColorOverride(string key, string? defaultHex = null)
+        {
+            if (_textColorOverrides.TryGetValue(key, out var val) && !string.IsNullOrWhiteSpace(val))
+            {
+                return val;
+            }
+            return defaultHex ?? string.Empty;
+        }
+
         public async Task SetImageSelectionColorAsync(string color)
         {
             _imageSelectionColor = color;
@@ -334,6 +351,12 @@ namespace Pivot.Services
             _imageDragSelectionOpacity = opacity;
             await _settingsStore.UpsertAsync("Image.DragSelectionOpacity", opacity.ToString(CultureInfo.InvariantCulture));
             _messenger.Send(new SettingsChangedMessage("ImageDragSelectionOpacity"));
+        }
+
+        public async Task SetMenuDisplayModeAsync(MenuDisplayMode mode)
+        {
+            _menuDisplayMode = mode;
+            await _settingsStore.UpsertAsync("MenuDisplayMode", mode.ToString());
         }
     }
 }

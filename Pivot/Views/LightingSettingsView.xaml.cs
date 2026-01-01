@@ -14,7 +14,7 @@ namespace Pivot.Views
     {
         private bool _isUpdating = false;
         private List<LightingPreset> _presets = new();
-        private SettingsService? _settingsService;
+        private MaterialSettingsService? _settingsService;
 
         public ModelViewerViewModel? ViewModel { get; set; }
 
@@ -22,7 +22,7 @@ namespace Pivot.Views
         {
             this.InitializeComponent();
             this.Loaded += LightingSettingsView_Loaded;
-            _settingsService = App.Current?.Services?.GetService<SettingsService>();
+            _settingsService = App.Current?.Services?.GetService<MaterialSettingsService>();
         }
 
         private async void LightingSettingsView_Loaded(object sender, RoutedEventArgs e)

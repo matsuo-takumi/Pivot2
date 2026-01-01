@@ -27,7 +27,7 @@ namespace Pivot.Views
             this.InitializeComponent();
             
             // Get services
-            var settings = App.Current.Services.GetRequiredService<SettingsService>();
+            var themeSettings = App.Current.Services.GetRequiredService<ThemeSettingsService>();
             var textColorManager = App.Current.Services.GetRequiredService<ITextColorResourceManager>();
             var presetService = App.Current.Services.GetRequiredService<IPresetService<Models.TextColorPresetData>>();
             var presetLogger = App.Current.Services.GetService<ILogger<TextColorPresetViewModel>>();
@@ -35,7 +35,7 @@ namespace Pivot.Views
             try
             {
                 // Create ViewModel immediately - entries will be loaded asynchronously after page loads
-                ViewModel = new ColorSettingsViewModel(settings, textColorManager, presetService, presetLogger);
+                ViewModel = new ColorSettingsViewModel(themeSettings, textColorManager, presetService, presetLogger);
                 this.DataContext = ViewModel;
                 _logger?.LogInformation("ColorSettingsPage initialized successfully.");
             }
@@ -190,8 +190,8 @@ namespace Pivot.Views
             // Apply app theme to dialog
             try
             {
-                var settings = App.Current.Services.GetRequiredService<SettingsService>();
-                dialog.RequestedTheme = settings.GetTheme();
+                var themeSettings = App.Current.Services.GetRequiredService<ThemeSettingsService>();
+                dialog.RequestedTheme = themeSettings.AppTheme;
             }
             catch { }
 

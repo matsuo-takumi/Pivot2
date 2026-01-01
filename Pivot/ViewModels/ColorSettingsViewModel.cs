@@ -13,7 +13,7 @@ namespace Pivot.ViewModels
 {
     public partial class ColorSettingsViewModel : ObservableObject
     {
-        private readonly SettingsService _settings;
+        private readonly ThemeSettingsService _themeSettings;
         private readonly ITextColorResourceManager _resourceManager;
 
         [ObservableProperty]
@@ -32,22 +32,22 @@ namespace Pivot.ViewModels
         public TextColorPresetViewModel PresetViewModel { get; }
 
         public ColorSettingsViewModel(
-            SettingsService settings,
+            ThemeSettingsService themeSettings,
             ITextColorResourceManager resourceManager,
             IPresetService<Models.TextColorPresetData> presetService,
             Microsoft.Extensions.Logging.ILogger<TextColorPresetViewModel>? presetLogger = null)
         {
-            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _themeSettings = themeSettings ?? throw new ArgumentNullException(nameof(themeSettings));
             _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
             
             // Initialize lightweight properties first (fast, cached lookups)
-            IsTextColorCustomizationEnabled = _settings.IsTextColorCustomizationEnabled();
-            ImageSelectionColor = _settings.GetImageSelectionColor();
-            ImageSelectionOpacity = _settings.GetImageSelectionOpacity();
-            ImageSelectionBorderThickness = _settings.GetImageSelectionBorderThickness();
+            IsTextColorCustomizationEnabled = _themeSettings.IsTextColorCustomizationEnabled;
+            ImageSelectionColor = _themeSettings.ImageSelectionColor;
+            ImageSelectionOpacity = _themeSettings.ImageSelectionOpacity;
+            ImageSelectionBorderThickness = _themeSettings.ImageSelectionBorderThickness;
             
             // Initialize TextColorSettings (entries will be loaded asynchronously after page loads)
-            TextColorSettings = new TextColorSettingsViewModel(settings, resourceManager);
+            TextColorSettings = new TextColorSettingsViewModel(themeSettings, resourceManager);
             
             // Initialize PresetViewModel last (lightweight, just holds references)
             PresetViewModel = new TextColorPresetViewModel(presetService, TextColorSettings, presetLogger);
@@ -60,7 +60,7 @@ namespace Pivot.ViewModels
 
         partial void OnIsTextColorCustomizationEnabledChanged(bool value)
         {
-            _ = _settings.SetTextColorCustomizationEnabledAsync(value);
+            _ = _themeSettings.SetTextColorCustomizationEnabledAsync(value);
             // When disabled, restore default theme colors
             if (!value)
             {
@@ -70,17 +70,17 @@ namespace Pivot.ViewModels
 
         partial void OnImageSelectionColorChanged(string value)
         {
-            _ = _settings.SetImageSelectionColorAsync(value);
+            _ = _themeSettings.SetImageSelectionColorAsync(value);
         }
 
         partial void OnImageSelectionOpacityChanged(double value)
         {
-            _ = _settings.SetImageSelectionOpacityAsync(value);
+            _ = _themeSettings.SetImageSelectionOpacityAsync(value);
         }
 
         partial void OnImageSelectionBorderThicknessChanged(double value)
         {
-            _ = _settings.SetImageSelectionBorderThicknessAsync(value);
+            _ = _themeSettings.SetImageSelectionBorderThicknessAsync(value);
         }
 
         private void RestoreDefaultThemeColors()
@@ -104,7 +104,7 @@ namespace Pivot.ViewModels
             }
 
             // Clear all text color overrides
-            await _settings.ClearAllTextColorOverridesAsync();
+            await _themeSettings.ClearAllTextColorOverridesAsync();
         }
 
     }

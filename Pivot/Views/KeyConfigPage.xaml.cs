@@ -6,12 +6,12 @@ namespace Pivot.Views
 {
     public sealed partial class KeyConfigPage : Page
     {
-        private readonly SettingsService? _settings;
+        private readonly ViewportSettingsService? _settings;
 
         public KeyConfigPage()
         {
             this.InitializeComponent();
-            _settings = App.Current?.Services?.GetService<SettingsService>();
+            _settings = App.Current?.Services?.GetService<ViewportSettingsService>();
             LoadSettings();
         }
 

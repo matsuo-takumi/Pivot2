@@ -19,7 +19,7 @@ namespace Pivot.CodeModule.ViewModels
     public partial class CodeViewModel : ObservableObject
     {
         private readonly CodeService? _codeService;
-        private readonly SettingsService? _settingsService;
+        private readonly FilterSettingsService? _filterSettings;
         private List<CodeFile> _allSnippets = new List<CodeFile>();
         private HashSet<string> _selectedCodeTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
@@ -73,10 +73,10 @@ namespace Pivot.CodeModule.ViewModels
         /// <summary>
         /// Main constructor using CodeService (new architecture).
         /// </summary>
-        public CodeViewModel(CodeService codeService, SettingsService settingsService)
+        public CodeViewModel(CodeService codeService, FilterSettingsService filterSettings)
         {
             _codeService = codeService;
-            _settingsService = settingsService;
+            _filterSettings = filterSettings;
             _snippets = new ObservableCollection<CodeFile>();
             InitializeTagInfrastructure();
 
@@ -101,7 +101,7 @@ namespace Pivot.CodeModule.ViewModels
         public CodeViewModel()
         {
             _codeService = null;
-            _settingsService = null;
+            _filterSettings = null;
             _snippets = new ObservableCollection<CodeFile>();
             _allSnippets = _snippets.ToList();
             InitializeTagInfrastructure();
@@ -233,8 +233,8 @@ namespace Pivot.CodeModule.ViewModels
             {
                 try
                 {
-                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                    var filters = settings?.GetCodeFilters() ?? new List<CustomFilter>();
+                    var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
+                    var filters = filterSettings?.GetCodeFilters() ?? new List<CustomFilter>();
                     foreach (var filter in filters)
                     {
                         var name = (filter?.Name ?? string.Empty).Trim();
@@ -391,8 +391,8 @@ namespace Pivot.CodeModule.ViewModels
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                var filters = settings?.GetCodeFilters();
+                var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
+                var filters = filterSettings?.GetCodeFilters();
                 if (filters != null)
                 {
                     foreach (var filter in filters)
@@ -568,8 +568,8 @@ namespace Pivot.CodeModule.ViewModels
                 NavigationItems.Add(allItem);
 
                 // Get filters from settings
-                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                var filters = settings?.GetCodeFilters() ?? new List<CustomFilter>();
+                var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
+                var filters = filterSettings?.GetCodeFilters() ?? new List<CustomFilter>();
 
                 foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
                 {
@@ -990,16 +990,11 @@ namespace Pivot.CodeModule.ViewModels
 #if DEBUG
                     System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: CodeService null, fallback export id={file.Id}");
 #endif
-                    // Fallback: export to JSON
+                    // Fallback: export to JSON using default path (SettingsService removed)
                     try
                     {
-                        var settings = _settingsService ?? App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                        var exportDir = settings?.GetExportOutputDirectory() ?? string.Empty;
-                        if (string.IsNullOrWhiteSpace(exportDir))
-                        {
-                            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                            exportDir = System.IO.Path.Combine(docs, "Pivot", "CodeSnippets");
-                        }
+                        var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                        var exportDir = System.IO.Path.Combine(docs, "Pivot", "CodeSnippets");
                         try { if (!System.IO.Directory.Exists(exportDir)) System.IO.Directory.CreateDirectory(exportDir); } catch { }
                         
                         var outPath = System.IO.Path.Combine(exportDir, file.Id.ToString() + ".json");

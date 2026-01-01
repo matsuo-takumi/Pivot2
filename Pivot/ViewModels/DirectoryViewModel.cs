@@ -5,9 +5,7 @@ using Pivot.Services;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using System; // ArgumentOutOfRangeException を使用するために追加
-using Windows.Storage.Pickers; // FolderPicker を使用するために追加
-using Microsoft.Extensions.DependencyInjection; // GetService 拡張メソッドを使用するために追加
+using System;
 using Pivot.Models;
 using System.IO;
 
@@ -15,8 +13,8 @@ namespace Pivot.ViewModels
 {
     public class DirectoryViewModel : ObservableObject
     {
-        //private readonly ILogger<DirectoryViewModel> _logger; // コメントアウト
-        private readonly SettingsService? _settingsService;
+        private readonly DirectorySettingsService? _directorySettings;  
+        private readonly IDialogService? _dialogService;
 
         private static string NormalizePath(string path)
         {
@@ -31,26 +29,25 @@ namespace Pivot.ViewModels
             }
         }
 
-        // Refresh ObservableCollections from SettingsService cache
+        // Refresh ObservableCollections from DirectorySettingsService cache
         public void RefreshFromSettings()
         {
-            if (_settingsService == null) return;
-            var settings = _settingsService.GetUserSettings();
+            if (_directorySettings == null) return;
 
             AssetDirectories.Clear();
-            foreach (var d in settings.AssetDirectories)
+            foreach (var d in _directorySettings.AssetDirectories)
             {
                 AssetDirectories.Add(d);
             }
 
             ImageDirectories.Clear();
-            foreach (var d in settings.ImageDirectories)
+            foreach (var d in _directorySettings.ImageDirectories)
             {
                 ImageDirectories.Add(d);
             }
 
             ProjectDirectories.Clear();
-            foreach (var d in settings.ProjectDirectories)
+            foreach (var d in _directorySettings.ProjectDirectories)
             {
                 ProjectDirectories.Add(d);
             }
@@ -87,17 +84,16 @@ namespace Pivot.ViewModels
 
         // 実行時用のコンストラクタ（DIコンテナが使用）
         public DirectoryViewModel(
-            //ILogger<DirectoryViewModel> logger, // コメントアウト
-            SettingsService settingsService)
+            DirectorySettingsService directorySettings,
+            IDialogService dialogService)
         {
-            //_logger = logger; // コメントアウト
-            _settingsService = settingsService;
+            _directorySettings = directorySettings;
+            _dialogService = dialogService;
 
-            var settings = _settingsService.GetUserSettings();
-            AssetDirectories = new ObservableCollection<string>(settings.AssetDirectories);
-            ImageDirectories = new ObservableCollection<string>(settings.ImageDirectories);
-            ProjectDirectories = new ObservableCollection<string>(settings.ProjectDirectories);
-            CodeDirectories = new ObservableCollection<string>(settings.CodeDirectories);
+            AssetDirectories = new ObservableCollection<string>(_directorySettings.AssetDirectories);
+            ImageDirectories = new ObservableCollection<string>(_directorySettings.ImageDirectories);
+            ProjectDirectories = new ObservableCollection<string>(_directorySettings.ProjectDirectories);
+            CodeDirectories = new ObservableCollection<string>(_directorySettings.CodeDirectories);
 
             AddDirectoryCommand = new AsyncRelayCommand<DirectoryCategory>(AddDirectoryAsync);
             RemoveDirectoryCommand = new AsyncRelayCommand<string>(RemoveDirectoryAsync);
@@ -135,7 +131,7 @@ namespace Pivot.ViewModels
 
         private async Task AddDirectoryAsync(DirectoryCategory category)
         {
-            if (_settingsService == null) return;
+            if (_directorySettings == null) return;
 
             // TODO: FolderPicker を使用してディレクトリを選択させる
             var folderPicker = new Windows.Storage.Pickers.FolderPicker();
@@ -155,196 +151,67 @@ namespace Pivot.ViewModels
                 string path = folder.Path;
                 if (!GetDirectoryCollection(category).Contains(NormalizePath(path)))
                 {
-                    await _settingsService.AddDirectoryAsync(category, path);
+                    await _directorySettings.AddDirectoryAsync(category, path);
                     GetDirectoryCollection(category).Add(NormalizePath(path));
                     //_logger.LogInformation("Added directory: {Category} - {Path}", category, path); // コメントアウト
                 }
             }
         }
 
-        // Asset ディレクトリ選択コマンド（FolderPickerで選択）
+        // Asset ディレクトリ選択コマンド（IDialogServiceで選択）
         private async Task SelectAssetDirectoryAsync()
         {
-            if (_settingsService == null) return;
-
-            try
-            {
-                var folderPicker = new Windows.Storage.Pickers.FolderPicker();
-                folderPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop;
-                folderPicker.FileTypeFilter.Add("*");
-
-                var uiWindow = App.Current.MainWindow as Microsoft.UI.Xaml.Window;
-                if (uiWindow == null) return;
-
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(uiWindow);
-                WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hwnd);
-
-                var folder = await folderPicker.PickSingleFolderAsync();
-                if (folder != null)
-                {
-                    string selectedPath = folder.Path; // 選択された元のパス
-                    string normalizedSelectedPath = NormalizePath(selectedPath);
-                    
-                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectAsset: SelectedPath='{selectedPath}', Normalized='{normalizedSelectedPath}'");
-                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectAsset: Current AssetDirectories normalized: {string.Join(", ", AssetDirectories.Select(NormalizePath))}");
-
-                    if (!AssetDirectories.Any(d => NormalizePath(d) == normalizedSelectedPath))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectAsset: Adding '{selectedPath}' to settings and UI.");
-                        await _settingsService.AddDirectoryAsync(DirectoryCategory.Asset, selectedPath);
-                        AssetDirectories.Add(selectedPath);
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectAsset: Added '{selectedPath}'. Current count: {AssetDirectories.Count}");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectAsset: '{selectedPath}' already exists (normalized). Not adding.");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"SelectAssetDirectoryAsync error: {ex.Message}");
-            }
+            if (_directorySettings == null || _dialogService == null) return;
+            await SelectDirectoryForCategoryAsync(DirectoryCategory.Asset, AssetDirectories);
         }
 
-        // Image ディレクトリ選択コマンド（FolderPickerで選択）
+        // Image ディレクトリ選択コマンド（IDialogServiceで選択）
         private async Task SelectImageDirectoryAsync()
         {
-            if (_settingsService == null) return;
-
-            try
-            {
-                var folderPicker = new Windows.Storage.Pickers.FolderPicker();
-                folderPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop;
-                folderPicker.FileTypeFilter.Add("*");
-
-                var uiWindow = App.Current.MainWindow as Microsoft.UI.Xaml.Window;
-                if (uiWindow == null) return;
-
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(uiWindow);
-                WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hwnd);
-
-                var folder = await folderPicker.PickSingleFolderAsync();
-                if (folder != null)
-                {
-                    string selectedPath = folder.Path;
-                    string normalizedSelectedPath = NormalizePath(selectedPath);
-                    
-                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectImage: SelectedPath='{selectedPath}', Normalized='{normalizedSelectedPath}'");
-                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectImage: Current ImageDirectories normalized: {string.Join(", ", ImageDirectories.Select(NormalizePath))}");
-
-                    if (!ImageDirectories.Any(d => NormalizePath(d) == normalizedSelectedPath))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectImage: Adding '{selectedPath}' to settings and UI.");
-                        await _settingsService.AddDirectoryAsync(DirectoryCategory.Image, selectedPath);
-                        ImageDirectories.Add(selectedPath);
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectImage: Added '{selectedPath}'. Current count: {ImageDirectories.Count}");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectImage: '{selectedPath}' already exists (normalized). Not adding.");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"SelectImageDirectoryAsync error: {ex.Message}");
-            }
+            if (_directorySettings == null || _dialogService == null) return;
+            await SelectDirectoryForCategoryAsync(DirectoryCategory.Image, ImageDirectories);
         }
 
-        // Project ディレクトリ選択コマンド（FolderPickerで選択）
+        // Project ディレクトリ選択コマンド（IDialogServiceで選択）
         private async Task SelectProjectDirectoryAsync()
         {
-            if (_settingsService == null) return;
-
-            try
-            {
-                var folderPicker = new Windows.Storage.Pickers.FolderPicker();
-                folderPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop;
-                folderPicker.FileTypeFilter.Add("*");
-
-                var uiWindow = App.Current.MainWindow as Microsoft.UI.Xaml.Window;
-                if (uiWindow == null) return;
-
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(uiWindow);
-                WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hwnd);
-
-                var folder = await folderPicker.PickSingleFolderAsync();
-                if (folder != null)
-                {
-                    string selectedPath = folder.Path;
-                    string normalizedSelectedPath = NormalizePath(selectedPath);
-                    
-                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectProject: SelectedPath='{selectedPath}', Normalized='{normalizedSelectedPath}'");
-                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectProject: Current ProjectDirectories normalized: {string.Join(", ", ProjectDirectories.Select(NormalizePath))}");
-
-                    if (!ProjectDirectories.Any(d => NormalizePath(d) == normalizedSelectedPath))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectProject: Adding '{selectedPath}' to settings and UI.");
-                        await _settingsService.AddDirectoryAsync(DirectoryCategory.Project, selectedPath);
-                        ProjectDirectories.Add(selectedPath);
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectProject: Added '{selectedPath}'. Current count: {ProjectDirectories.Count}");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectProject: '{selectedPath}' already exists (normalized). Not adding.");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"SelectProjectDirectoryAsync error: {ex.Message}");
-            }
+            if (_directorySettings == null || _dialogService == null) return;
+            await SelectDirectoryForCategoryAsync(DirectoryCategory.Project, ProjectDirectories);
         }
 
-        // Code ディレクトリ選択コマンド（FolderPickerで選択）
+        // Code ディレクトリ選択コマンド（IDialogServiceで選択）
         private async Task SelectCodeDirectoryAsync()
         {
-            if (_settingsService == null) return;
+            if (_directorySettings == null || _dialogService == null) return;
+            await SelectDirectoryForCategoryAsync(DirectoryCategory.Code, CodeDirectories);
+        }
 
+        /// <summary>
+        /// 共通のフォルダ選択ロジック。IDialogServiceを使用。
+        /// </summary>
+        private async Task SelectDirectoryForCategoryAsync(DirectoryCategory category, ObservableCollection<string> collection)
+        {
             try
             {
-                var folderPicker = new Windows.Storage.Pickers.FolderPicker();
-                folderPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop;
-                folderPicker.FileTypeFilter.Add("*");
+                var selectedPath = await _dialogService!.PickFolderAsync();
+                if (string.IsNullOrEmpty(selectedPath)) return;
 
-                var uiWindow = App.Current.MainWindow as Microsoft.UI.Xaml.Window;
-                if (uiWindow == null) return;
-
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(uiWindow);
-                WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hwnd);
-
-                var folder = await folderPicker.PickSingleFolderAsync();
-                if (folder != null)
+                var normalized = NormalizePath(selectedPath);
+                if (!collection.Any(d => NormalizePath(d) == normalized))
                 {
-                    string selectedPath = folder.Path;
-                    string normalizedSelectedPath = NormalizePath(selectedPath);
-
-                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: SelectedPath='{selectedPath}', Normalized='{normalizedSelectedPath}'");
-                    System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: Current CodeDirectories normalized: {string.Join(", ", CodeDirectories.Select(NormalizePath))}");
-
-                    if (!CodeDirectories.Any(d => NormalizePath(d) == normalizedSelectedPath))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: Adding '{selectedPath}' to settings and UI.");
-                        await _settingsService.AddDirectoryAsync(DirectoryCategory.Code, selectedPath);
-                        CodeDirectories.Add(selectedPath);
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: Added '{selectedPath}'. Current count: {CodeDirectories.Count}");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Debug] SelectCode: '{selectedPath}' already exists (normalized). Not adding.");
-                    }
+                    await _directorySettings!.AddDirectoryAsync(category, selectedPath);
+                    collection.Add(selectedPath);
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"SelectCodeDirectoryAsync error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"SelectDirectoryForCategoryAsync error: {ex.Message}");
             }
         }
 
         private async Task RemoveDirectoryAsync(string? path)
         {
-            if (string.IsNullOrWhiteSpace(path) || _settingsService == null) return;
+            if (string.IsNullOrWhiteSpace(path) || _directorySettings == null) return;
 
             DirectoryCategory? category = null;
             string normalizedPathToRemove = NormalizePath(path);
@@ -370,7 +237,7 @@ namespace Pivot.ViewModels
             if (category.HasValue)
             {
                 System.Diagnostics.Debug.WriteLine($"[Debug] Remove: Attempting to remove '{path}' from Category {category.Value}.");
-                await _settingsService.RemoveDirectoryAsync(category.Value, path);
+                await _directorySettings.RemoveDirectoryAsync(category.Value, path);
                 // ObservableCollection からも正規化されたパスで削除
                 var collection = GetDirectoryCollection(category.Value);
                 var itemToRemove = collection.FirstOrDefault(d => NormalizePath(d) == normalizedPathToRemove);
@@ -393,11 +260,11 @@ namespace Pivot.ViewModels
         // Asset ディレクトリ追加コマンド
         private async Task AddAssetDirectoryAsync(string? path)
         {
-            if (string.IsNullOrWhiteSpace(path) || _settingsService == null) return;
+            if (string.IsNullOrWhiteSpace(path) || _directorySettings == null) return;
 
             if (!AssetDirectories.Contains(NormalizePath(path)))
             {
-                await _settingsService.AddDirectoryAsync(DirectoryCategory.Asset, path);
+                await _directorySettings.AddDirectoryAsync(DirectoryCategory.Asset, path);
                 AssetDirectories.Add(NormalizePath(path));
                 //_logger.LogInformation("Added Asset directory: {Path}", path); // コメントアウト
             }
@@ -406,11 +273,11 @@ namespace Pivot.ViewModels
         // Image ディレクトリ追加コマンド
         private async Task AddImageDirectoryAsync(string? path)
         {
-            if (string.IsNullOrWhiteSpace(path) || _settingsService == null) return;
+            if (string.IsNullOrWhiteSpace(path) || _directorySettings == null) return;
 
             if (!ImageDirectories.Contains(NormalizePath(path)))
             {
-                await _settingsService.AddDirectoryAsync(DirectoryCategory.Image, path);
+                await _directorySettings.AddDirectoryAsync(DirectoryCategory.Image, path);
                 ImageDirectories.Add(NormalizePath(path));
                 //_logger.LogInformation("Added Image directory: {Path}", path); // コメントアウト
             }
@@ -419,11 +286,11 @@ namespace Pivot.ViewModels
         // Project ディレクトリ追加コマンド
         private async Task AddProjectDirectoryAsync(string? path)
         {
-            if (string.IsNullOrWhiteSpace(path) || _settingsService == null) return;
+            if (string.IsNullOrWhiteSpace(path) || _directorySettings == null) return;
 
             if (!ProjectDirectories.Contains(NormalizePath(path)))
             {
-                await _settingsService.AddDirectoryAsync(DirectoryCategory.Project, path);
+                await _directorySettings.AddDirectoryAsync(DirectoryCategory.Project, path);
                 ProjectDirectories.Add(NormalizePath(path));
                 //_logger.LogInformation("Added Project directory: {Path}", path); // コメントアウト
             }
@@ -432,11 +299,11 @@ namespace Pivot.ViewModels
         // Code ディレクトリ追加コマンド
         private async Task AddCodeDirectoryAsync(string? path)
         {
-            if (string.IsNullOrWhiteSpace(path) || _settingsService == null) return;
+            if (string.IsNullOrWhiteSpace(path) || _directorySettings == null) return;
 
             if (!CodeDirectories.Contains(NormalizePath(path)))
             {
-                await _settingsService.AddDirectoryAsync(DirectoryCategory.Code, path);
+                await _directorySettings.AddDirectoryAsync(DirectoryCategory.Code, path);
                 CodeDirectories.Add(NormalizePath(path));
             }
         }

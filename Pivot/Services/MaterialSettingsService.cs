@@ -84,6 +84,19 @@ namespace Pivot.Services
             }
         }
 
+        public Task SetMaterialParamsAsync(float r, float g, float b, float metallic, float roughness)
+        {
+            var mp = new MaterialParams
+            {
+                AlbedoR = r,
+                AlbedoG = g,
+                AlbedoB = b,
+                Metallic = metallic,
+                Roughness = roughness
+            };
+            return SetMaterialParamsAsync(mp);
+        }
+
         // =============== Material Presets ===============
 
         public List<MaterialPreset> GetMaterialPresets()
@@ -269,6 +282,9 @@ namespace Pivot.Services
     /// </summary>
     public class MaterialParams
     {
+        public float AlbedoR { get; set; } = 0.7f;
+        public float AlbedoG { get; set; } = 0.7f;
+        public float AlbedoB { get; set; } = 0.7f;
         public float Metallic { get; set; } = 0.5f;
         public float Roughness { get; set; } = 0.5f;
         public float AmbientOcclusion { get; set; } = 1.0f;

@@ -35,7 +35,7 @@ namespace Pivot.Controls
         private double _lastFpsUpdate;
         
         // Settings
-        private SettingsService? _settings;
+        private ViewportSettingsService? _viewportSettings;
         private CameraGestureConfig _gestureConfig = CameraGestureConfig.FromPreset(CameraGesturePreset.Maya);
 
         public static readonly DependencyProperty ViewerBackgroundProperty =
@@ -82,12 +82,12 @@ namespace Pivot.Controls
             this.Focus(FocusState.Programmatic);
             
             // Get settings
-            _settings = App.Current?.Services?.GetService<SettingsService>();
+            _viewportSettings = App.Current?.Services?.GetService<ViewportSettingsService>();
             
             // Load gesture preset
-            if (_settings != null)
+            if (_viewportSettings != null)
             {
-                var preset = _settings.GetViewportCameraGesture();
+                var preset = _viewportSettings.GetCameraGesture();
                 _gestureConfig = CameraGestureConfig.FromPreset(preset);
             }
             
@@ -105,9 +105,9 @@ namespace Pivot.Controls
                 InitializeRenderer();
                 
                 // Apply backface culling setting
-                if (_settings != null && _renderer != null)
+                if (_viewportSettings != null && _renderer != null)
                 {
-                    _renderer.SetBackfaceCulling(_settings.GetBackfaceCulling());
+                    _renderer.SetBackfaceCulling(_viewportSettings.GetBackfaceCulling());
                 }
                 
                 // Hide loading indicator after initialization
@@ -249,20 +249,20 @@ namespace Pivot.Controls
 
         private void UpdateInfoVisibility()
         {
-            if (_settings == null) return;
+            if (_viewportSettings == null) return;
             
             // Model Info
-            PolygonCountText.Visibility = _settings.GetShowPolygonCount() ? Visibility.Visible : Visibility.Collapsed;
-            VertexCountText.Visibility = _settings.GetShowVertexCount() ? Visibility.Visible : Visibility.Collapsed;
-            UVSetCountText.Visibility = _settings.GetShowUVSetCount() ? Visibility.Visible : Visibility.Collapsed;
-            MaterialCountText.Visibility = _settings.GetShowMaterialCount() ? Visibility.Visible : Visibility.Collapsed;
-            BoundingBoxText.Visibility = _settings.GetShowBoundingBox() ? Visibility.Visible : Visibility.Collapsed;
+            PolygonCountText.Visibility = _viewportSettings.GetShowPolygonCount() ? Visibility.Visible : Visibility.Collapsed;
+            VertexCountText.Visibility = _viewportSettings.GetShowVertexCount() ? Visibility.Visible : Visibility.Collapsed;
+            UVSetCountText.Visibility = _viewportSettings.GetShowUVSetCount() ? Visibility.Visible : Visibility.Collapsed;
+            MaterialCountText.Visibility = _viewportSettings.GetShowMaterialCount() ? Visibility.Visible : Visibility.Collapsed;
+            BoundingBoxText.Visibility = _viewportSettings.GetShowBoundingBox() ? Visibility.Visible : Visibility.Collapsed;
             
             // Viewport Stats  
-            FpsText.Visibility = _settings.GetShowFPS() ? Visibility.Visible : Visibility.Collapsed;
-            ResolutionText.Visibility = _settings.GetShowResolution() ? Visibility.Visible : Visibility.Collapsed;
-            ViewportSizeText.Visibility = _settings.GetShowViewportSize() ? Visibility.Visible : Visibility.Collapsed;
-            CameraInfoText.Visibility = _settings.GetShowCameraInfo() ? Visibility.Visible : Visibility.Collapsed;
+            FpsText.Visibility = _viewportSettings.GetShowFPS() ? Visibility.Visible : Visibility.Collapsed;
+            ResolutionText.Visibility = _viewportSettings.GetShowResolution() ? Visibility.Visible : Visibility.Collapsed;
+            ViewportSizeText.Visibility = _viewportSettings.GetShowViewportSize() ? Visibility.Visible : Visibility.Collapsed;
+            CameraInfoText.Visibility = _viewportSettings.GetShowCameraInfo() ? Visibility.Visible : Visibility.Collapsed;
             
             // Show separator if both sections have visible items
             bool hasModelStats = PolygonCountText.Visibility == Visibility.Visible || 

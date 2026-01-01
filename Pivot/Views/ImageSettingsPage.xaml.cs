@@ -11,27 +11,25 @@ namespace Pivot.Views
 {
     public sealed partial class ImageSettingsPage : Page
     {
-        private readonly SettingsService? _settings;
-
         public ImageSettingsPage()
         {
             this.InitializeComponent();
-            _settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
             this.Loaded += ImageSettingsPage_Loaded;
         }
 
         private void ImageSettingsPage_Loaded(object sender, RoutedEventArgs e)
         {
             // Initialize common filter settings view
+            var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
             var logger = App.Current.Services.GetService(typeof(Microsoft.Extensions.Logging.ILogger<ViewModels.FilterSettingsViewModel>)) as Microsoft.Extensions.Logging.ILogger<ViewModels.FilterSettingsViewModel>;
             
-            if (_settings != null)
+            if (filterSettings != null)
             {
                 var filterView = this.FindName("FilterSettingsView") as FilterSettingsView;
                 if (filterView != null)
                 {
                     filterView.ViewModel = new ViewModels.FilterSettingsViewModel(
-                        _settings,
+                        filterSettings,
                         Models.FilterType.Image,
                         "Image",
                         GetDefaultImageFilters,

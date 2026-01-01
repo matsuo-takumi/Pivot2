@@ -11,7 +11,7 @@ namespace Pivot.ViewModels
 {
     public partial class ThemeViewModel : ObservableRecipient
     {
-        private readonly SettingsService _settingsService;
+        private readonly ThemeSettingsService _themeSettings;
         private readonly IMessenger _messenger;
         private bool _isLoadingThemeSettings;
 
@@ -21,47 +21,42 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private BackdropType _appBackdropType;
 
-        // (カスタムAcrylic/Luminosity 設定は削除)
-
         public OverlayTintViewModel OverlayTint { get; }
 
-        public ThemeViewModel(SettingsService settingsService, IMessenger messenger)
+        public ThemeViewModel(ThemeSettingsService themeSettings, IMessenger messenger)
         {
-            _settingsService = settingsService;
+            _themeSettings = themeSettings;
             _messenger = messenger;
-            OverlayTint = new OverlayTintViewModel(_settingsService, _messenger);
+            OverlayTint = new OverlayTintViewModel(_themeSettings, _messenger);
 
             _isLoadingThemeSettings = true;
             LoadCurrentSettings();
             _isLoadingThemeSettings = false;
-            IsActive = true; // メッセージの受信を開始
+            IsActive = true;
         }
 
-        // Provide lists for binding (RadioButtons ItemsSource)
         public System.Collections.Generic.IEnumerable<BackdropType> BackdropTypes => System.Enum.GetValues(typeof(BackdropType)) as BackdropType[] ?? new BackdropType[0];
 
         public System.Collections.Generic.IEnumerable<ElementTheme> ElementThemes => System.Enum.GetValues(typeof(ElementTheme)) as ElementTheme[] ?? new ElementTheme[0];
 
-        // Generated partial method hooks (MVVM Toolkit) to react to property changes
         partial void OnAppThemeChanged(ElementTheme value)
         {
             if (_isLoadingThemeSettings) return;
-            _ = _settingsService.SetTheme(value);
+            _ = _themeSettings.SetThemeAsync(value);
             _messenger.Send(new ThemeChangedMessage(value));
         }
 
         partial void OnAppBackdropTypeChanged(BackdropType value)
         {
             if (_isLoadingThemeSettings) return;
-            _ = _settingsService.SetBackdropType(value);
+            _ = _themeSettings.SetBackdropTypeAsync(value);
             _messenger.Send(new BackdropTypeChangedMessage(value));
         }
 
         private void LoadCurrentSettings()
         {
-            AppTheme = _settingsService.GetTheme();
-            AppBackdropType = _settingsService.GetBackdropType();
-            // (カスタム設定は削除)
+            AppTheme = _themeSettings.AppTheme;
+            AppBackdropType = _themeSettings.AppBackdropType;
         }
 
         [RelayCommand]
@@ -70,7 +65,7 @@ namespace Pivot.ViewModels
             if (AppTheme != theme)
             {
                 AppTheme = theme;
-                await _settingsService.SetTheme(theme);
+                await _themeSettings.SetThemeAsync(theme);
                 _messenger.Send(new ThemeChangedMessage(theme));
             }
         }
@@ -81,7 +76,7 @@ namespace Pivot.ViewModels
             if (AppBackdropType != type)
             {
                 AppBackdropType = type;
-                await _settingsService.SetBackdropType(type);
+                await _themeSettings.SetBackdropTypeAsync(type);
                 _messenger.Send(new BackdropTypeChangedMessage(type));
             }
         }

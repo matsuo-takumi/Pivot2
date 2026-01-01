@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Pivot.Views
 {
@@ -53,10 +54,13 @@ namespace Pivot.Views
             };
 
             // Apply app theme to dialog
-            try 
+            try
             { 
-                var settings = App.Current.Services.GetService(typeof(Services.SettingsService)) as Services.SettingsService;
-                dialog.RequestedTheme = settings?.GetTheme() ?? Microsoft.UI.Xaml.ElementTheme.Default;
+                var themeSettings = App.Current.Services.GetService<Services.ThemeSettingsService>();
+                if (themeSettings != null)
+                {
+                    dialog.RequestedTheme = themeSettings.AppTheme;
+                }
             } 
             catch { }
 
@@ -115,8 +119,8 @@ namespace Pivot.Views
                 // Apply app theme to dialog
                 try 
                 { 
-                    var settings = App.Current.Services.GetService(typeof(Services.SettingsService)) as Services.SettingsService;
-                    dialog.RequestedTheme = settings?.GetTheme() ?? Microsoft.UI.Xaml.ElementTheme.Default;
+                    var themeSettings = App.Current.Services.GetService<Services.ThemeSettingsService>();
+                    dialog.RequestedTheme = themeSettings?.AppTheme ?? Microsoft.UI.Xaml.ElementTheme.Default;
                 } 
                 catch { }
 

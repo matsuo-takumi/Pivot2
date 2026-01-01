@@ -47,8 +47,8 @@ namespace Pivot
 			
 			// Load directory settings
 			try { await Services.GetRequiredService<DirectorySettingsService>().LoadAsync(); } catch { }
-			// Initialize SettingsService (loads theme, backdrop, and other settings)
-			try { await Services.GetRequiredService<SettingsService>().InitializeAsync(); } catch { }
+			// Initialize theme settings
+			try { await Services.GetRequiredService<ThemeSettingsService>().LoadAsync(); } catch { }
 			// Ensure text color resources are initialized
 			try { _ = Services.GetRequiredService<ITextColorResourceManager>(); } catch { }
 			// Kick main view model initialization (auto-scan if possible)
@@ -90,8 +90,7 @@ namespace Pivot
 			// Core stores/services
 			sc.AddSingleton<ISettingsStore, JsonSettingsStore>();
 			// SnippetCacheService removed (legacy)
-			sc.AddSingleton<MetadataService>(); // Legacy stub for compatibility
-			sc.AddSingleton<SettingsService>(); // Stub for Phase 2
+			sc.AddSingleton<MetadataService>();
             sc.AddSingleton<DirectorySettingsService>();
             sc.AddSingleton<ThemeSettingsService>();
             sc.AddSingleton<FilterSettingsService>(); // Extracted from SettingsService
@@ -101,6 +100,9 @@ namespace Pivot
             sc.AddSingleton<AssetDisplaySettingsService>(); // Extracted from SettingsService
             sc.AddSingleton<CodeSettingsService>(); // Extracted from SettingsService
             sc.AddSingleton<ITextColorResourceManager, TextColorResourceManager>();
+            sc.AddSingleton<IDialogService, DialogService>(); // UI dialog abstraction
+            sc.AddSingleton<INavigationService, NavigationService>(); // Navigation abstraction
+            sc.AddSingleton<IBackdropService, BackdropService>(); // Backdrop management
 			// Database services (EF Core + SQLite)
 			var dbPath = System.IO.Path.Combine(
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -137,11 +139,6 @@ namespace Pivot
             // Filter service (depends on SettingsService)
             sc.AddSingleton<FilterService>();
 
-            // Code module: SQLite DB and services (lazy local appdata path)
-            // Legacy services - will be removed after CodeViewModel migration
-            // Legacy CodeModule services removed
-            // Consolidated into CodeService and PivotDbContext
-            
             sc.AddTransient<CodeViewModel>();
             
             Services = sc.BuildServiceProvider();

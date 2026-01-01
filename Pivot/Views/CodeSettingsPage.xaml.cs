@@ -14,12 +14,14 @@ namespace Pivot.Views
 {
     public sealed partial class CodeSettingsPage : Page
     {
-        private readonly SettingsService? _settings;
+        private readonly DirectorySettingsService? _directorySettings;
+        private readonly CodeSettingsService? _codeSettings;
 
         public CodeSettingsPage()
         {
             this.InitializeComponent();
-            _settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+            _directorySettings = App.Current.Services.GetService(typeof(DirectorySettingsService)) as DirectorySettingsService;
+            _codeSettings = App.Current.Services.GetService(typeof(CodeSettingsService)) as CodeSettingsService;
             this.Loaded += CodeSettingsPage_Loaded;
             
             LoadSaveFormat();
@@ -29,15 +31,16 @@ namespace Pivot.Views
         private void CodeSettingsPage_Loaded(object sender, RoutedEventArgs e)
         {
             // Initialize common filter settings view
+            var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
             var logger = App.Current.Services.GetService(typeof(Microsoft.Extensions.Logging.ILogger<ViewModels.FilterSettingsViewModel>)) as Microsoft.Extensions.Logging.ILogger<ViewModels.FilterSettingsViewModel>;
             
-            if (_settings != null)
+            if (filterSettings != null)
             {
                 var filterView = this.FindName("FilterSettingsView") as FilterSettingsView;
                 if (filterView != null)
                 {
                     filterView.ViewModel = new ViewModels.FilterSettingsViewModel(
-                        _settings,
+                        filterSettings,
                         Models.FilterType.Code,
                         "Code",
                         GetDefaultCodeFilters,
@@ -65,7 +68,7 @@ namespace Pivot.Views
         {
             try
             {
-                var dir = _settings?.GetExportOutputDirectory() ?? string.Empty;
+                var dir = _directorySettings?.CodeSaveOutputDirectory ?? string.Empty;
                 var box = this.FindName("OutputDirBox") as TextBox;
                 if (box != null) box.Text = dir;
                 var status = this.FindName("StatusText") as TextBlock;
@@ -81,9 +84,9 @@ namespace Pivot.Views
                 var box = this.FindName("OutputDirBox") as TextBox;
                 if (box == null) return;
                 var path = box.Text?.Trim() ?? string.Empty;
-                if (_settings != null)
+                if (_directorySettings != null)
                 {
-                    await _settings.SetExportOutputDirectoryAsync(path);
+                    await _directorySettings.SetCodeSaveOutputDirectoryAsync(path);
                     var status = this.FindName("StatusText") as TextBlock;
                     if (status != null) status.Text = "Saved.";
                 }
@@ -119,7 +122,7 @@ namespace Pivot.Views
                     var box = this.FindName("OutputDirBox") as TextBox;
                     if (box != null) box.Text = folder.Path;
                     // Optionally save immediately
-                    if (_settings != null) await _settings.SetExportOutputDirectoryAsync(folder.Path);
+                    if (_directorySettings != null) await _directorySettings.SetCodeSaveOutputDirectoryAsync(folder.Path);
                     var status = this.FindName("StatusText") as TextBlock;
                     if (status != null) status.Text = "Saved.";
                 }
@@ -138,7 +141,9 @@ namespace Pivot.Views
         {
             try
             {
-                var fmt = _settings?.GetCodeExportFormat() ?? Pivot.Models.CodeExportFormat.Json;
+                var fmtStr = _codeSettings?.GetCodeExportFormat();
+                if (!Enum.TryParse<Pivot.Models.CodeExportFormat>(fmtStr, true, out var fmt)) 
+                    fmt = Pivot.Models.CodeExportFormat.Json;
                 var combo = this.FindName("SaveFormatCombo") as ComboBox;
                 if (combo != null)
                 {
@@ -159,12 +164,12 @@ namespace Pivot.Views
         {
             try
             {
-                if (_settings == null) return;
+                if (_codeSettings == null) return;
                 if (!(sender is ComboBox cb)) return;
                 var sel = cb.SelectedItem as ComboBoxItem;
                 var tag = sel?.Tag?.ToString() ?? "Json";
                 if (!Enum.TryParse<Pivot.Models.CodeExportFormat>(tag, out var fmt)) fmt = Pivot.Models.CodeExportFormat.Json;
-                await _settings.SetCodeExportFormatAsync(fmt);
+                await _codeSettings.SetCodeExportFormatAsync(fmt.ToString());
             }
             catch { }
         }

@@ -9,12 +9,15 @@ using Microsoft.Extensions.Logging;
 using Windows.UI;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Pivot.Views
 {
     public sealed partial class AssetSettingsPage : Page
     {
-        private SettingsService? _settings;
+        private ViewportSettingsService? _viewportSettings;
+        private MaterialSettingsService? _materialSettings;
         private bool _isInitializing = true;
         private List<MaterialPreset> _materialPresets = new();
         private List<LightingPreset> _lightingPresets = new();
@@ -28,22 +31,27 @@ namespace Pivot.Views
         private async void AssetSettingsPage_Loaded(object sender, RoutedEventArgs e)
         {
             // Initialize common filter settings view
-            _settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+            _viewportSettings = App.Current.Services.GetService<ViewportSettingsService>();
+            _materialSettings = App.Current.Services.GetService<MaterialSettingsService>();
+            var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
             var logger = App.Current.Services.GetService(typeof(ILogger<FilterSettingsViewModel>)) as ILogger<FilterSettingsViewModel>;
             
-            if (_settings != null)
+            if (filterSettings != null)
             {
                 var filterView = this.FindName("FilterSettingsView") as FilterSettingsView;
                 if (filterView != null)
                 {
                     filterView.ViewModel = new FilterSettingsViewModel(
-                        _settings,
+                        filterSettings,
                         FilterType.Asset,
                         "Asset",
                         GetDefaultAssetFilters,
                         logger);
                 }
-                
+            }
+            
+            if (_viewportSettings != null)
+            {
                 // Load viewport gesture preset
                 LoadViewportGesturePreset();
                 
@@ -52,7 +60,10 @@ namespace Pivot.Views
                 
                 // Load display settings
                 LoadDisplaySettings();
-                
+            }
+
+            if (_materialSettings != null)
+            {
                 // Load presets
                 await LoadPresetsAsync();
             }
@@ -62,35 +73,35 @@ namespace Pivot.Views
 
         private void LoadDisplaySettings()
         {
-            if (_settings == null) return;
+            if (_viewportSettings == null) return;
             
-            ShowAxisGizmoToggle.IsOn = _settings.GetUserSettings().ViewportShowAxisGizmo;
-            BackfaceCullingToggle.IsOn = _settings.GetBackfaceCulling();
+            ShowAxisGizmoToggle.IsOn = _viewportSettings.GetShowAxisGizmo();
+            BackfaceCullingToggle.IsOn = _viewportSettings.GetBackfaceCulling();
             
             // Model Info toggles
-            ShowPolygonCountToggle.IsOn = _settings.GetShowPolygonCount();
-            ShowVertexCountToggle.IsOn = _settings.GetShowVertexCount();
-            ShowUVSetCountToggle.IsOn = _settings.GetShowUVSetCount();
-            ShowMaterialCountToggle.IsOn = _settings.GetShowMaterialCount();
-            ShowBoundingBoxToggle.IsOn = _settings.GetShowBoundingBox();
+            ShowPolygonCountToggle.IsOn = _viewportSettings.GetShowPolygonCount();
+            ShowVertexCountToggle.IsOn = _viewportSettings.GetShowVertexCount();
+            ShowUVSetCountToggle.IsOn = _viewportSettings.GetShowUVSetCount();
+            ShowMaterialCountToggle.IsOn = _viewportSettings.GetShowMaterialCount();
+            ShowBoundingBoxToggle.IsOn = _viewportSettings.GetShowBoundingBox();
             
             // Viewport Stats toggles
-            ShowFPSToggle.IsOn = _settings.GetShowFPS();
-            ShowResolutionToggle.IsOn = _settings.GetShowResolution();
-            ShowViewportSizeToggle.IsOn = _settings.GetShowViewportSize();
-            ShowCameraInfoToggle.IsOn = _settings.GetShowCameraInfo();
+            ShowFPSToggle.IsOn = _viewportSettings.GetShowFPS();
+            ShowResolutionToggle.IsOn = _viewportSettings.GetShowResolution();
+            ShowViewportSizeToggle.IsOn = _viewportSettings.GetShowViewportSize();
+            ShowCameraInfoToggle.IsOn = _viewportSettings.GetShowCameraInfo();
         }
 
         private async System.Threading.Tasks.Task LoadPresetsAsync()
         {
-            if (_settings == null) return;
+            if (_materialSettings == null) return;
             
             // Load material presets
-            _materialPresets = await _settings.GetMaterialPresetsAsync();
+            _materialPresets = new List<MaterialPreset>(await _materialSettings.GetMaterialPresetsAsync());
             MaterialPresetsList.ItemsSource = _materialPresets;
             
             // Load lighting presets
-            _lightingPresets = await _settings.GetLightingPresetsAsync();
+            _lightingPresets = await _materialSettings.GetLightingPresetsAsync();
             LightingPresetsList.ItemsSource = _lightingPresets;
         }
 
@@ -98,7 +109,7 @@ namespace Pivot.Views
         {
             try
             {
-                var preset = _settings?.GetViewportCameraGesture() ?? CameraGesturePreset.Maya;
+                var preset = _viewportSettings?.GetCameraGesture() ?? CameraGesturePreset.Maya;
                 
                 // Select the correct ComboBox item
                 for (int i = 0; i < GesturePresetComboBox.Items.Count; i++)
@@ -129,9 +140,9 @@ namespace Pivot.Views
                     item.Tag is string tagStr &&
                     Enum.TryParse<CameraGesturePreset>(tagStr, out var preset))
                 {
-                    if (_settings != null)
+                    if (_viewportSettings != null)
                     {
-                        await _settings.SetViewportCameraGestureAsync(preset);
+                        await _viewportSettings.SetCameraGestureAsync(preset);
                         UpdateGestureDisplay(preset);
                     }
                 }
@@ -168,11 +179,11 @@ namespace Pivot.Views
 
         private void LoadBackgroundSettings()
         {
-            if (_settings == null) return;
+            if (_viewportSettings == null) return;
             
             try
             {
-                var mode = _settings.GetViewportBackgroundMode();
+                var mode = _viewportSettings.GetBackgroundMode();
                 for (int i = 0; i < BackgroundModeCombo.Items.Count; i++)
                 {
                     if (BackgroundModeCombo.Items[i] is ComboBoxItem item &&
@@ -184,7 +195,7 @@ namespace Pivot.Views
                 }
                 UpdateBackgroundColorPanelVisibility(mode);
                 
-                var hexColor = _settings.GetViewportBackgroundColor();
+                var hexColor = _viewportSettings.GetBackgroundColor();
                 BgColorPicker.Color = HexToColor(hexColor);
             }
             catch (Exception ex)
@@ -195,7 +206,7 @@ namespace Pivot.Views
 
         private async void BackgroundModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
+            if (_isInitializing || _viewportSettings == null) return;
             
             try
             {
@@ -203,7 +214,7 @@ namespace Pivot.Views
                     item.Tag is string tagStr &&
                     Enum.TryParse<ViewportBackgroundMode>(tagStr, out var mode))
                 {
-                    await _settings.SetViewportBackgroundModeAsync(mode);
+                    await _viewportSettings.SetBackgroundModeAsync(mode);
                     UpdateBackgroundColorPanelVisibility(mode);
                 }
             }
@@ -222,13 +233,13 @@ namespace Pivot.Views
 
         private async void BgColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
         {
-            if (_isInitializing || _settings == null) return;
+            if (_isInitializing || _viewportSettings == null) return;
             
             try
             {
                 var color = args.NewColor;
                 var hexColor = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-                await _settings.SetViewportBackgroundColorAsync(hexColor);
+                await _viewportSettings.SetBackgroundColorAsync(hexColor);
             }
             catch (Exception ex)
             {
@@ -253,73 +264,72 @@ namespace Pivot.Views
             return Color.FromArgb(255, 51, 153, 204); // Default
         }
 
-        private void ShowAxisGizmoToggle_Toggled(object sender, RoutedEventArgs e)
+        private async void ShowAxisGizmoToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            var userSettings = _settings.GetUserSettings();
-            userSettings.ViewportShowAxisGizmo = ShowAxisGizmoToggle.IsOn;
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowAxisGizmoAsync(ShowAxisGizmoToggle.IsOn);
         }
 
         private async void BackfaceCullingToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetBackfaceCullingAsync(BackfaceCullingToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetBackfaceCullingAsync(BackfaceCullingToggle.IsOn);
         }
 
         // Model Info toggles
         private async void ShowPolygonCountToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowPolygonCountAsync(ShowPolygonCountToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowPolygonCountAsync(ShowPolygonCountToggle.IsOn);
         }
 
         private async void ShowVertexCountToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowVertexCountAsync(ShowVertexCountToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowVertexCountAsync(ShowVertexCountToggle.IsOn);
         }
 
         private async void ShowUVSetCountToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowUVSetCountAsync(ShowUVSetCountToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowUVSetCountAsync(ShowUVSetCountToggle.IsOn);
         }
 
         private async void ShowMaterialCountToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowMaterialCountAsync(ShowMaterialCountToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowMaterialCountAsync(ShowMaterialCountToggle.IsOn);
         }
 
         private async void ShowBoundingBoxToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowBoundingBoxAsync(ShowBoundingBoxToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowBoundingBoxAsync(ShowBoundingBoxToggle.IsOn);
         }
 
         // Viewport Stats toggles
         private async void ShowFPSToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowFPSAsync(ShowFPSToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowFPSAsync(ShowFPSToggle.IsOn);
         }
 
         private async void ShowResolutionToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowResolutionAsync(ShowResolutionToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowResolutionAsync(ShowResolutionToggle.IsOn);
         }
 
         private async void ShowViewportSizeToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowViewportSizeAsync(ShowViewportSizeToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowViewportSizeAsync(ShowViewportSizeToggle.IsOn);
         }
 
         private async void ShowCameraInfoToggle_Toggled(object sender, RoutedEventArgs e)
         {
-            if (_isInitializing || _settings == null) return;
-            await _settings.SetShowCameraInfoAsync(ShowCameraInfoToggle.IsOn);
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowCameraInfoAsync(ShowCameraInfoToggle.IsOn);
         }
 
         // Material Preset handlers
@@ -330,7 +340,7 @@ namespace Pivot.Views
 
         private async void AddMaterialPreset_Click(object sender, RoutedEventArgs e)
         {
-            if (_settings == null) return;
+            if (_materialSettings == null) return;
             
             var dialog = new ContentDialog
             {
@@ -358,7 +368,7 @@ namespace Pivot.Views
                         Roughness = 0.5f
                     };
                     _materialPresets.Add(preset);
-                    await _settings.SaveMaterialPresetsAsync(_materialPresets);
+                    await _materialSettings.SetMaterialPresetsAsync(_materialPresets);
                     MaterialPresetsList.ItemsSource = null;
                     MaterialPresetsList.ItemsSource = _materialPresets;
                 }
@@ -367,12 +377,12 @@ namespace Pivot.Views
 
         private async void DeleteMaterialPreset_Click(object sender, RoutedEventArgs e)
         {
-            if (_settings == null || sender is not Button button) return;
+            if (_materialSettings == null || sender is not Button button) return;
             
             if (button.DataContext is MaterialPreset preset)
             {
                 _materialPresets.Remove(preset);
-                await _settings.SaveMaterialPresetsAsync(_materialPresets);
+                await _materialSettings.SetMaterialPresetsAsync(_materialPresets);
                 MaterialPresetsList.ItemsSource = null;
                 MaterialPresetsList.ItemsSource = _materialPresets;
             }
@@ -386,7 +396,7 @@ namespace Pivot.Views
 
         private async void AddLightingPreset_Click(object sender, RoutedEventArgs e)
         {
-            if (_settings == null) return;
+            if (_materialSettings == null) return;
             
             var dialog = new ContentDialog
             {
@@ -409,7 +419,7 @@ namespace Pivot.Views
                     preset.Name = name;
                     preset.IsCustom = true;
                     _lightingPresets.Add(preset);
-                    await _settings.SaveLightingPresetsAsync(_lightingPresets);
+                    await _materialSettings.SaveLightingPresetsAsync(_lightingPresets);
                     LightingPresetsList.ItemsSource = null;
                     LightingPresetsList.ItemsSource = _lightingPresets;
                 }
@@ -418,12 +428,12 @@ namespace Pivot.Views
 
         private async void DeleteLightingPreset_Click(object sender, RoutedEventArgs e)
         {
-            if (_settings == null || sender is not Button button) return;
+            if (_materialSettings == null || sender is not Button button) return;
             
             if (button.DataContext is LightingPreset preset)
             {
                 _lightingPresets.Remove(preset);
-                await _settings.SaveLightingPresetsAsync(_lightingPresets);
+                await _materialSettings.SaveLightingPresetsAsync(_lightingPresets);
                 LightingPresetsList.ItemsSource = null;
                 LightingPresetsList.ItemsSource = _lightingPresets;
             }

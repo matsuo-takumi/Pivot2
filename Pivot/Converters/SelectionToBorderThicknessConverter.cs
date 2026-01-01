@@ -1,5 +1,4 @@
 using Microsoft.UI.Xaml.Data;
-using Pivot.Services;
 using System;
 using Microsoft.UI.Xaml;
 
@@ -16,17 +15,6 @@ namespace Pivot.Converters
                 {
                     return new Thickness(thickness);
                 }
-                
-                try
-                {
-                    var settings = App.Current?.Services?.GetService(typeof(SettingsService)) as SettingsService;
-                    if (settings != null)
-                    {
-                        var thicknessValue = settings.GetImageSelectionBorderThickness();
-                        return new Thickness(thicknessValue);
-                    }
-                }
-                catch { }
                 
                 // Fallback: Default 2px border
                 return new Thickness(2.0);

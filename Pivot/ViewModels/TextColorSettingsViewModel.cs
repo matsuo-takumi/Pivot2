@@ -15,7 +15,7 @@ namespace Pivot.ViewModels
 {
     public class TextColorSettingsViewModel : ObservableObject
     {
-        private readonly SettingsService _settings;
+        private readonly ThemeSettingsService _themeSettings;
         private readonly ITextColorResourceManager _resourceManager;
         private bool _isLoading;
 
@@ -26,9 +26,9 @@ namespace Pivot.ViewModels
             private set => SetProperty(ref _isLoading, value);
         }
 
-        public TextColorSettingsViewModel(SettingsService settings, ITextColorResourceManager resourceManager)
+        public TextColorSettingsViewModel(ThemeSettingsService themeSettings, ITextColorResourceManager resourceManager)
         {
-            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _themeSettings = themeSettings ?? throw new ArgumentNullException(nameof(themeSettings));
             _resourceManager = resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
             // Don't create entries synchronously - load them asynchronously after page loads
         }
@@ -47,7 +47,7 @@ namespace Pivot.ViewModels
                 var entriesToAdd = new List<TextColorSettingViewModel>(TextColorRoleDefinitions.Roles.Count);
                 foreach (var definition in TextColorRoleDefinitions.Roles)
                 {
-                    var hex = _settings.GetTextColorOverride(definition.SettingKey, definition.DefaultHex);
+                    var hex = _themeSettings.GetTextColorOverride(definition.SettingKey, definition.DefaultHex);
                     var color = TextColorHelper.ParseHexOrDefault(hex, definition.DefaultColor);
                     var entry = new TextColorSettingViewModel(
                         definition.SettingKey,
@@ -89,7 +89,7 @@ namespace Pivot.ViewModels
         {
             try
             {
-                await _settings.SetTextColorOverrideAsync(entry.SettingKey, entry.HexValue);
+                await _themeSettings.SetTextColorOverrideAsync(entry.SettingKey, entry.HexValue);
             }
             catch
             {

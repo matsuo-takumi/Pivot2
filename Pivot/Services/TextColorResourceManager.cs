@@ -22,12 +22,12 @@ namespace Pivot.Services
     public class TextColorResourceManager : ITextColorResourceManager
     {
         private readonly Dictionary<string, TextColorRoleDefinition> _roleMap;
-        private readonly SettingsService _settings;
+        private readonly ThemeSettingsService _themeSettings;
         private readonly Dictionary<string, SolidColorBrush> _brushCache;
 
-        public TextColorResourceManager(SettingsService settings)
+        public TextColorResourceManager(ThemeSettingsService themeSettings)
         {
-            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _themeSettings = themeSettings ?? throw new ArgumentNullException(nameof(themeSettings));
             _roleMap = TextColorRoleDefinitions.Roles.ToDictionary(def => def.SettingKey);
             _brushCache = new Dictionary<string, SolidColorBrush>();
             
@@ -35,12 +35,12 @@ namespace Pivot.Services
             InitializeAllBrushes();
             
             // Initialize colors based on customization enabled state
-            if (_settings.IsTextColorCustomizationEnabled())
+            if (_themeSettings.IsTextColorCustomizationEnabled)
             {
                 // Apply custom colors from settings
                 foreach (var role in TextColorRoleDefinitions.Roles)
                 {
-                    var hex = _settings.GetTextColorOverride(role.SettingKey, role.DefaultHex);
+                    var hex = _themeSettings.GetTextColorOverride(role.SettingKey, role.DefaultHex);
                     var color = TextColorHelper.ParseHexOrDefault(hex, role.DefaultColor);
                     ApplyColor(role.SettingKey, color);
                 }
@@ -68,7 +68,7 @@ namespace Pivot.Services
         public void ApplyColor(string settingKey, Color color)
         {
             // Only apply custom colors if customization is enabled
-            if (!_settings.IsTextColorCustomizationEnabled()) return;
+            if (!_themeSettings.IsTextColorCustomizationEnabled) return;
             
             if (!_roleMap.TryGetValue(settingKey, out var role)) return;
             var brush = GetOrCreateBrush(role.ResourceKey, role.DefaultColor);

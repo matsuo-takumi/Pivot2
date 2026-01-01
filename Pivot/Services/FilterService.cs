@@ -10,16 +10,16 @@ namespace Pivot.Services
 {
 	public class FilterService : ObservableObject
 	{
-		private readonly SettingsService _settings;
+		private readonly FilterSettingsService _filterSettings;
 		public ObservableCollection<FilterViewModel> Filters { get; } = new ObservableCollection<FilterViewModel>();
 
-		// multi-select: selected filter IDs (per-tab selection persisted via SettingsService)
+		// multi-select: selected filter IDs (per-tab selection persisted via FilterSettingsService)
 		private HashSet<Guid> _selectedFilterIds = new HashSet<Guid>();
 		public IReadOnlyCollection<Guid> SelectedFilterIds => _selectedFilterIds;
 
-		public FilterService(SettingsService settings)
+		public FilterService(FilterSettingsService filterSettings)
 		{
-			_settings = settings ?? throw new ArgumentNullException(nameof(settings));
+			_filterSettings = filterSettings ?? throw new ArgumentNullException(nameof(filterSettings));
 			LoadFilters();
 			// restore selected filters for Asset tab if available
             try
@@ -38,13 +38,10 @@ namespace Pivot.Services
 			Filters.Clear();
 			try
 			{
-				var user = _settings.GetUserSettings();
-				if (user?.AssetFilters != null)
+				var assetFilters = _filterSettings.GetAssetFilters();
+				foreach (var f in assetFilters)
 				{
-					foreach (var f in user.AssetFilters)
-					{
-						Filters.Add(new FilterViewModel(f));
-					}
+					Filters.Add(new FilterViewModel(f));
 				}
 				// keep existing SelectedFilterIds unchanged here; consumer will ApplyFilterFromService after construction
 				UpdateFilterSelections();

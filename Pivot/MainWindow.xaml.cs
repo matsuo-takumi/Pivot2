@@ -34,7 +34,7 @@ namespace Pivot
     /// <summary>
     /// An empty window that can be used on its own or navigated to within a Frame.
     /// </summary>
-    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<NavigationRequestMessage>, IRecipient<OverlayColorChangedMessage>
+    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<OverlayColorChangedMessage>
     {
         // Provide an implicit conversion so generated binding code can pass 'this' (MainWindow)
         // to APIs that expect a FrameworkElement (the generated code calls SetConverterLookupRoot(this)).
@@ -45,12 +45,9 @@ namespace Pivot
         public MainViewModel ViewModel { get; }
         public ThemeViewModel ThemeViewModel { get; }
         private readonly IMessenger _messenger;
-        private readonly SettingsService _settingsService;
-
-        // Backdrop Controllers
-        private DesktopAcrylicController? _acrylicController; // Null許容型に変更
-        private MicaController? _micaController; // MicaControllerも追加
-        private SystemBackdropConfiguration? _configurationSource; // Null許容型に変更
+        private readonly ThemeSettingsService _themeSettings;
+        private readonly INavigationService _navigationService;
+        private readonly IBackdropService _backdropService;
 
         public MainWindow()
         {
@@ -58,7 +55,10 @@ namespace Pivot
             ViewModel = App.Current.Services.GetRequiredService<MainViewModel>();
             ThemeViewModel = App.Current.Services.GetRequiredService<ThemeViewModel>();
             _messenger = App.Current.Services.GetRequiredService<IMessenger>();
-            _settingsService = App.Current.Services.GetRequiredService<SettingsService>();
+            _themeSettings = App.Current.Services.GetRequiredService<ThemeSettingsService>();
+            _navigationService = App.Current.Services.GetRequiredService<INavigationService>();
+            _backdropService = App.Current.Services.GetRequiredService<IBackdropService>();
+            _navigationService.RegisterNavigationHandler(NavigateTo);
 
             var rootElement = this.Content as FrameworkElement;
             if (rootElement != null)
@@ -74,8 +74,8 @@ namespace Pivot
             ExtendsContentIntoTitleBar = true;
             SetTitleBar(AppTitleBar); // MainWindow.xamlで定義したGridをタイトルバーとして設定
 
-            // SettingsServiceから初期のBackdropTypeを取得して設定
-            SetSystemBackdrop(_settingsService.GetBackdropType());
+            // ThemeSettingsServiceから初期のBackdropTypeを取得して設定
+            SetSystemBackdrop(_themeSettings.AppBackdropType);
 
             // BackdropTypeChangedMessageを購読
             _messenger.Register<BackdropTypeChangedMessage>(this);
@@ -90,8 +90,7 @@ namespace Pivot
             NavigateTo(NavigationRegion.Code);
             NavigateTo(NavigationRegion.Preference);
 
-            // ナビゲーション要求購読
-            _messenger.Register<NavigationRequestMessage>(this);
+            // ナビゲーション要求はNavigationServiceが処理 - 直接購読不要
         }
 
         public void Receive(BackdropTypeChangedMessage message)
@@ -104,7 +103,7 @@ namespace Pivot
             try
             {
                 // If overlay mode is active, refresh the overlay brush
-                if (_settingsService.GetBackdropType() == BackdropType.Overlay)
+                if (_themeSettings.AppBackdropType == BackdropType.Overlay)
                 {
                     SetSystemBackdrop(BackdropType.Overlay);
                 }
@@ -114,176 +113,50 @@ namespace Pivot
 
         public void SetSystemBackdrop(BackdropType type)
         {
-            // Dispose any existing controllers
-            if (_micaController != null)
-            {
-                _micaController.Dispose();
-                _micaController = null;
-            }
-            if (_acrylicController != null)
-            {
-                _acrylicController.Dispose();
-                _acrylicController = null;
-            }
-
-            this.Activated -= Window_Activated; // イベントハンドラの重複登録を避ける
+            // Unregister event handlers before backdrop change
+            this.Activated -= Window_Activated;
             this.Closed -= Window_Closed;
-            if (Content is FrameworkElement rootElement) // nullチェックを追加
+            if (Content is FrameworkElement rootElement)
             {
                 rootElement.ActualThemeChanged -= Window_ThemeChanged;
             }
-            
-            _configurationSource = null;
 
+            // Delegate to BackdropService
+            _backdropService.SetBackdrop(this, type, Root, AppTitleBar);
+
+            // Handle None mode text colors
             if (type == BackdropType.None)
             {
-                SystemBackdrop = null;
-                // Register theme change handler for None mode
                 if (Content is FrameworkElement rootElementForNone)
                 {
                     rootElementForNone.ActualThemeChanged += Window_ThemeChanged;
+                    ForceTextColorsForNone(GetTextColorForTheme(rootElementForNone.ActualTheme));
                 }
-                // Set solid background colors based on theme (light = white, dark = black)
-                SetSolidBackgroundForNone();
                 return;
             }
 
-            // Restore text colors from Color settings when switching away from None
+            // Restore text colors from settings when not in None mode
             RestoreTextColorsFromSettings();
 
-            DispatcherQueue.EnsureSystemDispatcherQueue();
-
-            _configurationSource = new SystemBackdropConfiguration();
+            // Register event handlers for active backdrops
             Activated += Window_Activated;
             Closed += Window_Closed;
-            if (Content is FrameworkElement rootElement2) // nullチェックを追加
+            if (Content is FrameworkElement rootElement2)
             {
                 rootElement2.ActualThemeChanged += Window_ThemeChanged;
             }
-
-            _configurationSource.IsInputActive = true;
-            SetConfigurationSourceTheme();
-
-            switch (type)
-            {
-                case BackdropType.Mica:
-                    if (MicaController.IsSupported())
-                    {
-                        _micaController = new MicaController();
-                        _micaController.Kind = MicaKind.Base;
-                        _micaController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
-                        _micaController.SetSystemBackdropConfiguration(_configurationSource);
-                        SystemBackdrop = null;
-                        SetTransparentRootAndTitleBar();
-                    }
-                    break;
-                case BackdropType.MicaAlt:
-                    if (MicaController.IsSupported())
-                    {
-                        _micaController = new MicaController();
-                        _micaController.Kind = MicaKind.BaseAlt;
-                        _micaController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
-                        _micaController.SetSystemBackdropConfiguration(_configurationSource);
-                        SystemBackdrop = null;
-                        SetTransparentRootAndTitleBar();
-                    }
-                    break;
-                case BackdropType.AcrylicThin:
-                    if (DesktopAcrylicController.IsSupported())
-                    {
-                        _acrylicController = new DesktopAcrylicController();
-                        _acrylicController.Kind = DesktopAcrylicKind.Thin;
-                        _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
-                        _acrylicController.SetSystemBackdropConfiguration(_configurationSource);
-                        SystemBackdrop = null;
-                        SetTransparentRootAndTitleBar();
-                    }
-                    break;
-                case BackdropType.Acrylic:
-                    if (DesktopAcrylicController.IsSupported())
-                    {
-                        _acrylicController = new DesktopAcrylicController();
-                        _acrylicController.Kind = DesktopAcrylicKind.Base;
-                        _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
-                        _acrylicController.SetSystemBackdropConfiguration(_configurationSource);
-                        SystemBackdrop = null;
-                        SetTransparentRootAndTitleBar();
-                    }
-                    break;
-                case BackdropType.Overlay:
-                    // Use an in-app Acrylic brush created from settings for a lightweight overlay effect
-                    SystemBackdrop = null;
-                    try
-                    {
-                        var hex = _settingsService.GetOverlayTintColor();
-                        if (!hex.StartsWith("#")) hex = "#" + hex;
-                        byte r = 0, g = 0, b = 0;
-                        if (hex.Length == 7)
-                        {
-                            r = Convert.ToByte(hex.Substring(1, 2), 16);
-                            g = Convert.ToByte(hex.Substring(3, 2), 16);
-                            b = Convert.ToByte(hex.Substring(5, 2), 16);
-                        }
-                    var brush = new Microsoft.UI.Xaml.Media.AcrylicBrush
-                    {
-                        TintColor = ColorHelper.FromArgb(255, r, g, b),
-                        TintOpacity = _settingsService.GetOverlayTintOpacity(),
-                        TintLuminosityOpacity = _settingsService.GetOverlayTintLuminosityOpacity(),
-                        TintTransitionDuration = TimeSpan.FromMilliseconds(_settingsService.GetOverlayTintTransitionDurationMs()),
-                        FallbackColor = Colors.Transparent
-                    };
-                        if (Root != null) Root.Background = brush;
-                        if (AppTitleBar != null) AppTitleBar.Background = brush;
-                    }
-                    catch
-                    {
-                        if (Root != null) Root.Background = new SolidColorBrush(Colors.Transparent);
-                    }
-                    break;
-                // custom types removed
-                default:
-                    SystemBackdrop = null;
-                    SetTransparentRootAndTitleBar();
-                    break;
-            }
         }
 
-        private void SetTransparentRootAndTitleBar()
+        private Windows.UI.Color GetTextColorForTheme(ElementTheme theme)
         {
-            var transparentBrush = new SolidColorBrush(Colors.Transparent);
-            if (Root != null) Root.Background = transparentBrush;
-            if (AppTitleBar != null) AppTitleBar.Background = transparentBrush;
+            return theme == ElementTheme.Dark
+                ? Windows.UI.Color.FromArgb(255, 255, 255, 255)
+                : Windows.UI.Color.FromArgb(255, 0, 0, 0);
         }
 
-        private void SetSolidBackgroundForNone()
-        {
-            if (Content is FrameworkElement rootElement)
-            {
-                var theme = rootElement.ActualTheme;
-                Windows.UI.Color backgroundColor;
-                Windows.UI.Color textColor;
+        // SetTransparentRootAndTitleBar removed - now in BackdropService
 
-                if (theme == ElementTheme.Dark)
-                {
-                    // Dark mode: black background, white text
-                    backgroundColor = Windows.UI.Color.FromArgb(255, 0, 0, 0); // Black
-                    textColor = Windows.UI.Color.FromArgb(255, 255, 255, 255); // White
-                }
-                else
-                {
-                    // Light mode: white background, black text
-                    backgroundColor = Windows.UI.Color.FromArgb(255, 255, 255, 255); // White
-                    textColor = Windows.UI.Color.FromArgb(255, 0, 0, 0); // Black
-                }
-
-                var backgroundBrush = new SolidColorBrush(backgroundColor);
-                if (Root != null) Root.Background = backgroundBrush;
-                if (AppTitleBar != null) AppTitleBar.Background = backgroundBrush;
-                
-                // Force all text color resources to match the theme (ignore Color settings)
-                ForceTextColorsForNone(textColor);
-            }
-        }
+        // SetSolidBackgroundForNone removed - now in BackdropService
 
         private void ForceTextColorsForNone(Windows.UI.Color textColor)
         {
@@ -378,7 +251,7 @@ namespace Pivot
                 // Restore all text colors from settings
                 foreach (var role in TextColorRoleDefinitions.Roles)
                 {
-                    var hex = _settingsService.GetTextColorOverride(role.SettingKey, role.DefaultHex);
+                    var hex = _themeSettings.GetTextColorOverride(role.SettingKey, role.DefaultHex);
                     var color = Pivot.Utilities.TextColorHelper.ParseHexOrDefault(hex, role.DefaultColor);
                     textColorManager.ApplyColor(role.SettingKey, color);
                 }
@@ -391,49 +264,34 @@ namespace Pivot
 
         private void Window_Activated(object sender, WindowActivatedEventArgs args)
         {
-            if (_configurationSource != null)
-            {
-                _configurationSource.IsInputActive = args.WindowActivationState != WindowActivationState.Deactivated;
-            }
+            _backdropService.SetInputActive(args.WindowActivationState != WindowActivationState.Deactivated);
         }
 
         private void Window_Closed(object sender, WindowEventArgs args)
         {
-            if (_acrylicController != null)
-            {
-                _acrylicController.Dispose();
-                _acrylicController = null;
-            }
-            if (_micaController != null)
-            {
-                _micaController.Dispose();
-                _micaController = null;
-            }
+            _backdropService.Dispose();
             Activated -= Window_Activated;
-            if (Content is FrameworkElement rootElement) // nullチェックを追加
+            if (Content is FrameworkElement rootElement)
             {
                 rootElement.ActualThemeChanged -= Window_ThemeChanged;
             }
-            _configurationSource = null;
         }
 
         private void Window_ThemeChanged(FrameworkElement sender, object args)
         {
-            if (_configurationSource != null)
-            {
-                SetConfigurationSourceTheme();
-            }
+            // Update backdrop theme via service
+            _backdropService.UpdateTheme(sender.ActualTheme);
             
-            // If backdrop type is None, update background colors when theme changes
-            if (_settingsService.GetBackdropType() == BackdropType.None)
+            // If backdrop type is None, update text colors for theme
+            if (_backdropService.CurrentBackdropType == BackdropType.None)
             {
-                SetSolidBackgroundForNone();
+                ForceTextColorsForNone(GetTextColorForTheme(sender.ActualTheme));
             }
             
             // Update text colors if customization is disabled (use default theme colors)
             try
             {
-                if (!_settingsService.IsTextColorCustomizationEnabled())
+                if (!_themeSettings.IsTextColorCustomizationEnabled)
                 {
                     var textColorManager = App.Current.Services.GetService(typeof(ITextColorResourceManager)) as ITextColorResourceManager;
                     textColorManager?.UpdateThemeColors();
@@ -445,18 +303,7 @@ namespace Pivot
             }
         }
 
-        private void SetConfigurationSourceTheme()
-        {
-            if (_configurationSource != null && Content is FrameworkElement rootElement) // nullチェックを追加
-            {
-                switch (rootElement.ActualTheme)
-                {
-                    case ElementTheme.Dark: _configurationSource.Theme = SystemBackdropTheme.Dark; break;
-                    case ElementTheme.Light: _configurationSource.Theme = SystemBackdropTheme.Light; break;
-                    case ElementTheme.Default: _configurationSource.Theme = SystemBackdropTheme.Default; break;
-                }
-            }
-        }
+        // SetConfigurationSourceTheme removed - now in BackdropService
 
         private void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -541,10 +388,7 @@ namespace Pivot
             }
         }
 
-        public void Receive(NavigationRequestMessage message)
-        {
-            NavigateTo(message.Value);
-        }
+        // NavigationRequestMessage handling moved to NavigationService
 
         private Brush? GetResourceBrush(string key)
         {

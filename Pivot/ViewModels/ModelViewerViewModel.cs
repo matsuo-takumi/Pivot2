@@ -16,12 +16,14 @@ namespace Pivot.ViewModels
         private readonly Pivot.Utilities.OrbitCamera _camera = new();
         private Pivot.Utilities.VulkanInteropRenderer? _renderer;
         private Pivot.Utilities.BoundingBox _currentBounds;
-        private SettingsService? _settingsService;
+        private ViewportSettingsService? _viewportSettings;
+        private MaterialSettingsService? _materialSettings;
         private ViewportBackgroundMode _backgroundMode = ViewportBackgroundMode.Custom;
 
         public ModelViewerViewModel()
         {
-            _settingsService = App.Current?.Services?.GetService<SettingsService>();
+            _viewportSettings = App.Current?.Services?.GetService<ViewportSettingsService>();
+            _materialSettings = App.Current?.Services?.GetService<MaterialSettingsService>();
             var messenger = App.Current?.Services?.GetService<IMessenger>();
             
             if (messenger != null)
@@ -92,10 +94,10 @@ namespace Pivot.ViewModels
         {
             try
             {
-                _settingsService ??= App.Current?.Services?.GetService<SettingsService>();
-                if (_settingsService == null) return;
+                _viewportSettings ??= App.Current?.Services?.GetService<ViewportSettingsService>();
+                if (_viewportSettings == null) return;
                 
-                _backgroundMode = _settingsService.GetViewportBackgroundMode();
+                _backgroundMode = _viewportSettings.GetBackgroundMode();
                 
                 if (_backgroundMode == ViewportBackgroundMode.MatchTheme)
                 {
@@ -103,7 +105,7 @@ namespace Pivot.ViewModels
                 }
                 else
                 {
-                    var hexColor = _settingsService.GetViewportBackgroundColor();
+                    var hexColor = _viewportSettings.GetBackgroundColor();
                     BackgroundColor = HexToColor(hexColor);
                 }
             }
@@ -120,13 +122,13 @@ namespace Pivot.ViewModels
         {
             try
             {
-                _settingsService ??= App.Current?.Services?.GetService<SettingsService>();
-                _backgroundMode = _settingsService?.GetViewportBackgroundMode() ?? ViewportBackgroundMode.Custom;
+                _viewportSettings ??= App.Current?.Services?.GetService<ViewportSettingsService>();
+                _backgroundMode = _viewportSettings?.GetBackgroundMode() ?? ViewportBackgroundMode.Custom;
                 
                 if (_backgroundMode != ViewportBackgroundMode.MatchTheme)
                 {
                     // Use custom color from settings
-                    var hexColor = _settingsService?.GetViewportBackgroundColor() ?? "#3399CC";
+                    var hexColor = _viewportSettings?.GetBackgroundColor() ?? "#3399CC";
                     BackgroundColor = HexToColor(hexColor);
                     return;
                 }
@@ -170,13 +172,13 @@ namespace Pivot.ViewModels
         {
             try
             {
-                _settingsService ??= App.Current?.Services?.GetService<SettingsService>();
-                if (_settingsService == null || _renderer == null) return;
+                _materialSettings ??= App.Current?.Services?.GetService<MaterialSettingsService>();
+                if (_materialSettings == null || _renderer == null) return;
                 
-                var (r, g, b, metallic, roughness) = _settingsService.GetMaterialParams();
-                _renderer.SetMaterialParams(r, g, b, metallic, roughness);
+                var mp = _materialSettings.GetMaterialParams();
+                _renderer.SetMaterialParams(mp.AlbedoR, mp.AlbedoG, mp.AlbedoB, mp.Metallic, mp.Roughness);
                 
-                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] Applied material params: RGB({r:F2},{g:F2},{b:F2}) M={metallic:F2} R={roughness:F2}");
+                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] Applied material params: RGB({mp.AlbedoR:F2},{mp.AlbedoG:F2},{mp.AlbedoB:F2}) M={mp.Metallic:F2} R={mp.Roughness:F2}");
             }
             catch (Exception ex)
             {
@@ -512,7 +514,7 @@ namespace Pivot.ViewModels
         /// </summary>
         public async Task SaveLightingStateAsync()
         {
-            if (_settingsService == null) return;
+            if (_materialSettings == null) return;
             
             var state = new LightingPreset
             {
@@ -529,7 +531,7 @@ namespace Pivot.ViewModels
                 BackColor = BackColor
             };
             
-            await _settingsService.SaveLightingStateAsync(state);
+            await _materialSettings.SaveLightingStateAsync(state);
         }
 
         /// <summary>
@@ -537,9 +539,9 @@ namespace Pivot.ViewModels
         /// </summary>
         public async Task RestoreLightingStateAsync()
         {
-            if (_settingsService == null) return;
+            if (_materialSettings == null) return;
             
-            var state = await _settingsService.GetSavedLightingStateAsync();
+            var state = await _materialSettings.GetSavedLightingStateAsync();
             if (state != null)
             {
                 ApplyLightingPreset(state);

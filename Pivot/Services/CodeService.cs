@@ -19,13 +19,13 @@ namespace Pivot.Services
     {
         private readonly IAssetRepository _repository;
         private readonly ILogger<CodeService> _logger;
-        private readonly SettingsService _settingsService;
+        private readonly DirectorySettingsService _directorySettings;
 
-        public CodeService(IAssetRepository repository, ILogger<CodeService> logger, SettingsService settingsService)
+        public CodeService(IAssetRepository repository, ILogger<CodeService> logger, DirectorySettingsService directorySettings)
         {
             _repository = repository;
             _logger = logger;
-            _settingsService = settingsService;
+            _directorySettings = directorySettings;
         }
 
         public async Task<List<CodeFile>> GetAllSnippetsAsync(CancellationToken ct = default)
@@ -99,7 +99,7 @@ namespace Pivot.Services
             if (string.IsNullOrWhiteSpace(path))
             {
                 // Fallback: Generate generic path in user code dir
-                var dirs = _settingsService.GetUserSettings().CodeDirectories;
+                var dirs = _directorySettings.CodeDirectories;
                 var root = dirs?.FirstOrDefault();
                 if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
                     throw new InvalidOperationException("No valid code directory configured to save new snippet.");

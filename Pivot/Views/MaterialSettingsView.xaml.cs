@@ -10,6 +10,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Windows.UI;
+using System.Threading.Tasks;
 
 namespace Pivot.Views
 {
@@ -18,7 +19,7 @@ namespace Pivot.Views
     /// </summary>
     public sealed partial class MaterialSettingsView : UserControl
     {
-        private readonly SettingsService _settings;
+        private readonly MaterialSettingsService _settings;
         private readonly IMessenger _messenger;
         private bool _isLoading = true;
 
@@ -28,23 +29,24 @@ namespace Pivot.Views
         {
             this.InitializeComponent();
 
-            _settings = App.Current.Services.GetRequiredService<SettingsService>();
+            _settings = App.Current.Services.GetRequiredService<MaterialSettingsService>();
             _messenger = App.Current.Services.GetRequiredService<IMessenger>();
 
             this.Loaded += MaterialSettingsView_Loaded;
         }
 
-        private void MaterialSettingsView_Loaded(object sender, RoutedEventArgs e)
+        private async void MaterialSettingsView_Loaded(object sender, RoutedEventArgs e)
         {
-            LoadPresets();
+            await LoadPresetsAsync();
             LoadCurrentSettings();
             _isLoading = false;
         }
 
-        private void LoadPresets()
+        private async Task LoadPresetsAsync()
         {
             Presets.Clear();
-            foreach (var preset in _settings.GetMaterialPresets())
+            var presets = await _settings.GetMaterialPresetsAsync();
+            foreach (var preset in presets)
             {
                 Presets.Add(preset);
             }
@@ -53,7 +55,12 @@ namespace Pivot.Views
 
         private void LoadCurrentSettings()
         {
-            var (r, g, b, metallic, roughness) = _settings.GetMaterialParams();
+            var mp = _settings.GetMaterialParams();
+            var r = mp.AlbedoR;
+            var g = mp.AlbedoG;
+            var b = mp.AlbedoB;
+            var metallic = mp.Metallic;
+            var roughness = mp.Roughness;
 
             AlbedoColorPicker.Color = Color.FromArgb(255, (byte)(r * 255), (byte)(g * 255), (byte)(b * 255));
             MetallicSlider.Value = metallic;
@@ -149,7 +156,7 @@ namespace Pivot.Views
 
             // Save custom presets
             var customPresets = Presets.Where(p => p.IsCustom).ToList();
-            await _settings.SetMaterialPresetsAsync(customPresets);
+            await _settings.SaveMaterialPresetsAsync(customPresets);
         }
     }
 }

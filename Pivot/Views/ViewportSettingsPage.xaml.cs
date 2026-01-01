@@ -10,13 +10,13 @@ namespace Pivot.Views
 {
     public sealed partial class ViewportSettingsPage : Page
     {
-        private readonly SettingsService? _settings;
+        private readonly ViewportSettingsService? _settings;
         private bool _isInitializing = true;
 
         public ViewportSettingsPage()
         {
             this.InitializeComponent();
-            _settings = App.Current.Services.GetService<SettingsService>();
+            _settings = App.Current.Services.GetService<ViewportSettingsService>();
             
             LoadCurrentSettings();
             _isInitializing = false;
@@ -27,7 +27,7 @@ namespace Pivot.Views
             try
             {
                 // Camera gesture preset
-                var preset = _settings?.GetViewportCameraGesture() ?? CameraGesturePreset.Maya;
+                var preset = _settings?.GetCameraGesture() ?? CameraGesturePreset.Maya;
                 
                 for (int i = 0; i < GesturePresetComboBox.Items.Count; i++)
                 {
@@ -42,7 +42,7 @@ namespace Pivot.Views
                 UpdateGestureDisplay(preset);
                 
                 // Background mode
-                var bgMode = _settings?.GetViewportBackgroundMode() ?? ViewportBackgroundMode.Custom;
+                var bgMode = _settings?.GetBackgroundMode() ?? ViewportBackgroundMode.Custom;
                 if (bgMode == ViewportBackgroundMode.Custom)
                 {
                     CustomModeRadio.IsChecked = true;
@@ -54,7 +54,7 @@ namespace Pivot.Views
                 UpdateColorPickerVisibility(bgMode);
                 
                 // Background color
-                var bgColorHex = _settings?.GetViewportBackgroundColor() ?? "#3399CC";
+                var bgColorHex = _settings?.GetBackgroundColor() ?? "#3399CC";
                 BgColorPicker.Color = HexToColor(bgColorHex);
             }
             catch (Exception ex)
@@ -75,7 +75,7 @@ namespace Pivot.Views
                 {
                     if (_settings != null)
                     {
-                        await _settings.SetViewportCameraGestureAsync(preset);
+                        await _settings.SetCameraGestureAsync(preset);
                         
                         UpdateGestureDisplay(preset);
                         
@@ -128,7 +128,7 @@ namespace Pivot.Views
                 
                 if (_settings != null)
                 {
-                    await _settings.SetViewportBackgroundModeAsync(mode);
+                    await _settings.SetBackgroundModeAsync(mode);
                     System.Diagnostics.Debug.WriteLine($"[ViewportSettingsPage] Saved background mode: {mode}");
                 }
                 
@@ -158,7 +158,7 @@ namespace Pivot.Views
                 
                 if (_settings != null)
                 {
-                    await _settings.SetViewportBackgroundColorAsync(hexColor);
+                    await _settings.SetBackgroundColorAsync(hexColor);
                     System.Diagnostics.Debug.WriteLine($"[ViewportSettingsPage] Saved background color: {hexColor}");
                 }
             }

@@ -83,7 +83,8 @@ namespace Pivot.ViewModels
         public SelectionManagerViewModel<TemplateItem> SelectionManager { get; }
 
         private System.Threading.CancellationTokenSource? _loadCts;
-        private SettingsService? _settings;
+        private ThemeSettingsService? _themeSettings;
+        private ImageDisplaySettingsService? _imageDisplaySettings;
         private DirectorySettingsService? _directorySettings;
         private readonly IMessenger? _messenger;
         private readonly MetadataService? _metadataService;
@@ -111,7 +112,8 @@ namespace Pivot.ViewModels
             try
             {
                 var services = App.Current.Services;
-                _settings = services.GetService<SettingsService>();
+                _themeSettings = services.GetService<ThemeSettingsService>();
+                _imageDisplaySettings = services.GetService<ImageDisplaySettingsService>();
                 _directorySettings = services.GetService<DirectorySettingsService>();
                 _messenger = services.GetService<IMessenger>();
                 _metadataService = services.GetService<MetadataService>();
@@ -124,14 +126,17 @@ namespace Pivot.ViewModels
                     _messenger.RegisterAll(this);
                 }
 
-                if (_settings != null)
+                if (_themeSettings != null)
                 {
-                    SelectionBorderThickness = _settings.GetImageSelectionBorderThickness();
-                    
+                    SelectionBorderThickness = _themeSettings.ImageSelectionBorderThickness;
+                }
+                
+                if (_imageDisplaySettings != null)
+                {
                     // Load persisted layout and sort settings
-                    CurrentLayout = _settings.GetImageLayoutMode();
-                    CurrentSortField = _settings.GetImageSortField();
-                    CurrentSortDirection = _settings.GetImageSortDirection();
+                    CurrentLayout = _imageDisplaySettings.GetLayoutMode();
+                    CurrentSortField = _imageDisplaySettings.GetSortField();
+                    CurrentSortDirection = _imageDisplaySettings.GetSortDirection();
                 }
             }
             catch { }
@@ -181,8 +186,8 @@ namespace Pivot.ViewModels
             ApplySort();
             
             // Persist settings
-            _ = _settings?.SetImageSortFieldAsync(CurrentSortField);
-            _ = _settings?.SetImageSortDirectionAsync(CurrentSortDirection);
+            _ = _imageDisplaySettings?.SetSortFieldAsync(CurrentSortField);
+            _ = _imageDisplaySettings?.SetSortDirectionAsync(CurrentSortDirection);
         }
 
         [RelayCommand]
@@ -194,7 +199,7 @@ namespace Pivot.ViewModels
             ApplySort();
             
             // Persist settings
-            _ = _settings?.SetImageSortDirectionAsync(CurrentSortDirection);
+            _ = _imageDisplaySettings?.SetSortDirectionAsync(CurrentSortDirection);
         }
 
         private void ApplySort()
@@ -294,7 +299,7 @@ namespace Pivot.ViewModels
             UseTextListMode = value == LayoutType.List;
             ShowThumbnails = !UseTextListMode;
             
-            _ = _settings?.SetImageLayoutModeAsync(value);
+            _ = _imageDisplaySettings?.SetLayoutModeAsync(value);
         }
 
         public async void Receive(DirectoryChangedMessage message)
@@ -518,8 +523,8 @@ namespace Pivot.ViewModels
             }
             catch (Exception ex)
             {
-               // Fallback to legacy
-               await LoadFromDirectoriesAsync(_currentDirectories ?? Enumerable.Empty<string>());
+               // Database load failed - log error instead of falling back to legacy
+               System.Diagnostics.Debug.WriteLine($"LoadFromDatabaseAsync failed: {ex.Message}");
             }
             finally
             {
@@ -552,129 +557,7 @@ namespace Pivot.ViewModels
             });
         }
 
-
-
-        /// <summary>
-        /// Legacy filesystem scan (fallback)
-        /// </summary>
-        public async Task LoadFromDirectoriesAsync(IEnumerable<string> directories, int maxFiles = 100000)
-        {
-            if (directories == null) return;
-            // Use class member _imageExtensions instead of local var
-            var files = new List<string>();
-            
-            await Task.Run(() =>
-            {
-                foreach (var d in directories)
-                {
-                    try
-                    {
-                        if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
-                        foreach (var f in Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
-                        {
-                            if (_imageExtensions.Contains(Path.GetExtension(f)))
-                            {
-                                files.Add(f);
-                                if (files.Count >= maxFiles) return;
-                            }
-                        }
-                    }
-                    catch { }
-                }
-            });
-
-            if (files.Count == 0) return;
-
-            try { _loadCts?.Cancel(); } catch { }
-            _loadCts = new System.Threading.CancellationTokenSource();
-            var ct = _loadCts.Token;
-
-            _dispatcherQueue.TryEnqueue(() => 
-            {
-                Images.Clear();
-                _allImages.Clear();
-            });
-            var thumbService = App.Current.Services.GetService<IThumbnailService>();
-            try
-            {
-                if (thumbService != null)
-                {
-                    var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                    var cacheDir = Path.Combine(local, "Pivot", "cache", "thumbnails");
-                    await thumbService.InitializeAsync(cacheDir, 500L * 1024 * 1024);
-                }
-            }
-            catch { }
-
-            int chunkSize = 50;
-            var chunks = files.Chunk(chunkSize);
-            
-            foreach (var chunk in chunks)
-            {
-                if (ct.IsCancellationRequested) break;
-                
-                var tasks = chunk.Select(f => CreateTemplateItemAsync(f, thumbService));
-                var items = await Task.WhenAll(tasks);
-                
-                _dispatcherQueue.TryEnqueue(() => _allImages.AddRange(items));
-            }
-
-            _dispatcherQueue.TryEnqueue(() => 
-            {
-                BuildDirectoryTree(directories);
-                FilterImages();
-            });
-        }
-
-        private async Task<TemplateItem> CreateTemplateItemAsync(string f, IThumbnailService? thumbService)
-        {
-            long fileSize = 0;
-            DateTime lastMod = DateTime.MinValue;
-            try
-            {
-                var fi = new FileInfo(f);
-                fileSize = fi.Length;
-                lastMod = fi.LastWriteTime;
-            }
-            catch { }
-            
-            var item = new TemplateItem
-            {
-                Kind = AssetKind.Image,
-                Path = f,
-                Name = Path.GetFileName(f),
-                Size = fileSize,
-                LastModified = lastMod
-            };
-
-            try
-            {
-                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(f);
-                var props = await file.Properties.GetImagePropertiesAsync();
-                
-                item.PixelWidth = (int)props.Width;
-                item.PixelHeight = (int)props.Height;
-                if (item.PixelHeight > 0)
-                {
-                    item.AspectRatio = (double)item.PixelWidth / item.PixelHeight;
-                }
-            }
-            catch { }
-
-            try
-            {
-                if (thumbService != null)
-                {
-                    var cached = thumbService.TryGetCachedThumbnailPath(f, 300, 200);
-                    if (!string.IsNullOrWhiteSpace(cached))
-                    {
-                        item.ThumbnailPath = new Uri(cached).AbsoluteUri;
-                    }
-                }
-            }
-            catch { }
-            return item;
-        }
+        // Legacy LoadFromDirectoriesAsync and CreateTemplateItemAsync removed - DB-first pattern only
 
         private void BuildDirectoryTree(IEnumerable<string> rootDirectories)
         {

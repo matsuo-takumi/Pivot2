@@ -57,10 +57,10 @@ namespace Pivot.Controls
         {
             try
             {
-                var settings = App.Current?.Services?.GetService<SettingsService>();
-                if (settings != null)
+                var viewportSettings = App.Current?.Services?.GetService<ViewportSettingsService>();
+                if (viewportSettings != null)
                 {
-                    var preset = settings.GetUserSettings().ViewportCameraGesture;
+                    var preset = viewportSettings.GetCameraGesture();
                     _gestureConfig = CameraGestureConfig.FromPreset(preset);
                 }
             }

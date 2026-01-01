@@ -13,7 +13,7 @@ namespace Pivot.ViewModels
 {
     public partial class OverlayTintViewModel : ObservableObject
     {
-        private readonly SettingsService _settings;
+        private readonly ThemeSettingsService _themeSettings;
         private readonly IMessenger _messenger;
         private bool _isInitializing = true;
         private bool _isUpdatingFromColor;
@@ -27,14 +27,14 @@ namespace Pivot.ViewModels
         private double _saturation;
         private double _lightness;
 
-        public OverlayTintViewModel(SettingsService settings, IMessenger messenger)
+        public OverlayTintViewModel(ThemeSettingsService themeSettings, IMessenger messenger)
         {
-            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _themeSettings = themeSettings ?? throw new ArgumentNullException(nameof(themeSettings));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
-            TintColor = ParseColor(_settings.GetOverlayTintColor());
-            TintOpacity = _settings.GetOverlayTintOpacity();
-            TintLuminosityOpacity = _settings.GetOverlayTintLuminosityOpacity();
-            TintTransitionDurationMs = _settings.GetOverlayTintTransitionDurationMs();
+            TintColor = ParseColor(_themeSettings.OverlayTintColor);
+            TintOpacity = _themeSettings.OverlayTintOpacity;
+            TintLuminosityOpacity = _themeSettings.OverlayTintLuminosityOpacity;
+            TintTransitionDurationMs = _themeSettings.OverlayTintTransitionDurationMs;
             UpdateBrush();
             UpdateHslFromColor(TintColor);
             _isInitializing = false;
@@ -178,10 +178,10 @@ namespace Pivot.ViewModels
             try
             {
                 var hex = FormatHex(TintColor);
-                await _settings.SetOverlayTintColorAsync(hex);
-                await _settings.SetOverlayTintOpacityAsync(TintOpacity);
-                await _settings.SetOverlayTintLuminosityOpacityAsync(TintLuminosityOpacity);
-                await _settings.SetOverlayTintTransitionDurationMsAsync((int)Math.Round(Math.Max(0, TintTransitionDurationMs)));
+                await _themeSettings.SetOverlayTintColorAsync(hex);
+                await _themeSettings.SetOverlayTintOpacityAsync(TintOpacity);
+                await _themeSettings.SetOverlayTintLuminosityOpacityAsync(TintLuminosityOpacity);
+                await _themeSettings.SetOverlayTintTransitionDurationMsAsync((int)Math.Round(Math.Max(0, TintTransitionDurationMs)));
                 try { _messenger.Send(new OverlayColorChangedMessage(hex)); } catch { }
                 StatusText = "Applied";
             }

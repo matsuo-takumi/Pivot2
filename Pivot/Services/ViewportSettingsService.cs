@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
@@ -21,6 +22,27 @@ namespace Pivot.Services
         private CameraGesturePreset _cameraGesture = CameraGesturePreset.Maya;
         private ViewportBackgroundMode _backgroundMode = ViewportBackgroundMode.Custom;
         private string _backgroundColor = "#3399CC";
+
+        // Bool settings cache (loaded once at startup to avoid sync-over-async)
+        private readonly Dictionary<string, bool> _boolCache = new();
+        private static readonly Dictionary<string, bool> _boolDefaults = new()
+        {
+            ["Viewport.ShowPolygonCount"] = true,
+            ["Viewport.ShowVertexCount"] = true,
+            ["Viewport.ShowUVSetCount"] = false,
+            ["Viewport.ShowMaterialCount"] = false,
+            ["Viewport.ShowBoundingBox"] = false,
+            ["Viewport.ShowFPS"] = true,
+            ["Viewport.ShowResolution"] = false,
+            ["Viewport.ShowViewportSize"] = false,
+            ["Viewport.ShowCameraInfo"] = false,
+            ["Viewport.ShowAxisGizmo"] = true,
+            ["Viewport.BackfaceCulling"] = true,
+        };
+
+        private string _assetLitShortcut = "Alt+1";
+        private string _assetDepthShortcut = "Alt+2";
+        private string _assetWorldNormalShortcut = "Alt+3";
 
         public ViewportSettingsService(
             ILogger<ViewportSettingsService> logger,
@@ -51,6 +73,23 @@ namespace Pivot.Services
                 var bgColor = await _settingsStore.GetAsync("Viewport.BackgroundColor");
                 if (!string.IsNullOrEmpty(bgColor))
                     _backgroundColor = bgColor;
+
+                // Shortcuts
+                var lit = await _settingsStore.GetAsync("KeyConfig.AssetLit");
+                if (!string.IsNullOrEmpty(lit)) _assetLitShortcut = lit;
+
+                var depth = await _settingsStore.GetAsync("KeyConfig.AssetDepth");
+                if (!string.IsNullOrEmpty(depth)) _assetDepthShortcut = depth;
+
+                var normal = await _settingsStore.GetAsync("KeyConfig.AssetWorldNormal");
+                if (!string.IsNullOrEmpty(normal)) _assetWorldNormalShortcut = normal;
+
+                // Preload all bool settings into cache
+                foreach (var kvp in _boolDefaults)
+                {
+                    var val = await _settingsStore.GetAsync(kvp.Key);
+                    _boolCache[kvp.Key] = bool.TryParse(val, out var parsed) ? parsed : kvp.Value;
+                }
 
                 _logger.LogInformation("ViewportSettingsService: Loaded");
             }
@@ -108,10 +147,60 @@ namespace Pivot.Services
         public bool GetShowCameraInfo() => GetBoolSetting("Viewport.ShowCameraInfo", false);
         public Task SetShowCameraInfoAsync(bool value) => SetBoolSettingAsync("Viewport.ShowCameraInfo", value);
 
+        public bool GetShowAxisGizmo() => GetBoolSetting("Viewport.ShowAxisGizmo", true);
+        public Task SetShowAxisGizmoAsync(bool value) => SetBoolSettingAsync("Viewport.ShowAxisGizmo", value);
+
         // =============== Rendering ===============
 
         public bool GetBackfaceCulling() => GetBoolSetting("Viewport.BackfaceCulling", true);
         public Task SetBackfaceCullingAsync(bool value) => SetBoolSettingAsync("Viewport.BackfaceCulling", value);
+
+        // =============== Shortcuts ===============
+
+        public string GetAssetLitShortcut() => _assetLitShortcut;
+
+        public async Task SetAssetLitShortcutAsync(string shortcut)
+        {
+            _assetLitShortcut = shortcut ?? "Alt+1";
+            try
+            {
+                await _settingsStore.UpsertAsync("KeyConfig.AssetLit", _assetLitShortcut);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ViewportSettingsService: Failed to persist KeyConfig.AssetLit.");
+            }
+        }
+
+        public string GetAssetDepthShortcut() => _assetDepthShortcut;
+
+        public async Task SetAssetDepthShortcutAsync(string shortcut)
+        {
+            _assetDepthShortcut = shortcut ?? "Alt+2";
+            try
+            {
+                await _settingsStore.UpsertAsync("KeyConfig.AssetDepth", _assetDepthShortcut);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ViewportSettingsService: Failed to persist KeyConfig.AssetDepth.");
+            }
+        }
+
+        public string GetAssetWorldNormalShortcut() => _assetWorldNormalShortcut;
+
+        public async Task SetAssetWorldNormalShortcutAsync(string shortcut)
+        {
+            _assetWorldNormalShortcut = shortcut ?? "Alt+3";
+            try
+            {
+                await _settingsStore.UpsertAsync("KeyConfig.AssetWorldNormal", _assetWorldNormalShortcut);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ViewportSettingsService: Failed to persist KeyConfig.AssetWorldNormal.");
+            }
+        }
 
         // =============== Background ===============
 
@@ -151,14 +240,8 @@ namespace Pivot.Services
 
         private bool GetBoolSetting(string key, bool defaultValue)
         {
-            try
-            {
-                var value = _settingsStore.GetAsync(key).GetAwaiter().GetResult();
-                if (bool.TryParse(value, out var result))
-                    return result;
-            }
-            catch { }
-            return defaultValue;
+            // Read from pre-loaded cache (no blocking async call)
+            return _boolCache.TryGetValue(key, out var cached) ? cached : defaultValue;
         }
 
         private async Task SetBoolSettingAsync(string key, bool value)

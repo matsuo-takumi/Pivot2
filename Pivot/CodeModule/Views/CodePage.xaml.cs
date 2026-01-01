@@ -97,22 +97,24 @@ namespace Pivot.CodeModule.Views
             }
             catch { }
             // Restore previously selected snippet (persisted) if available
+            // NOTE: Feature temporarily disabled during SettingsService removal
+            // TODO: Re-implement with CodeSettingsService
             try
             {
-                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                if (settings != null && ViewModel != null)
-                {
-                    var lastId = settings.GetLastSelectedSnippetId();
-                    if (lastId != Guid.Empty)
-                    {
-                        var found = ViewModel.Snippets.FirstOrDefault(s => s.Id == lastId);
-                        if (found != null)
-                        {
-                            ViewModel.SelectedSnippet = found;
-                            _ = SendSelectedSnippetToEditorAsync();
-                        }
-                    }
-                }
+                // var codeSettings = App.Current.Services.GetService(typeof(CodeSettingsService)) as CodeSettingsService;
+                // if (codeSettings != null && ViewModel != null)
+                // {
+                //     var lastId = codeSettings.GetLastSelectedSnippetId();
+                //     if (lastId != Guid.Empty)
+                //     {
+                //         var found = ViewModel.Snippets.FirstOrDefault(s => s.Id == lastId);
+                //         if (found != null)
+                //         {
+                //             ViewModel.SelectedSnippet = found;
+                //             _ = SendSelectedSnippetToEditorAsync();
+                //         }
+                //     }
+                // }
             }
             catch { }
 
@@ -482,16 +484,17 @@ namespace Pivot.CodeModule.Views
                     _ = CloseSnippetWithAnimationAsync();
                 }
                 // Persist last selected snippet id for restoration across page instances
-                try
-                {
-                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                    if (settings != null)
-                    {
-                        var id = ViewModel?.SelectedSnippet?.Id ?? Guid.Empty;
-                        _ = settings.SetLastSelectedSnippetIdAsync(id);
-                    }
-                }
-                catch { }
+                // NOTE: Feature temporarily disabled during SettingsService removal
+                // try
+                // {
+                //     var codeSettings = App.Current.Services.GetService(typeof(CodeSettingsService)) as CodeSettingsService;
+                //     if (codeSettings != null)
+                //     {
+                //         var id = ViewModel?.SelectedSnippet?.Id ?? Guid.Empty;
+                //         _ = codeSettings.SetLastSelectedSnippetIdAsync(id);
+                //     }
+                // }
+                // catch { }
             }
         }
 
@@ -2186,21 +2189,21 @@ namespace Pivot.CodeModule.Views
                     return;
                 }
 
-                var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                var userSettings = settings?.GetUserSettings();
-                var dirs = new System.Collections.Generic.List<string>(userSettings?.CodeDirectories ?? new System.Collections.Generic.List<string>());
+                var directorySettings = App.Current.Services.GetService(typeof(DirectorySettingsService)) as DirectorySettingsService;
+                var dirs = new System.Collections.Generic.List<string>(directorySettings?.CodeDirectories ?? new System.Collections.Generic.List<string>());
                 var allowedExts = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase) { ".json", ".cs", ".py", ".md", ".txt" };
 
-                // include export directory as a fallback
-                try
-                {
-                    var exportDir = settings?.GetExportOutputDirectory();
-                    if (!string.IsNullOrWhiteSpace(exportDir) && !dirs.Contains(exportDir) && System.IO.Directory.Exists(exportDir))
-                    {
-                        dirs.Add(exportDir);
-                    }
-                }
-                catch { }
+                // NOTE: Export directory fallback disabled during SettingsService removal
+                // DirectorySettingsService does not have ExportOutputDirectory property
+                // try
+                // {
+                //     var exportDir = directorySettings?.ExportOutputDirectory;
+                //     if (!string.IsNullOrWhiteSpace(exportDir) && !dirs.Contains(exportDir) && System.IO.Directory.Exists(exportDir))
+                //     {
+                //         dirs.Add(exportDir);
+                //     }
+                // }
+                // catch { }
 
                 foreach (var dir in dirs)
                 {
@@ -2233,33 +2236,34 @@ namespace Pivot.CodeModule.Views
                 }
 
                 // If file not found, try direct export filename match
-                try
-                {
-                    var exportDir = settings?.GetExportOutputDirectory();
-                    if (!string.IsNullOrWhiteSpace(exportDir) && System.IO.Directory.Exists(exportDir))
-                    {
-                        var jsonPath = System.IO.Path.Combine(exportDir, snippet.Id.ToString() + ".json");
-                        var mdPath = System.IO.Path.Combine(exportDir, snippet.Id.ToString() + ".md");
-                        if (System.IO.File.Exists(jsonPath))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: found exported json {jsonPath}");
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{jsonPath}\"", UseShellExecute = true });
-                            return;
-                        }
-                        if (System.IO.File.Exists(mdPath))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: found exported md {mdPath}");
-                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{mdPath}\"", UseShellExecute = true });
-                            return;
-                        }
-                    }
-                }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: export check error {ex.Message}"); }
+                // NOTE: Disabled during SettingsService removal - DirectorySettingsService lacks ExportOutputDirectory
+                // try
+                // {
+                //     var exportDir = directorySettings?.ExportOutputDirectory;
+                //     if (!string.IsNullOrWhiteSpace(exportDir) && System.IO.Directory.Exists(exportDir))
+                //     {
+                //         var jsonPath = System.IO.Path.Combine(exportDir, snippet.Id.ToString() + ".json");
+                //         var mdPath = System.IO.Path.Combine(exportDir, snippet.Id.ToString() + ".md");
+                //         if (System.IO.File.Exists(jsonPath))
+                //         {
+                //             System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: found exported json {jsonPath}");
+                //             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{jsonPath}\"", UseShellExecute = true });
+                //             return;
+                //         }
+                //         if (System.IO.File.Exists(mdPath))
+                //         {
+                //             System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: found exported md {mdPath}");
+                //             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{mdPath}\"", UseShellExecute = true });
+                //             return;
+                //         }
+                //     }
+                // }
+                // catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: export check error {ex.Message}"); }
 
                 // Fallback: open first configured code directory if available
                 try
                 {
-                    var firstDir = userSettings?.CodeDirectories?.FirstOrDefault();
+                    var firstDir = directorySettings?.CodeDirectories?.FirstOrDefault();
                     if (!string.IsNullOrWhiteSpace(firstDir) && System.IO.Directory.Exists(firstDir))
                     {
                         System.Diagnostics.Debug.WriteLine($"CardOpenDirectoryButton_Click: opening directory {firstDir}");
@@ -2727,10 +2731,10 @@ namespace Pivot.CodeModule.Views
                         return; // No change
                     }
 
-                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                    if (settings != null)
+                    var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
+                    if (filterSettings != null)
                     {
-                        var oldName = await settings.UpdateFilterNameAsync(filterId, newName);
+                        var oldName = await filterSettings.UpdateFilterNameAsync(filterId, newName);
                         if (!string.IsNullOrEmpty(oldName))
                         {
                             // Update all snippets that have this tag
@@ -2813,10 +2817,10 @@ namespace Pivot.CodeModule.Views
 
                 if (result == ContentDialogResult.Primary)
                 {
-                    var settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
-                    if (settings != null)
+                    var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
+                    if (filterSettings != null)
                     {
-                        var deletedName = await settings.DeleteFilterAsync(filterId);
+                        var deletedName = await filterSettings.DeleteFilterAsync(filterId);
                         if (!string.IsNullOrEmpty(deletedName))
                         {
                             // Remove tag from all snippets

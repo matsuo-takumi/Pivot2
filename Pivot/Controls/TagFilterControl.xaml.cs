@@ -18,7 +18,7 @@ namespace Pivot.Controls
         public string TabId { get; set; } = "Asset";
 
         private FilterService? _filterService;
-        private SettingsService? _settings;
+        private FilterSettingsService? _filterSettings;
 
         public TagFilterControl()
         {
@@ -31,7 +31,7 @@ namespace Pivot.Controls
             try
             {
                 _filterService = App.Current.Services.GetService(typeof(FilterService)) as FilterService;
-                _settings = App.Current.Services.GetService(typeof(SettingsService)) as SettingsService;
+                _filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
                 // Keep default horizontal orientation defined in XAML for all tabs (including Code)
 
                 RefreshItems();
@@ -42,17 +42,17 @@ namespace Pivot.Controls
 
         private void RefreshItems()
         {
-            if (_settings == null) return;
+            if (_filterSettings == null) return;
 
-            // If used for Code tab, prefer tags configured in user Preferences (SettingsService)
+            // If used for Code tab, prefer tags configured in user Preferences (FilterSettingsService)
             if (string.Equals(TabId, "Code", StringComparison.OrdinalIgnoreCase))
             {
                 try
                 {
-                    var user = _settings.GetUserSettings();
-                    if (user != null && user.CodeFilters != null && user.CodeFilters.Count > 0)
+                    var codeFilters = _filterSettings.GetCodeFilters();
+                    if (codeFilters != null && codeFilters.Count > 0)
                     {
-                        var prefTags = user.CodeFilters.Select(f => new TagItem { Name = f.Name, IsSelected = false }).ToList();
+                        var prefTags = codeFilters.Select(f => new TagItem { Name = f.Name, IsSelected = false }).ToList();
                         TagItems.ItemsSource = prefTags;
                         return;
                     }
@@ -65,24 +65,10 @@ namespace Pivot.Controls
                         return;
                     }
 
-                    // CodeRepository is removed, so we fallback to deriving tags from all snippets directly.
-                    List<TagItem> tags = null;
-                    if (tags == null || tags.Count == 0)
-                    {
-                        try
-                        {
-                            // Synchronously calling async method is not ideal but acceptable for fallback loading
-                            var all = Task.Run(async () => await codeService.GetAllSnippetsAsync()).Result;
-                            var derived = all.SelectMany(f => (f.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()))
-                                .Where(s => !string.IsNullOrWhiteSpace(s))
-                                .Distinct(StringComparer.OrdinalIgnoreCase)
-                                .Select(n => new TagItem { Name = n, IsSelected = false })
-                                .ToList();
-                            tags = derived;
-                        }
-                        catch { }
-                    }
-                    TagItems.ItemsSource = tags;
+                    // Use async loading (will be triggered by separate async initialization)
+                    // For now, return empty and let the page trigger async loading if needed
+                    TagItems.ItemsSource = null;
+                    _ = LoadCodeTagsAsync(codeService);
                     return;
                 }
                 catch { TagItems.ItemsSource = null; return; }
@@ -90,7 +76,7 @@ namespace Pivot.Controls
 
             // Default behavior: use FilterService for Asset/other tabs
             if (_filterService == null) return;
-            var visible = _settings.GetVisibleFiltersForTab(TabId) ?? new List<Guid>();
+            var visible = _filterSettings?.GetVisibleFiltersForTab(TabId) ?? new List<Guid>();
             var items = _filterService.Filters.Where(f => visible.Contains(f.Id)).ToList();
             TagItems.ItemsSource = items;
             // No further initialization; Tag_Toggled handles state changes
@@ -112,7 +98,7 @@ namespace Pivot.Controls
 
                 // Default behavior: use FilterService (e.g., Asset tab)
                 if (!(tb.DataContext is FilterViewModel vm)) return;
-                if (_filterService == null || _settings == null) return;
+                if (_filterService == null || _filterSettings == null) return;
                 if (tb.IsChecked == true)
                 {
                     _filterService.AddSelectedFilter(vm.Id);
@@ -122,9 +108,28 @@ namespace Pivot.Controls
                     _filterService.RemoveSelectedFilter(vm.Id);
                 }
                 // persist selection for this tab
-                await _settings.SetSelectedFiltersForTabAsync(TabId, _filterService.SelectedFilterIds.ToList());
+                await _filterSettings.SetSelectedFiltersForTabAsync(TabId, _filterService.SelectedFilterIds.ToList());
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Async helper to load code tags without blocking the UI thread.
+        /// </summary>
+        private async Task LoadCodeTagsAsync(Pivot.Services.CodeService codeService)
+        {
+            try
+            {
+                var all = await codeService.GetAllSnippetsAsync();
+                var derived = all
+                    .SelectMany(f => (f.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()))
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Select(n => new TagItem { Name = n, IsSelected = false })
+                    .ToList();
+                TagItems.ItemsSource = derived;
+            }
+            catch { TagItems.ItemsSource = null; }
         }
     }
 }

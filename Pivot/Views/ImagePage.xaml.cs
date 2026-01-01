@@ -64,10 +64,8 @@ namespace Pivot.Views
             // 初期レイアウトを適用
             ApplyLayout(ViewModel.CurrentLayout);
 
-            // 自動ロード
             try
             {
-                var settings = App.Current.Services.GetService<SettingsService>();
                 var dirSettings = App.Current.Services.GetService<DirectorySettingsService>();
                 if (dirSettings != null)
                 {
@@ -75,15 +73,6 @@ namespace Pivot.Views
                     if (dirSettings.ImageDirectories != null && dirSettings.ImageDirectories.Count > 0)
                     {
                          _ = ViewModel.LoadAsync(dirSettings.ImageDirectories);
-                    }
-                }
-                else if (settings != null)
-                {
-                    // Fallback
-                    var dirs = settings.GetUserSettings().ImageDirectories;
-                    if (dirs != null && dirs.Count > 0)
-                    {
-                        _ = ViewModel.LoadAsync(dirs);
                     }
                 }
             }
@@ -104,10 +93,10 @@ namespace Pivot.Views
                 {
                     try
                     {
-                        var settings = App.Current.Services.GetService<SettingsService>();
-                        if (settings != null)
+                        var themeSettings = App.Current.Services.GetService<ThemeSettingsService>();
+                        if (themeSettings != null)
                         {
-                            var newThickness = settings.GetImageSelectionBorderThickness();
+                            var newThickness = themeSettings.ImageSelectionBorderThickness;
                             if (Math.Abs(ViewModel.SelectionBorderThickness - newThickness) > 0.01)
                             {
                                 ViewModel.SelectionBorderThickness = newThickness;

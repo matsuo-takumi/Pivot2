@@ -1,5 +1,4 @@
 using Microsoft.UI.Xaml.Data;
-using Pivot.Services;
 using System;
 using Microsoft.UI.Xaml;
 
@@ -21,18 +20,6 @@ namespace Pivot.Converters
                 if (parameter is double thickness && thickness > 0)
                 {
                     borderThickness = thickness;
-                }
-                else
-                {
-                    try
-                    {
-                        var settings = App.Current?.Services?.GetService(typeof(SettingsService)) as SettingsService;
-                        if (settings != null)
-                        {
-                            borderThickness = settings.GetImageSelectionBorderThickness();
-                        }
-                    }
-                    catch { }
                 }
                 
                 // デフォルトのPadding（6）から、BorderThicknessの増加分を引く

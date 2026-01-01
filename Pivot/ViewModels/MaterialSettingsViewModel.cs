@@ -17,7 +17,7 @@ namespace Pivot.ViewModels
     /// </summary>
     public partial class MaterialSettingsViewModel : ObservableObject
     {
-        private readonly SettingsService _settings;
+        private readonly MaterialSettingsService _materialSettings;
         private readonly IMessenger _messenger;
 
         public ObservableCollection<MaterialPreset> Presets { get; } = new();
@@ -37,9 +37,9 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private bool _isCustomMode;
 
-        public MaterialSettingsViewModel(SettingsService settings, IMessenger messenger)
+        public MaterialSettingsViewModel(MaterialSettingsService materialSettings, IMessenger messenger)
         {
-            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _materialSettings = materialSettings ?? throw new ArgumentNullException(nameof(materialSettings));
             _messenger = messenger ?? throw new ArgumentNullException(nameof(messenger));
 
             LoadPresets();
@@ -50,14 +50,12 @@ namespace Pivot.ViewModels
         {
             Presets.Clear();
             
-            // Add default presets
             foreach (var preset in MaterialPreset.GetDefaultPresets())
             {
                 Presets.Add(preset);
             }
 
-            // Load custom presets from settings
-            var customPresets = _settings.GetMaterialPresets();
+            var customPresets = _materialSettings.GetMaterialPresets();
             foreach (var preset in customPresets.Where(p => p.IsCustom))
             {
                 Presets.Add(preset);
@@ -66,17 +64,12 @@ namespace Pivot.ViewModels
 
         private void LoadCurrentSettings()
         {
-            var settings = _settings.GetUserSettings();
+            var mp = _materialSettings.GetMaterialParams();
             
-            // Load current material values
-            Albedo = Color.FromArgb(255, 
-                (byte)(settings.MaterialAlbedoR * 255),
-                (byte)(settings.MaterialAlbedoG * 255),
-                (byte)(settings.MaterialAlbedoB * 255));
-            Metallic = settings.MaterialMetallic;
-            Roughness = settings.MaterialRoughness;
+            Albedo = Color.FromArgb(255, (byte)(mp.AlbedoR * 255), (byte)(mp.AlbedoG * 255), (byte)(mp.AlbedoB * 255));
+            Metallic = mp.Metallic;
+            Roughness = mp.Roughness;
 
-            // Find matching preset if any
             var matching = Presets.FirstOrDefault(p => 
                 Math.Abs(p.Albedo.R - Albedo.R) < 5 &&
                 Math.Abs(p.Albedo.G - Albedo.G) < 5 &&
@@ -127,12 +120,10 @@ namespace Pivot.ViewModels
 
         private void ApplyMaterialSettings()
         {
-            // Save to settings
-            _ = _settings.SetMaterialParamsAsync(
+            _ = _materialSettings.SetMaterialParamsAsync(
                 Albedo.R / 255f, Albedo.G / 255f, Albedo.B / 255f,
                 Metallic, Roughness);
 
-            // Notify renderer
             _messenger.Send(new SettingsChangedMessage("MaterialParams"));
         }
 
@@ -153,9 +144,8 @@ namespace Pivot.ViewModels
             Presets.Add(newPreset);
             SelectedPreset = newPreset;
 
-            // Save to settings
             var customPresets = Presets.Where(p => p.IsCustom).ToList();
-            await _settings.SetMaterialPresetsAsync(customPresets);
+            await _materialSettings.SetMaterialPresetsAsync(customPresets);
         }
 
         [RelayCommand]
@@ -170,9 +160,8 @@ namespace Pivot.ViewModels
                 SelectedPreset = Presets.FirstOrDefault();
             }
 
-            // Save to settings
             var customPresets = Presets.Where(p => p.IsCustom).ToList();
-            await _settings.SetMaterialPresetsAsync(customPresets);
+            await _materialSettings.SetMaterialPresetsAsync(customPresets);
         }
 
         [RelayCommand]

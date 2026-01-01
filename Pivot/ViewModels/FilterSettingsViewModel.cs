@@ -17,7 +17,7 @@ namespace Pivot.ViewModels
     /// </summary>
     public partial class FilterSettingsViewModel : ObservableObject
     {
-        private readonly SettingsService _settings;
+        private readonly FilterSettingsService _filterSettings;
         private readonly FilterType _filterType;
         private readonly string _tabId;
         private readonly ILogger<FilterSettingsViewModel>? _logger;
@@ -39,13 +39,13 @@ namespace Pivot.ViewModels
         };
 
         public FilterSettingsViewModel(
-            SettingsService settings,
+            FilterSettingsService filterSettings,
             FilterType filterType,
             string tabId,
             Func<List<CustomFilter>>? getDefaultFilters = null,
             ILogger<FilterSettingsViewModel>? logger = null)
         {
-            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _filterSettings = filterSettings ?? throw new ArgumentNullException(nameof(filterSettings));
             _filterType = filterType;
             _tabId = tabId ?? throw new ArgumentNullException(nameof(tabId));
             _getDefaultFilters = getDefaultFilters;
@@ -62,7 +62,7 @@ namespace Pivot.ViewModels
                 Filters.Clear();
 
                 var allFilters = GetFiltersForType(_filterType);
-                var visibleFilterIds = _settings.GetVisibleFiltersForTab(_tabId) ?? new List<Guid>();
+                var visibleFilterIds = _filterSettings.GetVisibleFiltersForTab(_tabId) ?? new List<Guid>();
 
                 foreach (var filter in allFilters)
                 {
@@ -95,7 +95,7 @@ namespace Pivot.ViewModels
 
             try
             {
-                var current = _settings.GetVisibleFiltersForTab(_tabId) ?? new List<Guid>();
+                var current = _filterSettings.GetVisibleFiltersForTab(_tabId) ?? new List<Guid>();
                 if (item.Visible)
                 {
                     if (!current.Contains(item.Id)) current.Add(item.Id);
@@ -104,7 +104,7 @@ namespace Pivot.ViewModels
                 {
                     current.Remove(item.Id);
                 }
-                await _settings.SetVisibleFiltersForTabAsync(_tabId, current);
+                await _filterSettings.SetVisibleFiltersForTabAsync(_tabId, current);
                 LoadFilters();
             }
             catch (Exception ex)
@@ -244,12 +244,11 @@ namespace Pivot.ViewModels
 
         private List<CustomFilter> GetFiltersForType(FilterType type)
         {
-            var userSettings = _settings.GetUserSettings();
             return type switch
             {
-                FilterType.Asset => userSettings.AssetFilters,
-                FilterType.Code => userSettings.CodeFilters,
-                FilterType.Image => GetImageFilters(userSettings.AssetFilters),
+                FilterType.Asset => _filterSettings.GetAssetFilters(),
+                FilterType.Code => _filterSettings.GetCodeFilters(),
+                FilterType.Image => GetImageFilters(_filterSettings.GetAssetFilters()),
                 _ => new List<CustomFilter>()
             };
         }
@@ -274,13 +273,12 @@ namespace Pivot.ViewModels
             switch (type)
             {
                 case FilterType.Asset:
-                    await _settings.SetAssetFiltersAsync(filters);
+                    await _filterSettings.SetAssetFiltersAsync(filters);
                     break;
                 case FilterType.Code:
-                    await _settings.SetCodeFiltersAsync(filters);
+                    await _filterSettings.SetCodeFiltersAsync(filters);
                     break;
                 case FilterType.Image:
-                    // ImageはAssetFiltersを使用するため、既存のAssetFiltersを更新
                     await SaveImageFiltersAsync(filters);
                     break;
             }
@@ -288,20 +286,18 @@ namespace Pivot.ViewModels
 
         private async Task SaveImageFiltersAsync(List<CustomFilter> imageFilters)
         {
-            var userSettings = _settings.GetUserSettings();
+            var assetFilters = _filterSettings.GetAssetFilters();
             var imageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tga", ".tif", ".tiff"
             };
 
-            // 画像拡張子を含まないフィルターを保持
-            var nonImageFilters = userSettings.AssetFilters
+            var nonImageFilters = assetFilters
                 .Where(f => !f.AllowedExtensions.Any(ext => imageExtensions.Contains(ext)))
                 .ToList();
 
-            // 画像フィルターと非画像フィルターを結合
             var allFilters = nonImageFilters.Concat(imageFilters).ToList();
-            await _settings.SetAssetFiltersAsync(allFilters);
+            await _filterSettings.SetAssetFiltersAsync(allFilters);
         }
 
         /// <summary>
