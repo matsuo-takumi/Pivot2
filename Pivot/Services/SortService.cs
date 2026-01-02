@@ -13,7 +13,9 @@ namespace Pivot.Services
         Name,
         Date,
         Size,
-        Type
+        Type,
+        Rating,
+        AspectRatio
     }
 
     /// <summary>

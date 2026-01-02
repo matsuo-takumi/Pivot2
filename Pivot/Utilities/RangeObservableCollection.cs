@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 
-namespace Pivot.Utils
+namespace Pivot.Utilities
 {
     /// <summary>
     /// ObservableCollection with batch update support to avoid flickering

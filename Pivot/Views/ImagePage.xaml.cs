@@ -49,10 +49,6 @@ namespace Pivot.Views
                 RowSpacing = 8 
             };
             
-            
-            // Capture default template (Grid/List)
-            _defaultItemTemplate = (ItemsRepeaterMain.ItemTemplate as DataTemplate)!;
-
             ViewModel = new ImageViewModel();
             this.DataContext = ViewModel;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -60,9 +56,9 @@ namespace Pivot.Views
 
             // responsive handlers
             SizeChanged += ImagePage_SizeChanged;
-
-            // 初期レイアウトを適用
-            ApplyLayout(ViewModel.CurrentLayout);
+            
+            // Initialize BrowserControl after Loaded event
+            this.Loaded += ImagePage_Loaded;
 
             try
             {
@@ -79,10 +75,48 @@ namespace Pivot.Views
             catch { }
 
             this.Unloaded += ImagePage_Unloaded;
-            
 
             // Register for messages
             WeakReferenceMessenger.Default.Register<SettingsChangedMessage>(this);
+        }
+        
+        private async void ImagePage_Loaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Initialize BrowserControl with Image assets
+                await BrowserControl.InitializeAsync(AssetKind.Image);
+            }
+            catch { }
+        }
+        
+        // Event handlers for BrowserControl
+        private void BrowserControl_ItemClicked(object? sender, AssetEntity asset)
+        {
+            // Selection handling
+            System.Diagnostics.Debug.WriteLine($"Item clicked: {asset.FileName}");
+        }
+        
+        private void BrowserControl_ItemDoubleClicked(object? sender, AssetEntity asset)
+        {
+            try
+            {
+                // Show preview
+                var item = new TemplateItem
+                {
+                    Path = asset.FilePath,
+                    Name = asset.FileName,
+                    ThumbnailPath = asset.ThumbnailPath ?? asset.FilePath
+                };
+                _ = PreviewControl.ShowAsync(item);
+            }
+            catch { }
+        }
+        
+        private void BrowserControl_ItemRightTapped(object? sender, (AssetEntity Asset, Windows.Foundation.Point Position) args)
+        {
+            // Right-click context menu (placeholder for future implementation)
+            System.Diagnostics.Debug.WriteLine($"Right-tapped: {args.Asset.FileName}");
         }
 
         public void Receive(SettingsChangedMessage message)
@@ -154,40 +188,8 @@ namespace Pivot.Views
 
         private void ApplyLayout(LayoutType layout)
         {
-            if (ItemsRepeaterMain == null) return;
-            
-            // Ensure Repeater is visible
-            ItemsRepeaterMain.Visibility = Visibility.Visible;
-
-            switch (layout)
-            {
-                case LayoutType.List:
-                    ItemsRepeaterMain.Layout = new StackLayout() { Orientation = Orientation.Vertical };
-                    ItemsRepeaterMain.ItemTemplate = _defaultItemTemplate;
-                    break;
-
-                case LayoutType.Masonry:
-                    ItemsRepeaterMain.Layout = _masonryLayout;
-                    if (Resources.TryGetValue("MasonryItemTemplate", out var t))
-                    {
-                        ItemsRepeaterMain.ItemTemplate = t as DataTemplate;
-                    }
-                    UpdateResponsive(ActualWidth);
-                    break;
-
-                case LayoutType.Grid:
-                default:
-                    ItemsRepeaterMain.Layout = new UniformGridLayout
-                    {
-                        MinItemWidth = 220,
-                        MinItemHeight = 170,
-                        MinRowSpacing = 8,
-                        MinColumnSpacing = 8,
-                        ItemsStretch = UniformGridLayoutItemsStretch.Fill
-                    };
-                    ItemsRepeaterMain.ItemTemplate = _defaultItemTemplate;
-                    break;
-            }
+            // Layout is now handled by BrowserControl
+            // This method is kept for backward compatibility
         }
 
         // ... Existing Pointer Handlers ...

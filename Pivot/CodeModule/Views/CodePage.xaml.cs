@@ -97,24 +97,22 @@ namespace Pivot.CodeModule.Views
             }
             catch { }
             // Restore previously selected snippet (persisted) if available
-            // NOTE: Feature temporarily disabled during SettingsService removal
-            // TODO: Re-implement with CodeSettingsService
             try
             {
-                // var codeSettings = App.Current.Services.GetService(typeof(CodeSettingsService)) as CodeSettingsService;
-                // if (codeSettings != null && ViewModel != null)
-                // {
-                //     var lastId = codeSettings.GetLastSelectedSnippetId();
-                //     if (lastId != Guid.Empty)
-                //     {
-                //         var found = ViewModel.Snippets.FirstOrDefault(s => s.Id == lastId);
-                //         if (found != null)
-                //         {
-                //             ViewModel.SelectedSnippet = found;
-                //             _ = SendSelectedSnippetToEditorAsync();
-                //         }
-                //     }
-                // }
+                var browserSettings = App.Current.Services.GetService(typeof(BrowserSettingsService)) as BrowserSettingsService;
+                if (browserSettings != null && ViewModel != null)
+                {
+                    var lastId = browserSettings.LastSelectedSnippetId;
+                    if (lastId != null && lastId != Guid.Empty)
+                    {
+                        var found = ViewModel.Snippets.FirstOrDefault(s => s.Id == lastId);
+                        if (found != null)
+                        {
+                            ViewModel.SelectedSnippet = found;
+                            _ = SendSelectedSnippetToEditorAsync();
+                        }
+                    }
+                }
             }
             catch { }
 
@@ -484,17 +482,16 @@ namespace Pivot.CodeModule.Views
                     _ = CloseSnippetWithAnimationAsync();
                 }
                 // Persist last selected snippet id for restoration across page instances
-                // NOTE: Feature temporarily disabled during SettingsService removal
-                // try
-                // {
-                //     var codeSettings = App.Current.Services.GetService(typeof(CodeSettingsService)) as CodeSettingsService;
-                //     if (codeSettings != null)
-                //     {
-                //         var id = ViewModel?.SelectedSnippet?.Id ?? Guid.Empty;
-                //         _ = codeSettings.SetLastSelectedSnippetIdAsync(id);
-                //     }
-                // }
-                // catch { }
+                try
+                {
+                    var browserSettings = App.Current.Services.GetService(typeof(BrowserSettingsService)) as BrowserSettingsService;
+                    if (browserSettings != null)
+                    {
+                        var id = ViewModel?.SelectedSnippet?.Id;
+                        _ = browserSettings.SetLastSelectedSnippetIdAsync(id);
+                    }
+                }
+                catch { }
             }
         }
 

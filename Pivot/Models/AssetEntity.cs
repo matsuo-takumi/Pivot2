@@ -9,6 +9,10 @@ namespace Pivot.Models
     [Index(nameof(Kind))]
     [Index(nameof(Hash))]
     [Index(nameof(LastModifiedUtc))]
+    // Performance indexes for scalable browser
+    [Index(nameof(Kind), nameof(LastModifiedUtc), Name = "IX_Asset_Kind_Date")]
+    [Index(nameof(AspectRatio), Name = "IX_Asset_AspectRatio")]
+    [Index(nameof(Rating), Name = "IX_Asset_Rating")]
     public class AssetEntity
     {
         [Key]
@@ -61,6 +65,18 @@ namespace Pivot.Models
         // ユーザーメタデータ
         public string? UserTagsJson { get; set; }
         public bool IsFavorite { get; set; }
+        
+        /// <summary>
+        /// User rating (0-5). Used for sorting and filtering.
+        /// </summary>
+        public int Rating { get; set; } = 0;
+        
+        /// <summary>
+        /// Dominant color of the image in HEX format (#FF0000).
+        /// Used as placeholder background before image loads.
+        /// </summary>
+        [MaxLength(10)]
+        public string? DominantColor { get; set; }
         
         // 論理削除
         public bool IsDeleted { get; set; }

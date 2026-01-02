@@ -124,6 +124,7 @@ namespace Pivot.ViewModels
                 if (SetProperty(ref _hue, normalized) && !_isUpdatingFromColor)
                 {
                     UpdateColorFromHsl();
+                    TriggerPersist();
                 }
             }
         }
@@ -137,6 +138,7 @@ namespace Pivot.ViewModels
                 if (SetProperty(ref _saturation, clamped) && !_isUpdatingFromColor)
                 {
                     UpdateColorFromHsl();
+                    TriggerPersist();
                 }
             }
         }
@@ -153,6 +155,7 @@ namespace Pivot.ViewModels
                     if (!_isUpdatingFromColor)
                     {
                         UpdateColorFromHsl();
+                        TriggerPersist();
                     }
                 }
             }

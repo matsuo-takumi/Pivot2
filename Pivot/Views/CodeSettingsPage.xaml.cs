@@ -15,13 +15,13 @@ namespace Pivot.Views
     public sealed partial class CodeSettingsPage : Page
     {
         private readonly DirectorySettingsService? _directorySettings;
-        private readonly CodeSettingsService? _codeSettings;
+        private readonly BrowserSettingsService? _browserSettings;
 
         public CodeSettingsPage()
         {
             this.InitializeComponent();
             _directorySettings = App.Current.Services.GetService(typeof(DirectorySettingsService)) as DirectorySettingsService;
-            _codeSettings = App.Current.Services.GetService(typeof(CodeSettingsService)) as CodeSettingsService;
+            _browserSettings = App.Current.Services.GetService(typeof(BrowserSettingsService)) as BrowserSettingsService;
             this.Loaded += CodeSettingsPage_Loaded;
             
             LoadSaveFormat();
@@ -141,7 +141,7 @@ namespace Pivot.Views
         {
             try
             {
-                var fmtStr = _codeSettings?.GetCodeExportFormat();
+                var fmtStr = _browserSettings?.CodeExportFormat;
                 if (!Enum.TryParse<Pivot.Models.CodeExportFormat>(fmtStr, true, out var fmt)) 
                     fmt = Pivot.Models.CodeExportFormat.Json;
                 var combo = this.FindName("SaveFormatCombo") as ComboBox;
@@ -164,12 +164,12 @@ namespace Pivot.Views
         {
             try
             {
-                if (_codeSettings == null) return;
+                if (_browserSettings == null) return;
                 if (!(sender is ComboBox cb)) return;
                 var sel = cb.SelectedItem as ComboBoxItem;
                 var tag = sel?.Tag?.ToString() ?? "Json";
                 if (!Enum.TryParse<Pivot.Models.CodeExportFormat>(tag, out var fmt)) fmt = Pivot.Models.CodeExportFormat.Json;
-                await _codeSettings.SetCodeExportFormatAsync(fmt.ToString());
+                await _browserSettings.SetCodeExportFormatAsync(fmt.ToString());
             }
             catch { }
         }

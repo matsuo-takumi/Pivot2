@@ -58,6 +58,42 @@ namespace Pivot.Services
 
         // Public Properties
         public ElementTheme AppTheme => _appTheme;
+        
+        /// <summary>
+        /// Gets the effective theme to apply. When AppTheme is Default, returns the actual system theme (Light or Dark).
+        /// This is necessary because WinUI 3's ElementTheme.Default always results in Dark, not the system theme.
+        /// </summary>
+        public ElementTheme EffectiveTheme
+        {
+            get
+            {
+                if (_appTheme == ElementTheme.Default)
+                {
+                    return GetSystemTheme();
+                }
+                return _appTheme;
+            }
+        }
+        
+        /// <summary>
+        /// Detects the current Windows system theme (Light or Dark) using UISettings.
+        /// </summary>
+        private static ElementTheme GetSystemTheme()
+        {
+            try
+            {
+                var uiSettings = new Windows.UI.ViewManagement.UISettings();
+                var foregroundColor = uiSettings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Foreground);
+                // If foreground is light (close to white), system is in Dark mode
+                // If foreground is dark (close to black), system is in Light mode
+                bool isDark = foregroundColor.R > 127 && foregroundColor.G > 127 && foregroundColor.B > 127;
+                return isDark ? ElementTheme.Dark : ElementTheme.Light;
+            }
+            catch
+            {
+                return ElementTheme.Dark; // Fallback to Dark if detection fails
+            }
+        }
         public BackdropType AppBackdropType => _appBackdropType;
         public string OverlayTintColor => _overlayTintColor;
         public double OverlayTintOpacity => _overlayTintOpacity;

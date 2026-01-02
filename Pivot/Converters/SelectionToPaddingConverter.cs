@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Data;
+using Pivot.Services;
 using System;
 using Microsoft.UI.Xaml;
 
@@ -21,6 +22,19 @@ namespace Pivot.Converters
                 {
                     borderThickness = thickness;
                 }
+                else
+                {
+                    // ThemeSettingsServiceから設定値を取得
+                    try
+                    {
+                        var themeSettings = App.Current?.Services?.GetService(typeof(ThemeSettingsService)) as ThemeSettingsService;
+                        if (themeSettings != null)
+                        {
+                            borderThickness = themeSettings.ImageSelectionBorderThickness;
+                        }
+                    }
+                    catch { }
+                }
                 
                 // デフォルトのPadding（6）から、BorderThicknessの増加分を引く
                 // BorderThicknessが2px増えたら、Paddingを2px減らす（左右上下それぞれ）
@@ -39,4 +53,3 @@ namespace Pivot.Converters
         }
     }
 }
-

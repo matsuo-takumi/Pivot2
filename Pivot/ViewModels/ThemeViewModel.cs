@@ -43,7 +43,8 @@ namespace Pivot.ViewModels
         {
             if (_isLoadingThemeSettings) return;
             _ = _themeSettings.SetThemeAsync(value);
-            _messenger.Send(new ThemeChangedMessage(value));
+            // Send EffectiveTheme (resolved to Light/Dark) so UI applies correctly
+            _messenger.Send(new ThemeChangedMessage(_themeSettings.EffectiveTheme));
         }
 
         partial void OnAppBackdropTypeChanged(BackdropType value)
@@ -66,7 +67,8 @@ namespace Pivot.ViewModels
             {
                 AppTheme = theme;
                 await _themeSettings.SetThemeAsync(theme);
-                _messenger.Send(new ThemeChangedMessage(theme));
+                // Send EffectiveTheme (resolved to Light/Dark) so UI applies correctly
+                _messenger.Send(new ThemeChangedMessage(_themeSettings.EffectiveTheme));
             }
         }
 

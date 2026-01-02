@@ -88,107 +88,14 @@
 
             <!-- Main Content -->
             <Grid>
-                <!-- Main Content Area -->
-                <Border Background="#20E8F5E9" CornerRadius="6" Padding="6">
-                    <Grid>
-                        <ScrollViewer x:Name="MainScrollViewer" VerticalScrollBarVisibility="Auto" Background="Transparent">
-                            <Grid>
-                                <!-- Standard ItemsRepeater (Grid / List / Justified fallback) -->
-                                <ItemsRepeater x:Name="ItemsRepeaterMain" ItemsSource="{Binding Images}">
-                                    <ItemsRepeater.Layout>
-                                        <UniformGridLayout MinItemWidth="220" MinItemHeight="170" MinRowSpacing="8" MinColumnSpacing="8"/>
-                                    </ItemsRepeater.Layout>
-                                    <ItemsRepeater.ItemTemplate>
-                                        <DataTemplate x:DataType="models:TemplateItem">
-                                            <Border BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBorderBrushConverter}}" 
-                                                    BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBorderThicknessConverter}}" 
-                                                    CornerRadius="6" 
-                                                    Padding="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToPaddingConverter}}" 
-                                                    Margin="4" 
-                                                    Background="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBackgroundConverter}}"
-                                                    CanDrag="True"
-                                                    PointerPressed="ImageItem_PointerPressed"
-                                                    PointerMoved="ImageItem_PointerMoved"
-                                                    PointerReleased="ImageItem_PointerReleased"
-                                                    DragStarting="ImageItem_DragStarting"
-                                                    DoubleTapped="ImageItem_DoubleTapped"
-                                                    RightTapped="ImageItem_RightTapped">
-                                                <Grid>
-                                                    <!-- List Mode (Phase 1: Text) -->
-                                                    <Grid Visibility="{Binding DataContext.UseTextListMode, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" ColumnSpacing="12" Padding="4,6">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="*" MinWidth="200"/>
-                                                            <ColumnDefinition Width="80"/>
-                                                            <ColumnDefinition Width="130"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <FontIcon Grid.Column="0" Glyph="&#xE7B3;" FontSize="16" Foreground="{ThemeResource SystemAccentColor}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                        <TextBlock Grid.Column="1" Text="{x:Bind Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" x:Phase="1"/>
-                                                        <TextBlock Grid.Column="2" Text="{x:Bind Size, Converter={StaticResource FileSizeConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" x:Phase="1"/>
-                                                        <TextBlock Grid.Column="3" Text="{x:Bind LastModified, Converter={StaticResource DateTimeConverter}}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" x:Phase="1"/>
-                                                    </Grid>
-
-                                                    <!-- Grid Mode (Phase 2: Image) -->
-                                                    <StackPanel Visibility="{Binding DataContext.ShowThumbnails, ElementName=ImagePageRoot, Converter={StaticResource BoolToVisibility}}" MaxWidth="200">
-                                                        <Grid Width="200" Height="120" Background="Transparent">
-                                                            <!-- Phase 0: Placeholder background -->
-                                                            <Rectangle Fill="Transparent" />
-                                                            <!-- Phase 2: Heavy Image Loading -->
-                                                            <Image Stretch="UniformToFill" Source="{x:Bind ThumbnailPath, Converter={StaticResource CachedBitmapDecode}, ConverterParameter=300}" x:Phase="2"/>
-                                                        </Grid>
-                                                        <!-- Phase 1: Name Text -->
-                                                        <TextBlock Text="{x:Bind Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Stretch" MinHeight="18" x:Phase="1"/>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsRepeater.ItemTemplate>
-                                </ItemsRepeater>
-                            </Grid>
-                        </ScrollViewer>
-
-                        <!-- 画像プレビューオーバーレイ -->
-                        <controls:ImagePreviewControl x:Name="PreviewControl" Grid.RowSpan="2" />
-                        
-                        <!-- Floating Menu Button (Bottom Right) - Subtle Design -->
-                        <Button x:Name="FloatingMenuButton"
-                                Width="44" Height="44"
-                                CornerRadius="22"
-                                VerticalAlignment="Bottom"
-                                HorizontalAlignment="Right"
-                                Margin="0,0,12,12"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                Opacity="0.9"
-                                ToolTipService.ToolTip="View Options">
-                            <FontIcon Glyph="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="18"/>
-                            <Button.Flyout>
-                                <MenuFlyout Placement="Top">
-                                    <MenuFlyoutItem Text="Layout" Command="{Binding ToggleLayoutCommand}">
-                                        <MenuFlyoutItem.Icon>
-                                            <FontIcon Glyph="{Binding LayoutIcon}" FontFamily="Segoe MDL2 Assets"/>
-                                        </MenuFlyoutItem.Icon>
-                                    </MenuFlyoutItem>
-                                    <MenuFlyoutSubItem Text="Sort">
-                                        <MenuFlyoutSubItem.Icon>
-                                            <FontIcon Glyph="{Binding SortIcon}" FontFamily="Segoe MDL2 Assets"/>
-                                        </MenuFlyoutSubItem.Icon>
-                                        <MenuFlyoutItem Text="Name" Command="{Binding SetSortFieldCommand}" CommandParameter="Name"/>
-                                        <MenuFlyoutItem Text="Date" Command="{Binding SetSortFieldCommand}" CommandParameter="Date"/>
-                                        <MenuFlyoutItem Text="Size" Command="{Binding SetSortFieldCommand}" CommandParameter="Size"/>
-                                        <MenuFlyoutItem Text="Type" Command="{Binding SetSortFieldCommand}" CommandParameter="Type"/>
-                                    </MenuFlyoutSubItem>
-                                    <MenuFlyoutItem Text="Sort Direction" Command="{Binding ToggleSortDirectionCommand}">
-                                        <MenuFlyoutItem.Icon>
-                                            <FontIcon Glyph="{Binding SortDirectionIcon}" FontFamily="Segoe MDL2 Assets"/>
-                                        </MenuFlyoutItem.Icon>
-                                    </MenuFlyoutItem>
-                                </MenuFlyout>
-                            </Button.Flyout>
-                        </Button>
-                    </Grid>
-                </Border>
+                <!-- UnifiedBrowserControl with filtering and virtualized display -->
+                <controls:UnifiedBrowserControl x:Name="BrowserControl"
+                                                ItemClicked="BrowserControl_ItemClicked"
+                                                ItemDoubleClicked="BrowserControl_ItemDoubleClicked"
+                                                ItemRightTapped="BrowserControl_ItemRightTapped"/>
+                
+                <!-- 画像プレビューオーバーレイ -->
+                <controls:ImagePreviewControl x:Name="PreviewControl" Grid.RowSpan="2" />
             </Grid>
         </NavigationView>
     </Grid>

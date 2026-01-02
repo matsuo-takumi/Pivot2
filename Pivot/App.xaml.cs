@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -45,10 +46,29 @@ namespace Pivot
 				System.Diagnostics.Debug.WriteLine($"Database initialization failed: {ex}");
 			}
 			
+			// Initialize the settings store (load settings.json into memory cache)
+			try
+			{
+				var settingsStore = Services.GetRequiredService<ISettingsStore>();
+				if (settingsStore is JsonSettingsStore jsonStore)
+				{
+					await jsonStore.InitializeAsync();
+				}
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Settings store initialization failed: {ex}");
+			}
+
 			// Load directory settings
 			try { await Services.GetRequiredService<DirectorySettingsService>().LoadAsync(); } catch { }
 			// Initialize theme settings
 			try { await Services.GetRequiredService<ThemeSettingsService>().LoadAsync(); } catch { }
+			// Load remaining settings services
+			try { await Services.GetRequiredService<FilterSettingsService>().LoadAsync(); } catch { }
+			try { await Services.GetRequiredService<ViewportSettingsService>().LoadAsync(); } catch { }
+			try { await Services.GetRequiredService<MaterialSettingsService>().LoadAsync(); } catch { }
+			try { await Services.GetRequiredService<BrowserSettingsService>().LoadAsync(); } catch { }
 			// Ensure text color resources are initialized
 			try { _ = Services.GetRequiredService<ITextColorResourceManager>(); } catch { }
 			// Kick main view model initialization (auto-scan if possible)
@@ -60,16 +80,27 @@ namespace Pivot
 			MainWindow = new MainWindow();
 			MainWindow.Activate();
 
-			// Apply theme on startup
+			// Apply saved theme on startup
 			try
 			{
-				// Default to System theme
+				var themeSettings = Services.GetRequiredService<ThemeSettingsService>();
 				if (MainWindow?.Content is FrameworkElement root)
 				{
-					root.RequestedTheme = ElementTheme.Default;
+					root.RequestedTheme = themeSettings.EffectiveTheme;
 				}
 			}
 			catch { }
+
+			// Start background metadata indexing (non-blocking)
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					var indexer = Services.GetRequiredService<MetadataIndexingService>();
+					await indexer.IndexPendingAssetsAsync();
+				}
+				catch { }
+			});
 		}
 
 		private void BuildConfiguration()
@@ -96,9 +127,7 @@ namespace Pivot
             sc.AddSingleton<FilterSettingsService>(); // Extracted from SettingsService
             sc.AddSingleton<ViewportSettingsService>(); // Extracted from SettingsService
             sc.AddSingleton<MaterialSettingsService>(); // Extracted from SettingsService
-            sc.AddSingleton<ImageDisplaySettingsService>(); // Extracted from SettingsService
-            sc.AddSingleton<AssetDisplaySettingsService>(); // Extracted from SettingsService
-            sc.AddSingleton<CodeSettingsService>(); // Extracted from SettingsService
+            sc.AddSingleton<BrowserSettingsService>(); // Unified browser settings
             sc.AddSingleton<ITextColorResourceManager, TextColorResourceManager>();
             sc.AddSingleton<IDialogService, DialogService>(); // UI dialog abstraction
             sc.AddSingleton<INavigationService, NavigationService>(); // Navigation abstraction
@@ -119,6 +148,10 @@ namespace Pivot
             // New Code Logic Layer
             sc.AddScoped<CodeService>();
             sc.AddTransient<LegacyRescueService>();
+            
+            // Phase 2: Query and Indexing Services
+            sc.AddSingleton<AssetQueryService>();
+            sc.AddSingleton<MetadataIndexingService>();
 
 			// Preset services (汎用的なプリセットサービス)
 			sc.AddSingleton<IPresetService<Pivot.Models.TextColorPresetData>>(sp =>
@@ -135,6 +168,7 @@ namespace Pivot
 			sc.AddTransient<ImageViewModel>();
 			sc.AddTransient<AssetViewModel>();
 			sc.AddTransient<WindowViewModel>();
+			sc.AddTransient<BrowserViewModel>();  // Phase 3: Unified browser
 			sc.AddTransient<PreferencePageViewModel>();
             // Filter service (depends on SettingsService)
             sc.AddSingleton<FilterService>();

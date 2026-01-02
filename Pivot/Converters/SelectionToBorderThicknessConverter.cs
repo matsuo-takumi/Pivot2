@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Data;
+using Pivot.Services;
 using System;
 using Microsoft.UI.Xaml;
 
@@ -16,6 +17,18 @@ namespace Pivot.Converters
                     return new Thickness(thickness);
                 }
                 
+                // ThemeSettingsServiceから設定値を取得
+                try
+                {
+                    var themeSettings = App.Current?.Services?.GetService(typeof(ThemeSettingsService)) as ThemeSettingsService;
+                    if (themeSettings != null)
+                    {
+                        var thicknessValue = themeSettings.ImageSelectionBorderThickness;
+                        return new Thickness(thicknessValue);
+                    }
+                }
+                catch { }
+                
                 // Fallback: Default 2px border
                 return new Thickness(2.0);
             }
@@ -29,4 +42,3 @@ namespace Pivot.Converters
         }
     }
 }
-

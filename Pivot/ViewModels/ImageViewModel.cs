@@ -32,7 +32,7 @@ namespace Pivot.ViewModels
         };
 
         [ObservableProperty]
-        private Utils.RangeObservableCollection<TemplateItem> _images = new();
+        private Utilities.RangeObservableCollection<TemplateItem> _images = new();
 
         // Navigation
         public ObservableCollection<FolderNode> FolderTree { get; } = new();
@@ -84,7 +84,7 @@ namespace Pivot.ViewModels
 
         private System.Threading.CancellationTokenSource? _loadCts;
         private ThemeSettingsService? _themeSettings;
-        private ImageDisplaySettingsService? _imageDisplaySettings;
+        private BrowserSettingsService? _browserSettings;
         private DirectorySettingsService? _directorySettings;
         private readonly IMessenger? _messenger;
         private readonly MetadataService? _metadataService;
@@ -113,7 +113,7 @@ namespace Pivot.ViewModels
             {
                 var services = App.Current.Services;
                 _themeSettings = services.GetService<ThemeSettingsService>();
-                _imageDisplaySettings = services.GetService<ImageDisplaySettingsService>();
+                _browserSettings = services.GetService<BrowserSettingsService>();
                 _directorySettings = services.GetService<DirectorySettingsService>();
                 _messenger = services.GetService<IMessenger>();
                 _metadataService = services.GetService<MetadataService>();
@@ -131,12 +131,12 @@ namespace Pivot.ViewModels
                     SelectionBorderThickness = _themeSettings.ImageSelectionBorderThickness;
                 }
                 
-                if (_imageDisplaySettings != null)
+                if (_browserSettings != null)
                 {
                     // Load persisted layout and sort settings
-                    CurrentLayout = _imageDisplaySettings.GetLayoutMode();
-                    CurrentSortField = _imageDisplaySettings.GetSortField();
-                    CurrentSortDirection = _imageDisplaySettings.GetSortDirection();
+                    CurrentLayout = _browserSettings.DefaultLayoutMode;
+                    CurrentSortField = _browserSettings.DefaultSortField;
+                    CurrentSortDirection = _browserSettings.SortDirection;
                 }
             }
             catch { }
@@ -186,8 +186,8 @@ namespace Pivot.ViewModels
             ApplySort();
             
             // Persist settings
-            _ = _imageDisplaySettings?.SetSortFieldAsync(CurrentSortField);
-            _ = _imageDisplaySettings?.SetSortDirectionAsync(CurrentSortDirection);
+            _ = _browserSettings?.SetDefaultSortFieldAsync(CurrentSortField);
+            _ = _browserSettings?.SetSortDirectionAsync(CurrentSortDirection);
         }
 
         [RelayCommand]
@@ -199,7 +199,7 @@ namespace Pivot.ViewModels
             ApplySort();
             
             // Persist settings
-            _ = _imageDisplaySettings?.SetSortDirectionAsync(CurrentSortDirection);
+            _ = _browserSettings?.SetSortDirectionAsync(CurrentSortDirection);
         }
 
         private void ApplySort()
@@ -241,7 +241,7 @@ namespace Pivot.ViewModels
         /// Synchronize collection by only adding/removing changed items.
         /// This prevents unnecessary UI updates and flickering.
         /// </summary>
-        private void SynchronizeCollection(Utils.RangeObservableCollection<TemplateItem> target, List<TemplateItem> source)
+        private void SynchronizeCollection(Utilities.RangeObservableCollection<TemplateItem> target, List<TemplateItem> source)
         {
             // Quick path: if both empty, do nothing
             if (source.Count == 0 && target.Count == 0) return;
@@ -299,7 +299,7 @@ namespace Pivot.ViewModels
             UseTextListMode = value == LayoutType.List;
             ShowThumbnails = !UseTextListMode;
             
-            _ = _imageDisplaySettings?.SetLayoutModeAsync(value);
+            _ = _browserSettings?.SetDefaultLayoutModeAsync(value);
         }
 
         public async void Receive(DirectoryChangedMessage message)

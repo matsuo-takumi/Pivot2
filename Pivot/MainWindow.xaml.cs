@@ -34,7 +34,7 @@ namespace Pivot
     /// <summary>
     /// An empty window that can be used on its own or navigated to within a Frame.
     /// </summary>
-    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<OverlayColorChangedMessage>
+    public sealed partial class MainWindow : Window, IRecipient<BackdropTypeChangedMessage>, IRecipient<OverlayColorChangedMessage>, IRecipient<ThemeChangedMessage>
     {
         // Provide an implicit conversion so generated binding code can pass 'this' (MainWindow)
         // to APIs that expect a FrameworkElement (the generated code calls SetConverterLookupRoot(this)).
@@ -76,11 +76,11 @@ namespace Pivot
 
             // ThemeSettingsServiceから初期のBackdropTypeを取得して設定
             SetSystemBackdrop(_themeSettings.AppBackdropType);
+            // Update backdrop theme to match current theme
+            _backdropService.UpdateTheme(_themeSettings.AppTheme);
 
-            // BackdropTypeChangedMessageを購読
-            _messenger.Register<BackdropTypeChangedMessage>(this);
-            // Overlay color changesを購読
-            _messenger.Register<OverlayColorChangedMessage>(this);
+            // Register all IRecipient<T> implementations for message handling
+            _messenger.RegisterAll(this);
 
             // 初期ナビゲーション（ViewModelからの要求でも遷移可能）
             NavigateTo(NavigationRegion.Home);
@@ -96,6 +96,8 @@ namespace Pivot
         public void Receive(BackdropTypeChangedMessage message)
         {
             SetSystemBackdrop(message.Value);
+            // Preserve current theme when changing backdrop
+            _backdropService.UpdateTheme(_themeSettings.AppTheme);
         }
 
         public void Receive(OverlayColorChangedMessage message)
@@ -111,6 +113,20 @@ namespace Pivot
             catch { }
         }
 
+        public void Receive(ThemeChangedMessage message)
+        {
+            try
+            {
+                if (Content is FrameworkElement root)
+                {
+                    root.RequestedTheme = message.Value;
+                }
+                // Update backdrop theme to match
+                _backdropService.UpdateTheme(message.Value);
+            }
+            catch { }
+        }
+
         public void SetSystemBackdrop(BackdropType type)
         {
             // Unregister event handlers before backdrop change
@@ -121,8 +137,8 @@ namespace Pivot
                 rootElement.ActualThemeChanged -= Window_ThemeChanged;
             }
 
-            // Delegate to BackdropService
-            _backdropService.SetBackdrop(this, type, Root, AppTitleBar);
+            // Delegate to BackdropService - pass Content (top-level Grid) for proper backdrop application
+            _backdropService.SetBackdrop(this, type, Content as FrameworkElement, AppTitleBar);
 
             // Handle None mode text colors
             if (type == BackdropType.None)

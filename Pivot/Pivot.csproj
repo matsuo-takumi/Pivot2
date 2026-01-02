@@ -97,6 +97,9 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="13.6.0" />
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
+    
+    <!-- CommunityToolkit.WinUI for StaggeredLayout and controls -->
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.0.240109" />
 
     <!-- 3D model viewer (Silk.NET & Vulkan Interop) -->
     <PackageReference Include="Silk.NET.Core" Version="2.21.0" />

@@ -44,6 +44,11 @@ Generated\ Files/
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
+build_*.txt
+build_*.log
+msbuild.log
+err*.log
+out*.log
 
 # NUnit
 *.VisualState.xml
