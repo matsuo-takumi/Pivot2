@@ -82,7 +82,7 @@ namespace Pivot.ViewModels
         {
             if (entry == null) return;
             _resourceManager.ApplyColor(entry.SettingKey, entry.SelectedColor);
-            _ = PersistSelectionAsync(entry);
+            Utilities.SafeAsync.FireAndForget(PersistSelectionAsync(entry), nameof(OnColorChanged));
         }
 
         private async Task PersistSelectionAsync(TextColorSettingViewModel entry)

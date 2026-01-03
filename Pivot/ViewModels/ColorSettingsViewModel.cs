@@ -19,15 +19,6 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private bool _isTextColorCustomizationEnabled;
 
-        [ObservableProperty]
-        private string _imageSelectionColor;
-
-        [ObservableProperty]
-        private double _imageSelectionOpacity;
-
-        [ObservableProperty]
-        private double _imageSelectionBorderThickness;
-
         public TextColorSettingsViewModel TextColorSettings { get; }
         public TextColorPresetViewModel PresetViewModel { get; }
 
@@ -42,9 +33,6 @@ namespace Pivot.ViewModels
             
             // Initialize lightweight properties first (fast, cached lookups)
             IsTextColorCustomizationEnabled = _themeSettings.IsTextColorCustomizationEnabled;
-            ImageSelectionColor = _themeSettings.ImageSelectionColor;
-            ImageSelectionOpacity = _themeSettings.ImageSelectionOpacity;
-            ImageSelectionBorderThickness = _themeSettings.ImageSelectionBorderThickness;
             
             // Initialize TextColorSettings (entries will be loaded asynchronously after page loads)
             TextColorSettings = new TextColorSettingsViewModel(themeSettings, resourceManager);
@@ -60,27 +48,15 @@ namespace Pivot.ViewModels
 
         partial void OnIsTextColorCustomizationEnabledChanged(bool value)
         {
-            _ = _themeSettings.SetTextColorCustomizationEnabledAsync(value);
+            Utilities.SafeAsync.FireAndForget(
+                _themeSettings.SetTextColorCustomizationEnabledAsync(value),
+                nameof(OnIsTextColorCustomizationEnabledChanged));
+            
             // When disabled, restore default theme colors
             if (!value)
             {
                 RestoreDefaultThemeColors();
             }
-        }
-
-        partial void OnImageSelectionColorChanged(string value)
-        {
-            _ = _themeSettings.SetImageSelectionColorAsync(value);
-        }
-
-        partial void OnImageSelectionOpacityChanged(double value)
-        {
-            _ = _themeSettings.SetImageSelectionOpacityAsync(value);
-        }
-
-        partial void OnImageSelectionBorderThicknessChanged(double value)
-        {
-            _ = _themeSettings.SetImageSelectionBorderThicknessAsync(value);
         }
 
         private void RestoreDefaultThemeColors()

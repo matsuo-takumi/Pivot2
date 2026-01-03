@@ -67,7 +67,8 @@ namespace Pivot.Services
 
 		// ===== Phase 2: Buffers & periodic flush =====
 		private readonly ConcurrentQueue<ItemChangeData<AssetEntity>> _assetChangeBuffer = new();
-		private System.Timers.Timer? _assetFlushTimer;
+		private CancellationTokenSource? _flushLoopCts;
+		private Task? _flushLoopTask;
 		private const int AssetFlushIntervalMs = 300; // Phase 6: move to config
 		private const int AssetFlushBatchMax = 100;   // Phase 6: move to config
 
@@ -85,17 +86,9 @@ namespace Pivot.Services
 			_thumbnailService = thumbnailService;
 
 
-			// Start periodic flush timer for asset changes
-			_assetFlushTimer = new System.Timers.Timer(AssetFlushIntervalMs)
-			{
-				AutoReset = true,
-				Enabled = true
-			};
-			_assetFlushTimer.Elapsed += (_, __) =>
-			{
-				try { FlushAssetBuffer(); }
-				catch (Exception ex) { _logger.LogError(ex, "FlushAssetBuffer failed"); }
-			};
+			// Start periodic flush loop for asset changes (using PeriodicTimer to avoid deadlock)
+			_flushLoopCts = new CancellationTokenSource();
+			_flushLoopTask = RunFlushLoopAsync(_flushLoopCts.Token);
 
 			// Subscribe to directory changes for real-time sync
 			_messenger.Register<DirectoryChangedMessage>(this, async (recipient, message) =>
@@ -592,6 +585,32 @@ namespace Pivot.Services
 		await ProcessFileChangeAsync(path, ct);
 	}
 
+	/// <summary>
+	/// Periodic flush loop using PeriodicTimer (C# 10+) to avoid deadlock issues with System.Timers.Timer.
+	/// </summary>
+	private async Task RunFlushLoopAsync(CancellationToken ct)
+	{
+		try
+		{
+			using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(AssetFlushIntervalMs));
+			while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+			{
+				try
+				{
+					FlushAssetBuffer();
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "FlushAssetBuffer failed");
+				}
+			}
+		}
+		catch (OperationCanceledException)
+		{
+			// Expected when disposed
+		}
+	}
+
 	private void FlushAssetBuffer()
 	{
 		var batch = new List<ItemChangeData<AssetEntity>>();
@@ -615,7 +634,14 @@ namespace Pivot.Services
 			_delayTokens.Clear();
 			try { _fileOpenSemaphore?.Dispose(); } catch { }
 			try { _hashSemaphore?.Dispose(); } catch { }
-			try { _assetFlushTimer?.Dispose(); } catch { }
+			// Stop flush loop gracefully
+			try
+			{
+				_flushLoopCts?.Cancel();
+				_flushLoopTask?.Wait(TimeSpan.FromSeconds(1));
+				_flushLoopCts?.Dispose();
+			}
+			catch { }
 			GC.SuppressFinalize(this);
 		}
 

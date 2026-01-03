@@ -9,10 +9,12 @@ namespace Pivot.Services
     /// Unified browser settings service.
     /// Consolidates ImageDisplaySettingsService, CodeSettingsService, and AssetDisplaySettingsService.
     /// </summary>
-    public class BrowserSettingsService
+    public class BrowserSettingsService(
+        ILogger<BrowserSettingsService> logger,
+        ISettingsStore settingsStore)
     {
-        private readonly ILogger<BrowserSettingsService> _logger;
-        private readonly ISettingsStore _settingsStore;
+        private readonly ILogger<BrowserSettingsService> _logger = logger;
+        private readonly ISettingsStore _settingsStore = settingsStore;
 
         // Layout settings
         private LayoutType _defaultLayoutMode = LayoutType.Grid;
@@ -35,14 +37,6 @@ namespace Pivot.Services
         private string _exportOutputDirectory = string.Empty;
         private Guid? _lastSelectedSnippetId = null;
         private string _codeExportFormat = "txt";
-
-        public BrowserSettingsService(
-            ILogger<BrowserSettingsService> logger,
-            ISettingsStore settingsStore)
-        {
-            _logger = logger;
-            _settingsStore = settingsStore;
-        }
 
         public async Task LoadAsync()
         {

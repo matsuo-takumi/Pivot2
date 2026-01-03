@@ -197,7 +197,7 @@ namespace Pivot.ViewModels
         private void TriggerPersist()
         {
             if (_isInitializing) return;
-            _ = PersistSettingsAsync();
+            Utilities.SafeAsync.FireAndForget(PersistSettingsAsync(), nameof(TriggerPersist));
         }
 
         private void UpdateHslFromColor(Color color)

@@ -120,9 +120,11 @@ namespace Pivot.ViewModels
 
         private void ApplyMaterialSettings()
         {
-            _ = _materialSettings.SetMaterialParamsAsync(
-                Albedo.R / 255f, Albedo.G / 255f, Albedo.B / 255f,
-                Metallic, Roughness);
+            Utilities.SafeAsync.FireAndForget(
+                _materialSettings.SetMaterialParamsAsync(
+                    Albedo.R / 255f, Albedo.G / 255f, Albedo.B / 255f,
+                    Metallic, Roughness),
+                nameof(ApplyMaterialSettings));
 
             _messenger.Send(new SettingsChangedMessage("MaterialParams"));
         }

@@ -14,13 +14,14 @@
 
     <UserControl.Resources>
         <converters:SelectionToBorderBrushConverter x:Key="SelectionConverter"/>
+        <converters:SelectionToBorderThicknessConverter x:Key="SelectionThicknessConverter"/>
         <!-- Card Template for Masonry/Grid layouts -->
         <DataTemplate x:Key="AssetCardTemplate" x:DataType="models:AssetEntity">
             <Border x:Name="ItemBorder" 
                     Margin="4"
                     CornerRadius="6"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderThickness="2"
+                    BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThicknessConverter}}"
                     BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionConverter}}"
                     CanDrag="True"
                     DragStarting="ItemBorder_DragStarting">
@@ -68,7 +69,7 @@
                     Padding="8"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="4"
-                    BorderThickness="2"
+                    BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThicknessConverter}}"
                     BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionConverter}}"
                     CanDrag="True"
                     DragStarting="ItemBorder_DragStarting">

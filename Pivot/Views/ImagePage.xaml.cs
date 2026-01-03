@@ -24,13 +24,14 @@ namespace Pivot.Views
 {
     public sealed partial class ImagePage : Page, IRecipient<SettingsChangedMessage>
     {
-        public ImageViewModel ViewModel { get; set; }
+        public ImageViewModel ViewModel { get; }
 
         public ImagePage()
         {
             this.InitializeComponent();
             
-            ViewModel = new ImageViewModel();
+            // Get ViewModel from DI container (proper dependency injection)
+            ViewModel = App.Current.Services.GetRequiredService<ImageViewModel>();
             this.DataContext = ViewModel;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.FolderTree.CollectionChanged += FolderTree_CollectionChanged;

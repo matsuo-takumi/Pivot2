@@ -28,7 +28,9 @@ namespace Pivot.ViewModels
 
         partial void OnMenuDisplayModeChanged(MenuDisplayMode value)
         {
-            _ = _themeSettings.SetMenuDisplayModeAsync(value);
+            Utilities.SafeAsync.FireAndForget(
+                _themeSettings.SetMenuDisplayModeAsync(value),
+                nameof(OnMenuDisplayModeChanged));
             _messenger.Send(new Pivot.Messages.MenuDisplayModeChangedMessage(value));
         }
 

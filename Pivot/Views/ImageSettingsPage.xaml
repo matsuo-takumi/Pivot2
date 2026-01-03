@@ -5,9 +5,17 @@
     xmlns:local="using:Pivot.Views"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:flyout="using:Microsoft.UI.Xaml.Controls.Primitives"
+    xmlns:converters="using:Pivot.Converters"
     mc:Ignorable="d"
     Background="Transparent"
     x:Name="ImageSettingsRoot">
+
+    <Page.Resources>
+        <converters:HexToColorConverter x:Key="HexToColorConverter" />
+        <converters:OpacityToPercentConverter x:Key="OpacityToPercentConverter" />
+    </Page.Resources>
 
     <Grid Padding="20">
         <Grid.RowDefinitions>
@@ -19,6 +27,106 @@
                 <local:FilterSettingsView x:Name="FilterSettingsView" />
             </PivotItem>
 
+            <PivotItem Header="Selector">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Image Selection Highlight" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Customize the appearance of selected image items in the Image page." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
+
+                        <!-- Select Section -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12">
+                            <StackPanel Spacing="16">
+                                <TextBlock Text="Select" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock Text="Configure the border appearance for selected image items." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" FontSize="12"/>
+
+                                <!-- Color -->
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Color" FontWeight="SemiBold" FontSize="14" />
+                                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                        <Button x:Name="SelectionColorButton" Width="48" Height="48" Background="Transparent" BorderThickness="0" Padding="0" Click="SelectionColorButton_Click">
+                                            <Border Width="48" Height="48" CornerRadius="6" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1">
+                                                <Border.Background>
+                                                    <SolidColorBrush x:Name="SelectionColorBrush" Color="{x:Bind ViewModel.SelectionColor, Mode=OneWay, Converter={StaticResource HexToColorConverter}}" />
+                                                </Border.Background>
+                                            </Border>
+                                            <flyout:FlyoutBase.AttachedFlyout>
+                                                <Flyout Placement="Bottom">
+                                                    <muxc:ColorPicker
+                                                        x:Name="SelectionColorPicker"
+                                                        ColorChanged="SelectionColorPicker_ColorChanged"
+                                                        ColorSpectrumShape="Ring"
+                                                        IsMoreButtonVisible="False"
+                                                        IsColorSliderVisible="True"
+                                                        IsColorChannelTextInputVisible="False"
+                                                        IsHexInputVisible="True"
+                                                        IsAlphaEnabled="False"
+                                                        IsAlphaSliderVisible="False"
+                                                        IsAlphaTextInputVisible="False" />
+                                                </Flyout>
+                                            </flyout:FlyoutBase.AttachedFlyout>
+                                        </Button>
+                                        <TextBox Width="120" Height="32" MinHeight="32" TextAlignment="Left" VerticalContentAlignment="Center" 
+                                                 Text="{x:Bind ViewModel.SelectionColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 PlaceholderText="#0078D4" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Opacity -->
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Text="Opacity" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                                        <TextBlock FontSize="14" 
+                                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   MinWidth="40"
+                                                   TextAlignment="Right">
+                                            <Run Text="{x:Bind ViewModel.SelectionOpacity, Mode=OneWay, Converter={StaticResource OpacityToPercentConverter}}" />
+                                            <Run Text="%" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <Slider Minimum="0" Maximum="1" 
+                                            Value="{x:Bind ViewModel.SelectionOpacity, Mode=TwoWay}"
+                                            TickFrequency="0.1"
+                                            TickPlacement="BottomRight"
+                                            StepFrequency="0.01" />
+                                    <TextBlock Text="Adjust the transparency of the selection border (0 = fully transparent, 100 = fully opaque)." 
+                                               TextWrapping="Wrap" 
+                                               Foreground="{ThemeResource AppTextCaptionBrush}" 
+                                               FontSize="11" />
+                                </StackPanel>
+
+                                <!-- Border Thickness -->
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Text="Border Thickness" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Bind ViewModel.SelectionBorderThickness, Mode=OneWay}" 
+                                                   FontSize="14" 
+                                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   MinWidth="40"
+                                                   TextAlignment="Right" />
+                                        <TextBlock Text="px" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Slider Minimum="0" Maximum="10" 
+                                            Value="{x:Bind ViewModel.SelectionBorderThickness, Mode=TwoWay}"
+                                            TickFrequency="1"
+                                            TickPlacement="BottomRight"
+                                            StepFrequency="0.5" />
+                                    <TextBlock Text="Adjust the thickness of the selection border." 
+                                               TextWrapping="Wrap" 
+                                               Foreground="{ThemeResource AppTextCaptionBrush}" 
+                                               FontSize="11" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
             <PivotItem Header="General">
                 <Grid Padding="12">
                     <TextBlock Text="General Image settings (placeholder)" Foreground="{ThemeResource AppTextCaptionBrush}" />
@@ -27,4 +135,3 @@
         </Pivot>
     </Grid>
 </Page>
-

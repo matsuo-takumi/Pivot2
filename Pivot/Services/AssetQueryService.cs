@@ -14,18 +14,12 @@ namespace Pivot.Services
     /// Unified query service for assets with filtering, sorting, and pagination.
     /// Designed for high performance with large datasets (10k+ items).
     /// </summary>
-    public class AssetQueryService
+    public class AssetQueryService(
+        ILogger<AssetQueryService> logger,
+        IServiceProvider serviceProvider)
     {
-        private readonly ILogger<AssetQueryService> _logger;
-        private readonly IServiceProvider _serviceProvider;
-
-        public AssetQueryService(
-            ILogger<AssetQueryService> logger,
-            IServiceProvider serviceProvider)
-        {
-            _logger = logger;
-            _serviceProvider = serviceProvider;
-        }
+        private readonly ILogger<AssetQueryService> _logger = logger;
+        private readonly IServiceProvider _serviceProvider = serviceProvider;
 
         /// <summary>
         /// Query assets with filter criteria and pagination.

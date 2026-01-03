@@ -192,11 +192,14 @@ namespace Pivot
             // Restore text colors from settings when not in None mode
             RestoreTextColorsFromSettings();
 
-            // Register event handlers for active backdrops
+            // Register event handlers for active backdrops (idempotent: unregister first to prevent double-registration)
+            Activated -= Window_Activated;
             Activated += Window_Activated;
+            Closed -= Window_Closed;
             Closed += Window_Closed;
             if (Content is FrameworkElement rootElement2)
             {
+                rootElement2.ActualThemeChanged -= Window_ThemeChanged;
                 rootElement2.ActualThemeChanged += Window_ThemeChanged;
             }
         }

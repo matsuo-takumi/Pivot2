@@ -21,6 +21,9 @@ namespace Pivot.ViewModels
         IRecipient<DirectoryChangedMessage>
     {
         private readonly DispatcherQueue _dispatcherQueue;
+        private readonly ThemeSettingsService? _themeSettings;
+        private readonly DirectorySettingsService? _directorySettings;
+        private readonly IMessenger? _messenger;
         
         // Navigation
         public ObservableCollection<FolderNode> FolderTree { get; } = new();
@@ -35,32 +38,25 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private double _selectionBorderThickness = 2.0;
 
-        private DirectorySettingsService? _directorySettings;
-        private readonly IMessenger? _messenger;
-        private IEnumerable<string>? _currentDirectories;
-
-        public ImageViewModel()
+        /// <summary>
+        /// DI-compatible constructor. Use this when resolving via service provider.
+        /// </summary>
+        public ImageViewModel(
+            ThemeSettingsService themeSettings,
+            DirectorySettingsService directorySettings,
+            IMessenger messenger)
         {
-            try
-            {
-                var services = App.Current.Services;
-                var themeSettings = services.GetService<ThemeSettingsService>();
-                _directorySettings = services.GetService<DirectorySettingsService>();
-                _messenger = services.GetService<IMessenger>();
-
-                _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+            _themeSettings = themeSettings;
+            _directorySettings = directorySettings;
+            _messenger = messenger;
+            _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             
-                if (_messenger != null)
-                {
-                    _messenger.RegisterAll(this);
-                }
-
-                if (themeSettings != null)
-                {
-                    SelectionBorderThickness = themeSettings.ImageSelectionBorderThickness;
-                }
+            _messenger?.RegisterAll(this);
+            
+            if (_themeSettings != null)
+            {
+                SelectionBorderThickness = _themeSettings.ImageSelectionBorderThickness;
             }
-            catch { }
         }
 
         partial void OnCurrentLayoutChanged(LayoutType value)

@@ -206,30 +206,7 @@ namespace Pivot.Views
             }
         }
 
-        private void ImageSelectionColorButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element)
-            {
-                FlyoutBase.ShowAttachedFlyout(element);
-            }
-        }
 
-        private void ImageSelectionColorPicker_ColorChanged(Microsoft.UI.Xaml.Controls.ColorPicker sender, Microsoft.UI.Xaml.Controls.ColorChangedEventArgs args)
-        {
-            try
-            {
-                var converter = new HexToColorConverter();
-                var hex = converter.ConvertBack(args.NewColor, typeof(string), string.Empty, string.Empty);
-                if (hex is string hexString && !string.IsNullOrWhiteSpace(hexString))
-                {
-                    ViewModel.ImageSelectionColor = hexString;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to update ImageSelectionColor from ColorPicker.");
-            }
-        }
 
 
     }

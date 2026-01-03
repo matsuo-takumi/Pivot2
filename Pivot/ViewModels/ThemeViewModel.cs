@@ -42,7 +42,9 @@ namespace Pivot.ViewModels
         partial void OnAppThemeChanged(ElementTheme value)
         {
             if (_isLoadingThemeSettings) return;
-            _ = _themeSettings.SetThemeAsync(value);
+            Utilities.SafeAsync.FireAndForget(
+                _themeSettings.SetThemeAsync(value),
+                nameof(OnAppThemeChanged));
             // Send EffectiveTheme (resolved to Light/Dark) so UI applies correctly
             _messenger.Send(new ThemeChangedMessage(_themeSettings.EffectiveTheme));
         }
@@ -50,7 +52,9 @@ namespace Pivot.ViewModels
         partial void OnAppBackdropTypeChanged(BackdropType value)
         {
             if (_isLoadingThemeSettings) return;
-            _ = _themeSettings.SetBackdropTypeAsync(value);
+            Utilities.SafeAsync.FireAndForget(
+                _themeSettings.SetBackdropTypeAsync(value),
+                nameof(OnAppBackdropTypeChanged));
             _messenger.Send(new BackdropTypeChangedMessage(value));
         }
 

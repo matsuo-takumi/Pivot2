@@ -73,34 +73,37 @@ namespace Pivot.Repositories
 
         public async Task UpsertAsync(AssetEntity asset, CancellationToken ct = default)
         {
-            var existing = await GetByPathAsync(asset.FilePath, ct);
+            // Use ExecuteUpdateAsync for single round-trip update (EF Core 7+)
+            // This avoids SELECT + UPDATE pattern, improving performance significantly
+            var affected = await _context.Assets
+                .Where(a => a.FilePath == asset.FilePath)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(a => a.FileName, asset.FileName)
+                    .SetProperty(a => a.Directory, asset.Directory)
+                    .SetProperty(a => a.Extension, asset.Extension)
+                    .SetProperty(a => a.FileSize, asset.FileSize)
+                    .SetProperty(a => a.LastModifiedUtc, asset.LastModifiedUtc)
+                    .SetProperty(a => a.Hash, asset.Hash)
+                    .SetProperty(a => a.Kind, asset.Kind)
+                    .SetProperty(a => a.Width, asset.Width)
+                    .SetProperty(a => a.Height, asset.Height)
+                    .SetProperty(a => a.AspectRatio, asset.AspectRatio)
+                    .SetProperty(a => a.ThumbnailPath, asset.ThumbnailPath)
+                    .SetProperty(a => a.ThumbnailGeneratedAt, asset.ThumbnailGeneratedAt)
+                    .SetProperty(a => a.Language, asset.Language)
+                    .SetProperty(a => a.Tool, asset.Tool)
+                    .SetProperty(a => a.ContentIndex, asset.ContentIndex)
+                    .SetProperty(a => a.UpdatedAt, DateTime.UtcNow),
+                    ct);
 
-            if (existing != null)
+            // If no rows were updated, insert new record
+            if (affected == 0)
             {
-                // Update
-                existing.FileName = asset.FileName;
-                existing.Directory = asset.Directory;
-                existing.Extension = asset.Extension;
-                existing.FileSize = asset.FileSize;
-                existing.LastModifiedUtc = asset.LastModifiedUtc;
-                existing.Hash = asset.Hash;
-                existing.Kind = asset.Kind;
-                existing.Width = asset.Width;
-                existing.Height = asset.Height;
-                existing.AspectRatio = asset.AspectRatio;
-                existing.ThumbnailPath = asset.ThumbnailPath;
-                existing.ThumbnailGeneratedAt = asset.ThumbnailGeneratedAt;
-                existing.UpdatedAt = DateTime.UtcNow;
-            }
-            else
-            {
-                // Insert
                 asset.CreatedAt = DateTime.UtcNow;
                 asset.UpdatedAt = DateTime.UtcNow;
-                await _context.Assets.AddAsync(asset, ct);
+                _context.Assets.Add(asset);
+                await _context.SaveChangesAsync(ct);
             }
-
-            await _context.SaveChangesAsync(ct);
         }
 
         public async Task MarkDeletedAsync(string filePath, CancellationToken ct = default)

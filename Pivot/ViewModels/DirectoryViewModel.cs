@@ -131,29 +131,18 @@ namespace Pivot.ViewModels
 
         private async Task AddDirectoryAsync(DirectoryCategory category)
         {
-            if (_directorySettings == null) return;
+            if (_directorySettings == null || _dialogService == null) return;
 
-            // TODO: FolderPicker を使用してディレクトリを選択させる
-            var folderPicker = new Windows.Storage.Pickers.FolderPicker();
-            folderPicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop;
-            folderPicker.FileTypeFilter.Add("*");
+            // Use IDialogService for UI separation (testable, no WinRT.Interop dependency)
+            var selectedPath = await _dialogService.PickFolderAsync();
             
-            // WinUI 3 の場合、ウィンドウハンドルを設定する必要がある
-            var uiWindow = App.Current.MainWindow as Microsoft.UI.Xaml.Window;
-            if (uiWindow == null) return; // UI Windowが取得できない場合は処理を中断
-
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(uiWindow);
-            WinRT.Interop.InitializeWithWindow.Initialize(folderPicker, hwnd);
-
-            var folder = await folderPicker.PickSingleFolderAsync();
-            if (folder != null)
+            if (!string.IsNullOrEmpty(selectedPath))
             {
-                string path = folder.Path;
-                if (!GetDirectoryCollection(category).Contains(NormalizePath(path)))
+                var normalizedPath = NormalizePath(selectedPath);
+                if (!GetDirectoryCollection(category).Contains(normalizedPath))
                 {
-                    await _directorySettings.AddDirectoryAsync(category, path);
-                    GetDirectoryCollection(category).Add(NormalizePath(path));
-                    //_logger.LogInformation("Added directory: {Category} - {Path}", category, path); // コメントアウト
+                    await _directorySettings.AddDirectoryAsync(category, selectedPath);
+                    GetDirectoryCollection(category).Add(selectedPath);
                 }
             }
         }

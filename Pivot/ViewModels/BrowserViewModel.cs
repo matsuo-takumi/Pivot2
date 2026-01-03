@@ -132,7 +132,9 @@ namespace Pivot.ViewModels
         partial void OnCurrentLayoutChanged(LayoutType value)
         {
             _logger.LogDebug("BrowserViewModel: Layout changed to {Layout}", value);
-            _ = _browserSettings.SetDefaultLayoutModeAsync(value);
+            Utilities.SafeAsync.FireAndForget(
+                _browserSettings.SetDefaultLayoutModeAsync(value),
+                nameof(OnCurrentLayoutChanged));
             UpdateStatusText();
         }
 
