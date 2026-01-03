@@ -10,6 +10,7 @@
     xmlns:controls="using:Pivot.Controls"
     mc:Ignorable="d"
     x:Name="ImagePageRoot"
+    KeyDown="ImagePage_KeyDown"
     Background="Transparent">
 
     <Page.Resources>

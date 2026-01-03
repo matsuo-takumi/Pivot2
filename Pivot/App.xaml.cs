@@ -96,9 +96,6 @@ namespace Pivot
 			{
 				try
 				{
-					// Show loading indicator
-					mainWindow?.ShowLoading("Initializing...");
-					
 					// Phase 1: Scan directories from settings and populate database
 					var directorySettings = Services.GetRequiredService<DirectorySettingsService>();
 					var scanner = Services.GetRequiredService<FileScannerService>();
@@ -107,31 +104,23 @@ namespace Pivot
 					var imageDirectories = directorySettings.ImageDirectories?.ToList() ?? new List<string>();
 					
 					// Phase 0: Reconcile - delete orphaned assets from removed directories
-					mainWindow?.UpdateLoadingText("Cleaning up...");
 					System.Diagnostics.Debug.WriteLine($"[Startup] Reconciling database with {imageDirectories.Count} configured directories");
 					await scanner.ReconcileAsync(imageDirectories);
 					
 					if (imageDirectories.Count > 0)
 					{
-						mainWindow?.UpdateLoadingText($"Scanning {imageDirectories.Count} directories...");
 						System.Diagnostics.Debug.WriteLine($"[Startup] Starting scan for {imageDirectories.Count} directories");
 						await scanner.ScanAsync(imageDirectories);
 						System.Diagnostics.Debug.WriteLine("[Startup] Directory scan completed");
 					}
 					
-					// Phase 2: Index pending assets (extract metadata)
-					mainWindow?.UpdateLoadingText("Indexing metadata...");
+					// Phase 2: Index pending assets (extract metadata) - runs silently
 					var indexer = Services.GetRequiredService<MetadataIndexingService>();
 					await indexer.IndexPendingAssetsAsync();
 				}
 				catch (Exception ex)
 				{
 					System.Diagnostics.Debug.WriteLine($"[Startup] Background scan/index error: {ex.Message}");
-				}
-				finally
-				{
-					// Hide loading indicator
-					mainWindow?.HideLoading();
 				}
 			});
 		}

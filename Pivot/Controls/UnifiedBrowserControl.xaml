@@ -6,12 +6,14 @@
     xmlns:local="using:Pivot.Controls"
     xmlns:utils="using:Pivot.Utilities"
     xmlns:models="using:Pivot.Models"
+    xmlns:converters="using:Pivot.Converters"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
     <UserControl.Resources>
+        <converters:SelectionToBorderBrushConverter x:Key="SelectionConverter"/>
         <!-- Card Template for Masonry/Grid layouts -->
         <DataTemplate x:Key="AssetCardTemplate" x:DataType="models:AssetEntity">
             <Border x:Name="ItemBorder" 
@@ -19,8 +21,10 @@
                     CornerRadius="6"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderThickness="2"
-                    BorderBrush="Transparent">
-                <Grid>
+                    BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionConverter}}"
+                    CanDrag="True"
+                    DragStarting="ItemBorder_DragStarting">
+                <Grid Background="Transparent">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
@@ -39,7 +43,7 @@
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center">
                             <Image.Source>
-                                <BitmapImage UriSource="{x:Bind FilePath}"
+                                <BitmapImage UriSource="{x:Bind DisplayImageSource}"
                                              DecodePixelWidth="300"
                                              DecodePixelType="Logical"/>
                             </Image.Source>
@@ -65,8 +69,10 @@
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="4"
                     BorderThickness="2"
-                    BorderBrush="Transparent">
-                <Grid>
+                    BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionConverter}}"
+                    CanDrag="True"
+                    DragStarting="ItemBorder_DragStarting">
+                <Grid Background="Transparent">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="48"/>
                         <ColumnDefinition Width="*"/>
@@ -83,7 +89,7 @@
                         </Border.Background>
                         <Image Stretch="UniformToFill">
                             <Image.Source>
-                                <BitmapImage UriSource="{x:Bind FilePath}"
+                                <BitmapImage UriSource="{x:Bind DisplayImageSource}"
                                              DecodePixelWidth="48"
                                              DecodePixelType="Logical"/>
                             </Image.Source>
@@ -140,6 +146,7 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
                 <!-- Search Box -->
@@ -181,6 +188,22 @@
                         Padding="8">
                     <FontIcon x:Name="SortDirectionIcon" Glyph="&#xE74B;" FontSize="14"/>
                 </Button>
+                
+                <!-- Loading Indicator (in filter bar) -->
+                <StackPanel x:Name="FilterBarLoadingIndicator"
+                            Grid.Column="4"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Center"
+                            Margin="8,0,0,0">
+                    <ProgressRing IsActive="True" Width="16" Height="16"/>
+                    <TextBlock x:Name="FilterBarLoadingText" 
+                               Text="Loading..." 
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -193,7 +216,9 @@
                            ItemTemplate="{StaticResource LayoutTemplateSelector}"
                            Tapped="AssetRepeater_Tapped"
                            DoubleTapped="AssetRepeater_DoubleTapped"
-                           RightTapped="AssetRepeater_RightTapped">
+                           RightTapped="AssetRepeater_RightTapped"
+                           ElementPrepared="AssetRepeater_ElementPrepared"
+                           ElementClearing="AssetRepeater_ElementClearing">
                 <ItemsRepeater.Layout>
                     <UniformGridLayout MinItemWidth="200"
                                        MinItemHeight="200"

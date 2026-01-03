@@ -34,9 +34,9 @@
                           HorizontalAlignment="Stretch" 
                           VerticalAlignment="Stretch">
                 
-                <!-- Pattern tiling grid (3x3 for pattern preview) -->
+                <!-- Pattern tiling using ImageBrush TileMode -->
                 <Grid x:Name="PatternContainer">
-                    <Grid x:Name="PatternGrid" Visibility="Collapsed">
+                    <Grid x:Name="PatternGrid" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -47,16 +47,18 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Image x:Name="PatternImage00" Grid.Row="0" Grid.Column="0" Stretch="None" Margin="0"/>
-                        <Image x:Name="PatternImage01" Grid.Row="0" Grid.Column="1" Stretch="None" Margin="-1,0,0,0"/>
-                        <Image x:Name="PatternImage02" Grid.Row="0" Grid.Column="2" Stretch="None" Margin="-1,0,0,0"/>
-                        <Image x:Name="PatternImage10" Grid.Row="1" Grid.Column="0" Stretch="None" Margin="0,-1,0,0"/>
-                        <Image x:Name="PatternImage11" Grid.Row="1" Grid.Column="1" Stretch="None" Margin="-1,-1,0,0"/>
-                        <Image x:Name="PatternImage12" Grid.Row="1" Grid.Column="2" Stretch="None" Margin="-1,-1,0,0"/>
-                        <Image x:Name="PatternImage20" Grid.Row="2" Grid.Column="0" Stretch="None" Margin="0,-1,0,0"/>
-                        <Image x:Name="PatternImage21" Grid.Row="2" Grid.Column="1" Stretch="None" Margin="-1,-1,0,0"/>
-                        <Image x:Name="PatternImage22" Grid.Row="2" Grid.Column="2" Stretch="None" Margin="-1,-1,0,0"/>
+                        <!-- 9 Images will be added here in code-behind or statically if preferred -->
+                        <Image x:Name="P00" Grid.Row="0" Grid.Column="0" Stretch="None"/>
+                        <Image x:Name="P01" Grid.Row="0" Grid.Column="1" Stretch="None"/>
+                        <Image x:Name="P02" Grid.Row="0" Grid.Column="2" Stretch="None"/>
+                        <Image x:Name="P10" Grid.Row="1" Grid.Column="0" Stretch="None"/>
+                        <Image x:Name="P11" Grid.Row="1" Grid.Column="1" Stretch="None"/>
+                        <Image x:Name="P12" Grid.Row="1" Grid.Column="2" Stretch="None"/>
+                        <Image x:Name="P20" Grid.Row="2" Grid.Column="0" Stretch="None"/>
+                        <Image x:Name="P21" Grid.Row="2" Grid.Column="1" Stretch="None"/>
+                        <Image x:Name="P22" Grid.Row="2" Grid.Column="2" Stretch="None"/>
                     </Grid>
+                    
                     <Image x:Name="ImagePreviewImage" 
                            Stretch="Uniform"
                            HorizontalAlignment="Center" 

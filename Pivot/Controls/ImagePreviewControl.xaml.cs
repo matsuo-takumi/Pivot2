@@ -23,6 +23,8 @@ namespace Pivot.Controls
         private Windows.Foundation.Point _lastMousePosition;
         private bool _isPatternPreviewEnabled = false;
 
+        public bool IsOpen => ImagePreviewOverlay.Visibility == Visibility.Visible;
+
         public ImagePreviewControl()
         {
             this.InitializeComponent();
@@ -44,35 +46,34 @@ namespace Pivot.Controls
                 ImagePreviewImage.Visibility = Visibility.Collapsed;
                 PatternGrid.Visibility = Visibility.Visible;
                 
-                // Set same image source to all 9 pattern images
-                PatternImage00.Source = _currentPreviewBitmap;
-                PatternImage01.Source = _currentPreviewBitmap;
-                PatternImage02.Source = _currentPreviewBitmap;
-                PatternImage10.Source = _currentPreviewBitmap;
-                PatternImage11.Source = _currentPreviewBitmap;
-                PatternImage12.Source = _currentPreviewBitmap;
-                PatternImage20.Source = _currentPreviewBitmap;
-                PatternImage21.Source = _currentPreviewBitmap;
-                PatternImage22.Source = _currentPreviewBitmap;
-                
-                // Zoom out to show entire 3x3 pattern
+                // Assign source to all 9 images
+                P00.Source = _currentPreviewBitmap; P01.Source = _currentPreviewBitmap; P02.Source = _currentPreviewBitmap;
+                P10.Source = _currentPreviewBitmap; P11.Source = _currentPreviewBitmap; P12.Source = _currentPreviewBitmap;
+                P20.Source = _currentPreviewBitmap; P21.Source = _currentPreviewBitmap; P22.Source = _currentPreviewBitmap;
+
+                // Zoom out to show the pattern (fit to screen roughly)
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     try
                     {
-                        var imgWidth = _currentPreviewBitmap.PixelWidth * 3;
-                        var imgHeight = _currentPreviewBitmap.PixelHeight * 3;
                         var viewWidth = ImagePreviewScrollViewer.ViewportWidth;
                         var viewHeight = ImagePreviewScrollViewer.ViewportHeight;
                         
-                        if (viewWidth > 0 && viewHeight > 0 && imgWidth > 0 && imgHeight > 0)
+                        // Calculate zoom to fit 3x3 grid (approx)
+                        // Total width = 3 * imageWidth
+                        var totalW = _currentPreviewBitmap.PixelWidth * 3;
+                        var totalH = _currentPreviewBitmap.PixelHeight * 3;
+                        
+                        if (totalW > 0 && totalH > 0)
                         {
-                            var zoomX = viewWidth / imgWidth;
-                            var zoomY = viewHeight / imgHeight;
-                            var fitZoom = Math.Min(zoomX, zoomY) * 0.9; // 90% to leave some margin
-                            fitZoom = Math.Max(fitZoom, ImagePreviewScrollViewer.MinZoomFactor);
-                            fitZoom = Math.Min(fitZoom, ImagePreviewScrollViewer.MaxZoomFactor);
-                            ImagePreviewScrollViewer.ChangeView(null, null, (float)fitZoom, false);
+                            var zoomX = viewWidth / totalW;
+                            var zoomY = viewHeight / totalH;
+                            var zoom = Math.Min(zoomX, zoomY);
+                            // Cap max zoom at 1.0 (pixel perfect) but allow shrinking
+                            if (zoom > 1.0) zoom = 1.0f; 
+                            
+                            // Apply slightly loosely
+                            ImagePreviewScrollViewer.ChangeView(null, null, (float)zoom, false);
                         }
                     }
                     catch { }
@@ -348,6 +349,7 @@ namespace Pivot.Controls
                 
                 // Reset pattern preview
                 _isPatternPreviewEnabled = false;
+                PatternPreviewToggle.IsChecked = false;
                 PatternPreviewToggle.IsChecked = false;
                 PatternGrid.Visibility = Visibility.Collapsed;
                 ImagePreviewImage.Visibility = Visibility.Visible;

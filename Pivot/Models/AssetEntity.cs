@@ -13,8 +13,32 @@ namespace Pivot.Models
     [Index(nameof(Kind), nameof(LastModifiedUtc), Name = "IX_Asset_Kind_Date")]
     [Index(nameof(AspectRatio), Name = "IX_Asset_AspectRatio")]
     [Index(nameof(Rating), Name = "IX_Asset_Rating")]
-    public class AssetEntity
+    public class AssetEntity : System.ComponentModel.INotifyPropertyChanged
     {
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        private void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
+        }
+
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        private bool _isSelected;
+
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (_isSelected != value)
+                {
+                    _isSelected = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         [Key]
         public int Id { get; set; }
 
@@ -61,6 +85,12 @@ namespace Pivot.Models
         [MaxLength(4096)]
         public string? ThumbnailPath { get; set; }
         public DateTime? ThumbnailGeneratedAt { get; set; }
+        
+        /// <summary>
+        /// サムネイルがあればそれを、なければ元画像パスを返す（表示用）
+        /// </summary>
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public string DisplayImageSource => !string.IsNullOrEmpty(ThumbnailPath) ? ThumbnailPath : FilePath;
 
         // ユーザーメタデータ
         public string? UserTagsJson { get; set; }

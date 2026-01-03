@@ -26,37 +26,15 @@ namespace Pivot.Views
     {
         public ImageViewModel ViewModel { get; set; }
 
-        private MasonryLayout _masonryLayout;
-        private DataTemplate _defaultItemTemplate = null!;
-
-        private const double DragActivationThresholdSquared = 16.0;
-        private bool _isPointerDown = false;
-        private bool _isDragIntent = false;
-        private Windows.Foundation.Point _pointerDownPoint;
-        private TemplateItem? _pressedItem;
-        private bool _pendingSelectionForClick = false;
-        private TemplateItem? _pendingSelectionItem;
-        
-
         public ImagePage()
         {
             this.InitializeComponent();
-            
-            _masonryLayout = new MasonryLayout 
-            { 
-                ColumnWidth = 220, 
-                ColumnSpacing = 8, 
-                RowSpacing = 8 
-            };
             
             ViewModel = new ImageViewModel();
             this.DataContext = ViewModel;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.FolderTree.CollectionChanged += FolderTree_CollectionChanged;
 
-            // responsive handlers
-            SizeChanged += ImagePage_SizeChanged;
-            
             // Initialize BrowserControl after Loaded event
             this.Loaded += ImagePage_Loaded;
 
@@ -68,7 +46,7 @@ namespace Pivot.Views
                     // Use ImageDirectories from DirectorySettingsService
                     if (dirSettings.ImageDirectories != null && dirSettings.ImageDirectories.Count > 0)
                     {
-                         _ = ViewModel.LoadAsync(dirSettings.ImageDirectories);
+                         ViewModel.Initialize(dirSettings.ImageDirectories);
                     }
                 }
             }
@@ -88,6 +66,29 @@ namespace Pivot.Views
                 await BrowserControl.InitializeAsync(AssetKind.Image);
             }
             catch { }
+        }
+
+        public async void ImagePage_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            // Only handle navigation if Preview is open (or maybe always if focused? User requested Sync during preview)
+            // Let's support it primarily when Preview is open for the "Sync" requirement.
+            if (PreviewControl.IsOpen)
+            {
+                int delta = 0;
+                if (e.Key == Windows.System.VirtualKey.Left) delta = -1;
+                else if (e.Key == Windows.System.VirtualKey.Right) delta = 1;
+                
+                if (delta != 0)
+                {
+                    e.Handled = true;
+                    var newAsset = BrowserControl.MoveSelection(delta);
+                    if (newAsset != null)
+                    {
+                        var item = AssetMapper.ToPreviewItem(newAsset);
+                        await PreviewControl.ShowAsync(item);
+                    }
+                }
+            }
         }
         
         // Event handlers for BrowserControl
@@ -150,24 +151,10 @@ namespace Pivot.Views
         private void ImagePage_Unloaded(object sender, RoutedEventArgs e)
         {
             try { ViewModel.FolderTree.CollectionChanged -= FolderTree_CollectionChanged; } catch { }
-            try { ViewModel?.CancelLoads(); } catch { }
             // Clean up message registration
             try { WeakReferenceMessenger.Default.UnregisterAll(this); } catch { }
 
             try { PreviewControl.Close(); } catch { }
-        }
-
-        private void ImagePage_SizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            UpdateResponsive(e.NewSize.Width);
-        }
-
-        private void UpdateResponsive(double width)
-        {
-             if (ViewModel?.CurrentLayout == LayoutType.Masonry)
-             {
-                 _masonryLayout.Invalidate();
-             }
         }
 
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -260,170 +247,6 @@ namespace Pivot.Views
             FolderNavigationView.SelectedItem = null;
             ViewModel.SelectedFolder = null;
             BrowserControl.SetDirectoryFilter(null);
-        }
-
-        // ダブルクリック判定用
-        private long _lastPointerPressedTime = 0;
-        private object? _lastPointerPressedSender = null;
-
-        private void ImageItem_PointerPressed(object sender, PointerRoutedEventArgs e)
-        {
-            try
-            {
-                // 手動ダブルクリック判定（Masonryレイアウト対策）
-                var now = DateTime.Now.Ticks;
-                // 500ms以内
-                if (sender == _lastPointerPressedSender && (now - _lastPointerPressedTime) < 5000000)
-                {
-                    if (sender is FrameworkElement elm && elm.DataContext is TemplateItem itm)
-                    {
-                        _ = PreviewControl.ShowAsync(itm);
-                        e.Handled = true;
-                        _lastPointerPressedSender = null; // リセット
-                        return;
-                    }
-                }
-                _lastPointerPressedTime = now;
-                _lastPointerPressedSender = sender;
-            }
-            catch { }
-
-            try
-            {
-                if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
-                {
-                    var keyModifiers = Windows.System.VirtualKeyModifiers.Control;
-                    var isCtrlPressed = (keyModifiers & Windows.System.VirtualKeyModifiers.Control) == Windows.System.VirtualKeyModifiers.Control;
-                    keyModifiers = Windows.System.VirtualKeyModifiers.Shift;
-                    var isShiftPressed = (keyModifiers & Windows.System.VirtualKeyModifiers.Shift) == Windows.System.VirtualKeyModifiers.Shift;
-
-                    // より正確な方法: InputKeyboardSourceを使用
-                    try
-                    {
-                        var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
-                        var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
-                        isCtrlPressed = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
-                        isShiftPressed = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
-                    }
-                    catch { }
-
-                    _isPointerDown = true;
-                    _isDragIntent = false;
-                    _pointerDownPoint = e.GetCurrentPoint(element).Position;
-                    _pressedItem = item;
-                    _pendingSelectionForClick = false;
-                    _pendingSelectionItem = null;
-                    element.CapturePointer(e.Pointer);
-
-                    element.CapturePointer(e.Pointer);
-
-                    if (isShiftPressed || isCtrlPressed)
-                    {
-                        // 修飾キーがある場合は即座に処理（ドラッグ開始前）
-                        ViewModel.HandleSelection(item, isCtrlPressed, isShiftPressed);
-                        _pendingSelectionForClick = false;
-                    }
-                    else
-                    {
-                        // 修飾キーがない場合は、クリック確定（PointerReleased）まで待つ
-                        // ドラッグ操作の可能性があるため
-                        _pendingSelectionForClick = true;
-                        _pendingSelectionItem = item;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"ImageItem_PointerPressed error: {ex.Message}");
-            }
-        }
-
-        private void ImageItem_PointerMoved(object sender, PointerRoutedEventArgs e)
-        {
-            if (!_isPointerDown || _pressedItem == null) return;
-            try
-            {
-                var currentPoint = e.GetCurrentPoint((UIElement)sender).Position;
-                var dx = currentPoint.X - _pointerDownPoint.X;
-                var dy = currentPoint.Y - _pointerDownPoint.Y;
-                if (!_isDragIntent && (dx * dx + dy * dy) >= DragActivationThresholdSquared)
-                {
-                    _isDragIntent = true;
-                }
-            }
-            catch { }
-        }
-
-        private void ImageItem_PointerReleased(object sender, PointerRoutedEventArgs e)
-        {
-            if (!_isPointerDown) return;
-            _isPointerDown = false;
-            if (!_isDragIntent && _pendingSelectionForClick && _pendingSelectionItem != null)
-            {
-                // ドラッグせずに離した場合はクリックとみなす（単一選択）
-                ViewModel.HandleSelection(_pendingSelectionItem, false, false);
-            }
-            _pendingSelectionForClick = false;
-            _pendingSelectionItem = null;
-            _isDragIntent = false;
-            _pressedItem = null;
-            if (sender is UIElement uiElement)
-            {
-                try { uiElement.ReleasePointerCapture(e.Pointer); } catch { }
-            }
-        }
-
-        private async void ImageItem_DragStarting(UIElement sender, DragStartingEventArgs e)
-        {
-            try
-            {
-                if (sender is FrameworkElement element && element.DataContext is TemplateItem item && ViewModel != null)
-                {
-                    // DragDropServiceのモジュール化されたメソッドを使用
-                    var selectedItems = ViewModel.SelectionManager.SelectedItems;
-                    await DragDropService.HandleDragStartingForTemplateItem(sender, e, item, selectedItems);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"ImageItem_DragStarting error: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
-                e.Cancel = true; // エラー時はドラッグをキャンセル
-            }
-        }
-
-        // 画像プレビュー機能
-        private async void ImageItem_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
-        {
-            try
-            {
-                if (sender is FrameworkElement element && element.DataContext is TemplateItem item)
-                {
-                    await PreviewControl.ShowAsync(item);
-                    e.Handled = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"ImageItem_DoubleTapped error: {ex.Message}");
-            }
-        }
-
-        // 右クリックメニュー
-        private void ImageItem_RightTapped(object sender, RightTappedRoutedEventArgs e)
-        {
-            try
-            {
-                if (sender is FrameworkElement element && element.DataContext is TemplateItem item)
-                {
-                    // 共通サービスを使用してメニューを設定
-                    ItemContextMenuService.SetupContextMenu(element, item);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"ImageItem_RightTapped error: {ex.Message}");
-            }
         }
 
     }

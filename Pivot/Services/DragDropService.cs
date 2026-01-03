@@ -219,6 +219,106 @@ namespace Pivot.Services
                 e.Cancel = true; // エラー時はドラッグをキャンセル
             }
         }
+        
+        /// <summary>
+        /// AssetEntity用のドラッグ開始処理
+        /// UnifiedBrowserControlで使用
+        /// </summary>
+        /// <param name="sender">ドラッグ開始するUI要素</param>
+        /// <param name="e">DragStartingEventArgs</param>
+        /// <param name="currentItem">現在のアイテム</param>
+        /// <param name="selectedItems">選択されているアイテムのコレクション</param>
+        public static async Task HandleDragStartingForAssetEntity(
+            UIElement sender, 
+            DragStartingEventArgs e, 
+            AssetEntity currentItem, 
+            IEnumerable<AssetEntity> selectedItems)
+        {
+            System.Diagnostics.Debug.WriteLine("DragDropService.HandleDragStartingForAssetEntity: Event fired!");
+            try
+            {
+                if (currentItem == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("DragDropService: currentItem is null");
+                    return;
+                }
+
+                // 選択されているアイテムを取得（選択されていない場合は現在のアイテムのみ）
+                var itemsToDrag = selectedItems != null && selectedItems.Any() 
+                    ? selectedItems 
+                    : new[] { currentItem };
+
+                System.Diagnostics.Debug.WriteLine($"DragDropService: Attempting to drag {itemsToDrag.Count()} AssetEntity item(s)");
+
+                // ファイルパスを取得
+                var filePaths = itemsToDrag
+                    .Select(i => i.FilePath)
+                    .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    .ToList();
+
+                if (filePaths.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("DragDropService: No valid file paths found");
+                    return;
+                }
+
+                foreach (var path in filePaths)
+                {
+                    System.Diagnostics.Debug.WriteLine($"DragDropService:   - File: {path}");
+                }
+
+                // StorageItemsを作成
+                var storageItems = await CreateStorageItems(filePaths);
+                if (storageItems.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("DragDropService: Failed to create storage items");
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"DragDropService: Created {storageItems.Count} storage item(s)");
+
+                // StorageItemsを設定（readOnly: falseでファイルをコピー可能にする）
+                e.Data.SetStorageItems(storageItems, readOnly: false);
+                System.Diagnostics.Debug.WriteLine($"DragDropService: SetStorageItems called with {storageItems.Count} item(s), readOnly=false");
+
+                // コピー操作を要求
+                e.Data.RequestedOperation = DataPackageOperation.Copy;
+                System.Diagnostics.Debug.WriteLine($"DragDropService: RequestedOperation set to {e.Data.RequestedOperation}");
+
+                // カスタムドラッグプレビュー: 画像のサムネイルを表示
+                var firstItem = itemsToDrag.FirstOrDefault();
+                if (firstItem != null && File.Exists(firstItem.FilePath))
+                {
+                    try
+                    {
+                        var imageFile = await StorageFile.GetFileFromPathAsync(firstItem.FilePath);
+                        var stream = await imageFile.OpenReadAsync();
+                        var bitmapImage = new BitmapImage();
+                        bitmapImage.DecodePixelWidth = 200;
+                        await bitmapImage.SetSourceAsync(stream);
+                        e.DragUI.SetContentFromBitmapImage(bitmapImage);
+                        System.Diagnostics.Debug.WriteLine("DragDropService: Set custom drag preview with image");
+                    }
+                    catch (Exception previewEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"DragDropService: Failed to set preview: {previewEx.Message}");
+                        e.DragUI.SetContentFromDataPackage();
+                    }
+                }
+                else
+                {
+                    e.DragUI.SetContentFromDataPackage();
+                }
+
+                System.Diagnostics.Debug.WriteLine("DragDropService: AssetEntity drag started successfully");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"DragDropService.HandleDragStartingForAssetEntity error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                e.Cancel = true;
+            }
+        }
 
         /// <summary>
         /// カスタムドラッグプレビューを設定（画像のサムネイルを表示）

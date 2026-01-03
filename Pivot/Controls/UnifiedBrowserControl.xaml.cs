@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -99,6 +100,7 @@ namespace Pivot.Controls
             DispatcherQueue.TryEnqueue(() =>
             {
                 LoadingRing.IsActive = isLoading;
+                FilterBarLoadingIndicator.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
                 if (_viewModel != null)
                 {
                     _viewModel.IsLoading = isLoading;
@@ -182,48 +184,36 @@ namespace Pivot.Controls
         #region Item Interaction Handlers (Parent-Level)
 
         // Helper to find the AssetEntity from a tapped element
+        // x:Bind を使用している DataTemplate 内では DataContext が設定されないため、
+        // ItemsRepeater.GetElementIndex() を使用してインデックスからデータを取得する
         private AssetEntity? FindAssetFromElement(DependencyObject? element)
         {
-            while (element != null)
+            // まず視覚ツリーを辿ってItemsRepeaterの直接の子要素を見つける
+            DependencyObject? current = element;
+            while (current != null)
             {
-                if (element is FrameworkElement fe && fe.DataContext is AssetEntity asset)
+                var parent = VisualTreeHelper.GetParent(current);
+                if (parent == AssetRepeater)
+                {
+                    // currentがItemsRepeaterの直接の子要素
+                    if (current is UIElement uiElement)
+                    {
+                        int index = AssetRepeater.GetElementIndex(uiElement);
+                        if (index >= 0 && _collection != null && index < _collection.Count)
+                        {
+                            return _collection[index];
+                        }
+                    }
+                    break;
+                }
+                
+                // DataContext でも試す（フォールバック）
+                if (current is FrameworkElement fe && fe.DataContext is AssetEntity asset)
                 {
                     return asset;
                 }
-                element = VisualTreeHelper.GetParent(element);
-            }
-            return null;
-        }
-
-        // Helper to find the Border element for selection visual
-        private Border? FindItemBorder(DependencyObject? element)
-        {
-            while (element != null)
-            {
-                if (element is Border border && border.Name == "ItemBorder")
-                {
-                    return border;
-                }
-                if (element is FrameworkElement fe && fe.DataContext is AssetEntity)
-                {
-                    // We're at the item level, search children for ItemBorder
-                    return FindChildBorder(fe);
-                }
-                element = VisualTreeHelper.GetParent(element);
-            }
-            return null;
-        }
-
-        private Border? FindChildBorder(DependencyObject parent)
-        {
-            if (parent is Border b && b.Name == "ItemBorder") return b;
-            
-            int count = VisualTreeHelper.GetChildrenCount(parent);
-            for (int i = 0; i < count; i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                var result = FindChildBorder(child);
-                if (result != null) return result;
+                
+                current = parent;
             }
             return null;
         }
@@ -231,22 +221,81 @@ namespace Pivot.Controls
         private void AssetRepeater_Tapped(object sender, TappedRoutedEventArgs e)
         {
             var asset = FindAssetFromElement(e.OriginalSource as DependencyObject);
-            if (asset != null)
+            if (asset == null || _collection == null) return;
+            
+            // Detect modifier keys
+            bool isCtrl = false;
+            bool isShift = false;
+            try
             {
-                System.Diagnostics.Debug.WriteLine($"[Tapped] {asset.FileName}");
-                
-                // Update selection visual
-                ClearSelectionVisuals();
-                var border = FindItemBorder(e.OriginalSource as DependencyObject);
-                if (border != null)
-                {
-                    border.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue);
-                    _selectedBorder = border;
-                }
-                
-                _selectedAsset = asset;
-                ItemClicked?.Invoke(this, asset);
+                var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+                var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+                isCtrl = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+                isShift = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
             }
+            catch { }
+            
+            System.Diagnostics.Debug.WriteLine($"[Tapped] {asset.FileName} Ctrl={isCtrl} Shift={isShift}");
+            
+            if (isShift && _lastClickedAsset != null)
+            {
+                // Shift+Click: Range selection
+                var startIndex = _collection.IndexOf(_lastClickedAsset);
+                var endIndex = _collection.IndexOf(asset);
+                
+                if (startIndex >= 0 && endIndex >= 0)
+                {
+                    int low = Math.Min(startIndex, endIndex);
+                    int high = Math.Max(startIndex, endIndex);
+                    
+                    // Clear existing selection first (unless Ctrl is also held - standard explorer behavior usually extends)
+                    // For simplicity, sticking to: Shift without Ctrl = Range select (exclusive)
+                    if (!isCtrl) 
+                    {
+                        foreach (var item in _selectedAssets) item.IsSelected = false;
+                        _selectedAssets.Clear();
+                    }
+                    
+                    // Select range
+                    for (int i = low; i <= high && i < _collection.Count; i++)
+                    {
+                        var rangeAsset = _collection[i];
+                        if (!rangeAsset.IsSelected)
+                        {
+                            rangeAsset.IsSelected = true;
+                            _selectedAssets.Add(rangeAsset);
+                        }
+                    }
+                }
+            }
+            else if (isCtrl)
+            {
+                // Ctrl+Click: Toggle selection
+                if (asset.IsSelected)
+                {
+                    asset.IsSelected = false;
+                    _selectedAssets.Remove(asset);
+                }
+                else
+                {
+                    asset.IsSelected = true;
+                    _selectedAssets.Add(asset);
+                }
+                _lastClickedAsset = asset;
+            }
+            else
+            {
+                // Normal click: Single selection (clear others)
+                // Use HashSet for fast clear
+                foreach (var item in _selectedAssets) item.IsSelected = false;
+                _selectedAssets.Clear();
+
+                asset.IsSelected = true;
+                _selectedAssets.Add(asset);
+                _lastClickedAsset = asset;
+            }
+            
+            ItemClicked?.Invoke(this, asset);
         }
 
         private void AssetRepeater_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -270,16 +319,116 @@ namespace Pivot.Controls
             }
         }
 
-        private AssetEntity? _selectedAsset;
-        private Border? _selectedBorder;
+        // Multi-selection state
+        private readonly HashSet<AssetEntity> _selectedAssets = new();
+        private AssetEntity? _lastClickedAsset; // For Shift-click range selection
+        
+        /// <summary>
+        /// Gets the currently selected assets.
+        /// </summary>
+        public IReadOnlyCollection<AssetEntity> SelectedItems => _selectedAssets;
+
+        /// <summary>
+        /// Moves the selection by the specified delta (e.g., +1 for next, -1 for previous).
+        /// Returns the newly selected asset, or null if no change.
+        /// </summary>
+        public AssetEntity? MoveSelection(int delta)
+        {
+            if (_collection == null || _collection.Count == 0) return null;
+
+            int currentIndex = -1;
+            
+            // If multiple items selected, use the last clicked one as anchor
+            if (_lastClickedAsset != null)
+            {
+                currentIndex = _collection.IndexOf(_lastClickedAsset);
+            }
+            else if (_selectedAssets.Count > 0)
+            {
+                // Fallback to first selected
+                currentIndex = _collection.IndexOf(_selectedAssets.First());
+            }
+
+            if (currentIndex == -1)
+            {
+                // No selection, start from beginning if attempting to move next
+                currentIndex = delta > 0 ? -1 : 0;
+            }
+
+            int newIndex = Math.Clamp(currentIndex + delta, 0, _collection.Count - 1);
+            if (newIndex == currentIndex) return null; // End of list
+
+            var newAsset = _collection[newIndex];
+            
+            // Update selection state
+            foreach (var item in _selectedAssets) item.IsSelected = false;
+            _selectedAssets.Clear();
+
+            newAsset.IsSelected = true;
+            _selectedAssets.Add(newAsset);
+            _lastClickedAsset = newAsset;
+            
+            // Ensure visible
+            AssetRepeater.GetOrCreateElement(newIndex).StartBringIntoView();
+
+            return newAsset;
+        }
 
         private void ClearSelectionVisuals()
         {
-            if (_selectedBorder != null)
+             foreach (var item in _selectedAssets) item.IsSelected = false;
+             _selectedAssets.Clear();
+             _lastClickedAsset = null;
+        }
+        
+        private async void ItemBorder_DragStarting(UIElement sender, DragStartingEventArgs e)
+        {
+            // ★重要: 非同期処理を待ってもらうためにDeferralを取得
+            var deferral = e.GetDeferral();
+
+            try
             {
-                _selectedBorder.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-                _selectedBorder = null;
+                var asset = FindAssetFromElement(sender);
+                if (asset == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[DragStarting] No asset found");
+                    e.Cancel = true;
+                    return;
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[DragStarting] {asset.FileName}");
+                
+                // If dragged item is not in selection, select it alone
+                if (!asset.IsSelected)
+                {
+                    ClearSelectionVisuals();
+                    asset.IsSelected = true;
+                    _selectedAssets.Add(asset);
+                }
+                
+                // Use DragDropService for AssetEntity
+                await DragDropService.HandleDragStartingForAssetEntity(sender, e, asset, _selectedAssets);
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DragStarting] Error: {ex.Message}");
+                e.Cancel = true;
+            }
+            finally
+            {
+                // ★重要: 処理が終わったら必ず完了を通知
+                deferral.Complete();
+            }
+        }
+        
+        private void AssetRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
+        {
+             // No manual visual sync needed - Data Binding handles it
+        }
+        
+        private void AssetRepeater_ElementClearing(ItemsRepeater sender, ItemsRepeaterElementClearingEventArgs args)
+        {
+             // No manual cleanup needed
         }
 
         #endregion
