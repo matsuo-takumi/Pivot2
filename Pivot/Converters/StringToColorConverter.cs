@@ -45,7 +45,12 @@ namespace Pivot.Converters
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)
         {
-            throw new NotImplementedException();
+            // Convert Color back to hex string
+            if (value is Windows.UI.Color color)
+            {
+                return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+            }
+            return string.Empty;
         }
     }
 }

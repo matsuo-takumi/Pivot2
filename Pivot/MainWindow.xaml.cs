@@ -93,6 +93,44 @@ namespace Pivot
             // ナビゲーション要求はNavigationServiceが処理 - 直接購読不要
         }
 
+        #region Loading Indicator
+
+        /// <summary>
+        /// Shows the loading indicator with a custom message.
+        /// </summary>
+        public void ShowLoading(string message = "Loading...")
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                LoadingText.Text = message;
+                LoadingIndicator.Visibility = Visibility.Visible;
+            });
+        }
+
+        /// <summary>
+        /// Hides the loading indicator.
+        /// </summary>
+        public void HideLoading()
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                LoadingIndicator.Visibility = Visibility.Collapsed;
+            });
+        }
+
+        /// <summary>
+        /// Updates the loading indicator text.
+        /// </summary>
+        public void UpdateLoadingText(string message)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                LoadingText.Text = message;
+            });
+        }
+
+        #endregion
+
         public void Receive(BackdropTypeChangedMessage message)
         {
             SetSystemBackdrop(message.Value);

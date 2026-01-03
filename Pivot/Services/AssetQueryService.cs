@@ -90,6 +90,18 @@ namespace Pivot.Services
                 query = query.Where(a => a.Kind == criteria.TargetKind.Value);
             }
 
+            // Directory filter (match exact directory or subdirectories)
+            if (!string.IsNullOrWhiteSpace(criteria.Directory))
+            {
+                var normalizedDir = criteria.Directory.Replace('/', '\\').TrimEnd('\\');
+                // Use LIKE for SQLite compatibility (StartsWith can have case-sensitivity issues)
+                var dirPattern = normalizedDir + "\\%";
+                System.Diagnostics.Debug.WriteLine($"[AssetQueryService] Directory filter: criteria='{criteria.Directory}', normalized='{normalizedDir}', pattern='{dirPattern}'");
+                query = query.Where(a => 
+                    a.Directory == normalizedDir ||
+                    EF.Functions.Like(a.Directory, dirPattern));
+            }
+
             // File name search (LIKE pattern)
             if (!string.IsNullOrWhiteSpace(criteria.SearchQuery))
             {

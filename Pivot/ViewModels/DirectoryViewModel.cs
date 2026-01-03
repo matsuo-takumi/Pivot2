@@ -187,20 +187,25 @@ namespace Pivot.ViewModels
         }
 
         /// <summary>
-        /// 共通のフォルダ選択ロジック。IDialogServiceを使用。
+        /// 共通のフォルダ選択ロジック。IDialogServiceを使用。複数選択に対応。
         /// </summary>
         private async Task SelectDirectoryForCategoryAsync(DirectoryCategory category, ObservableCollection<string> collection)
         {
             try
             {
-                var selectedPath = await _dialogService!.PickFolderAsync();
-                if (string.IsNullOrEmpty(selectedPath)) return;
-
-                var normalized = NormalizePath(selectedPath);
-                if (!collection.Any(d => NormalizePath(d) == normalized))
+                // Use multi-folder picker for selecting multiple directories at once
+                var selectedPaths = await _dialogService!.PickMultipleFoldersAsync();
+                
+                foreach (var selectedPath in selectedPaths)
                 {
-                    await _directorySettings!.AddDirectoryAsync(category, selectedPath);
-                    collection.Add(selectedPath);
+                    if (string.IsNullOrEmpty(selectedPath)) continue;
+
+                    var normalized = NormalizePath(selectedPath);
+                    if (!collection.Any(d => NormalizePath(d) == normalized))
+                    {
+                        await _directorySettings!.AddDirectoryAsync(category, selectedPath);
+                        collection.Add(selectedPath);
+                    }
                 }
             }
             catch (Exception ex)

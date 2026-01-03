@@ -30,5 +30,10 @@ namespace Pivot.Repositories
         Task<List<string>> GetAllDirectoriesAsync(
             AssetKind? kind = null,
             CancellationToken ct = default);
+
+        /// <summary>
+        /// Delete all assets in the specified directory and its subdirectories.
+        /// </summary>
+        Task<int> DeleteByDirectoryAsync(string directoryPath, CancellationToken ct = default);
     }
 }

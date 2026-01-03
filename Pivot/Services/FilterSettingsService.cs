@@ -12,7 +12,7 @@ namespace Pivot.Services
 {
     /// <summary>
     /// フィルター設定の管理サービス。
-    /// AssetFilters, CodeFilters, CodeCategories, VisibleFilters, SelectedFilters を管理。
+    /// AssetFilters, CodeFilters, VisibleFilters, SelectedFilters を管理。
     /// </summary>
     public class FilterSettingsService
     {
@@ -23,7 +23,7 @@ namespace Pivot.Services
         // In-memory cache
         private List<CustomFilter> _assetFilters = new();
         private List<CustomFilter> _codeFilters = new();
-        private List<CodeCategory> _codeCategories = new();
+
         private Dictionary<string, List<Guid>> _visibleFiltersByTab = new();
         private Dictionary<string, List<Guid>> _selectedFiltersByTab = new();
 
@@ -65,16 +65,7 @@ namespace Pivot.Services
                     _codeFilters = GetDefaultCodeFilters();
                 }
 
-                // CodeCategories
-                var codeCategoriesJson = await _settingsStore.GetAsync("CodeCategories");
-                if (!string.IsNullOrEmpty(codeCategoriesJson))
-                {
-                    _codeCategories = JsonSerializer.Deserialize<List<CodeCategory>>(codeCategoriesJson) ?? new();
-                }
-                else
-                {
-                    _codeCategories = InitializeDefaultCodeCategories();
-                }
+
 
                 // VisibleFiltersByTab
                 var visibleJson = await _settingsStore.GetAsync("VisibleFiltersByTab");
@@ -98,7 +89,7 @@ namespace Pivot.Services
                 _logger.LogWarning(ex, "FilterSettingsService: Failed to load, using defaults.");
                 _assetFilters = GetDefaultAssetFilters();
                 _codeFilters = GetDefaultCodeFilters();
-                _codeCategories = InitializeDefaultCodeCategories();
+                _codeFilters = GetDefaultCodeFilters();
             }
         }
 
@@ -137,22 +128,7 @@ namespace Pivot.Services
             }
         }
 
-        // =============== Code Categories ===============
 
-        public List<CodeCategory> GetCodeCategories() => _codeCategories ?? new List<CodeCategory>();
-
-        public async Task SetCodeCategoriesAsync(List<CodeCategory> categories)
-        {
-            _codeCategories = categories ?? new List<CodeCategory>();
-            try
-            {
-                await _settingsStore.UpsertAsync("CodeCategories", JsonSerializer.Serialize(_codeCategories));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "FilterSettingsService: Failed to persist CodeCategories.");
-            }
-        }
 
         // =============== Filter Lookup ===============
 
@@ -265,14 +241,6 @@ namespace Pivot.Services
             return new List<CustomFilter>();
         }
 
-        private static List<CodeCategory> InitializeDefaultCodeCategories()
-        {
-            return new List<CodeCategory>
-            {
-                new CodeCategory { Id = Guid.NewGuid(), Name = "General", SortOrder = 0 },
-                new CodeCategory { Id = Guid.NewGuid(), Name = "Snippets", SortOrder = 1 },
-                new CodeCategory { Id = Guid.NewGuid(), Name = "Templates", SortOrder = 2 }
-            };
-        }
+
     }
 }

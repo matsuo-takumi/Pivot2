@@ -53,11 +53,14 @@ namespace Pivot.Collections
             _hasMoreItems = true;
             Clear();
 
+            System.Diagnostics.Debug.WriteLine($"[IncrementalCollection] ResetAsync - Directory: '{_criteria.Directory ?? "(null)"}', Kind: {_criteria.TargetKind}");
+
             // Get total count
             using var scope = _serviceProvider.CreateScope();
             var queryService = scope.ServiceProvider.GetRequiredService<AssetQueryService>();
             _totalCount = await queryService.CountAsync(_criteria);
 
+            System.Diagnostics.Debug.WriteLine($"[IncrementalCollection] Total count: {_totalCount}");
             CountsUpdated?.Invoke(this, (0, _totalCount));
 
             // Initial load

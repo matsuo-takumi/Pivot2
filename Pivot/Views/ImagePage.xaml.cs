@@ -101,13 +101,8 @@ namespace Pivot.Views
         {
             try
             {
-                // Show preview
-                var item = new TemplateItem
-                {
-                    Path = asset.FilePath,
-                    Name = asset.FileName,
-                    ThumbnailPath = asset.ThumbnailPath ?? asset.FilePath
-                };
+                // Show preview using centralized mapper
+                var item = AssetMapper.ToPreviewItem(asset);
                 _ = PreviewControl.ShowAsync(item);
             }
             catch { }
@@ -248,7 +243,23 @@ namespace Pivot.Views
             if (args.SelectedItem is NavigationViewItem item && item.Tag is FolderNode node)
             {
                 ViewModel.SelectedFolder = node;
+                
+                // Update BrowserControl with directory filter (database-based)
+                BrowserControl.SetDirectoryFilter(node.FullPath);
             }
+            else
+            {
+                // Clear filter when no folder selected
+                BrowserControl.SetDirectoryFilter(null);
+            }
+        }
+
+        private void ShowAllButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Clear folder selection and show all images
+            FolderNavigationView.SelectedItem = null;
+            ViewModel.SelectedFolder = null;
+            BrowserControl.SetDirectoryFilter(null);
         }
 
         // ダブルクリック判定用

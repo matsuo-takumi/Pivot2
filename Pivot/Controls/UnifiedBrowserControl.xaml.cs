@@ -1,15 +1,20 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.WinUI.Controls;
 using Pivot.Collections;
 using Pivot.Models;
+using Pivot.Messages;
 using Pivot.Services;
 using Pivot.ViewModels;
+using Pivot.Utilities;
 
 namespace Pivot.Controls
 {
@@ -17,7 +22,9 @@ namespace Pivot.Controls
     /// Unified browser control for displaying assets with virtualized scrolling.
     /// Supports Masonry, Grid, and List layouts with filtering.
     /// </summary>
-    public sealed partial class UnifiedBrowserControl : UserControl
+    public sealed partial class UnifiedBrowserControl : UserControl, 
+        IRecipient<BulkItemsChangedMessage<AssetEntity>>,
+        IRecipient<DirectoryRemovedMessage>
     {
         private BrowserViewModel? _viewModel;
         private IncrementalAssetCollection? _collection;
@@ -40,6 +47,11 @@ namespace Pivot.Controls
         {
             this.InitializeComponent();
             _templateSelector = Resources["LayoutTemplateSelector"] as LayoutBasedTemplateSelector;
+            
+            // Register for real-time asset updates
+            WeakReferenceMessenger.Default.Register<BulkItemsChangedMessage<AssetEntity>>(this);
+            WeakReferenceMessenger.Default.Register<DirectoryRemovedMessage>(this);
+            this.Unloaded += (s, e) => WeakReferenceMessenger.Default.UnregisterAll(this);
         }
 
         /// <summary>
@@ -77,6 +89,7 @@ namespace Pivot.Controls
         {
             if (_viewModel == null || _collection == null) return;
 
+            System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] OnCriteriaChanged - Directory: '{_viewModel.FilterCriteria.Directory ?? "(null)"}'");
             await _collection.ResetAsync(_viewModel.FilterCriteria);
             UpdateEmptyState();
         }
@@ -166,39 +179,106 @@ namespace Pivot.Controls
 
         #endregion
 
-        #region Item Interaction Handlers
+        #region Item Interaction Handlers (Parent-Level)
 
-        private void Item_PointerPressed(object sender, PointerRoutedEventArgs e)
+        // Helper to find the AssetEntity from a tapped element
+        private AssetEntity? FindAssetFromElement(DependencyObject? element)
         {
-            if (sender is FrameworkElement element && element.DataContext is AssetEntity asset)
+            while (element != null)
             {
+                if (element is FrameworkElement fe && fe.DataContext is AssetEntity asset)
+                {
+                    return asset;
+                }
+                element = VisualTreeHelper.GetParent(element);
+            }
+            return null;
+        }
+
+        // Helper to find the Border element for selection visual
+        private Border? FindItemBorder(DependencyObject? element)
+        {
+            while (element != null)
+            {
+                if (element is Border border && border.Name == "ItemBorder")
+                {
+                    return border;
+                }
+                if (element is FrameworkElement fe && fe.DataContext is AssetEntity)
+                {
+                    // We're at the item level, search children for ItemBorder
+                    return FindChildBorder(fe);
+                }
+                element = VisualTreeHelper.GetParent(element);
+            }
+            return null;
+        }
+
+        private Border? FindChildBorder(DependencyObject parent)
+        {
+            if (parent is Border b && b.Name == "ItemBorder") return b;
+            
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                var result = FindChildBorder(child);
+                if (result != null) return result;
+            }
+            return null;
+        }
+
+        private void AssetRepeater_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            var asset = FindAssetFromElement(e.OriginalSource as DependencyObject);
+            if (asset != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Tapped] {asset.FileName}");
+                
+                // Update selection visual
+                ClearSelectionVisuals();
+                var border = FindItemBorder(e.OriginalSource as DependencyObject);
+                if (border != null)
+                {
+                    border.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue);
+                    _selectedBorder = border;
+                }
+                
+                _selectedAsset = asset;
                 ItemClicked?.Invoke(this, asset);
             }
         }
 
-        private void Item_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        private void AssetRepeater_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
-            if (sender is FrameworkElement element && element.DataContext is AssetEntity asset)
+            var asset = FindAssetFromElement(e.OriginalSource as DependencyObject);
+            if (asset != null)
             {
+                System.Diagnostics.Debug.WriteLine($"[DoubleTapped] {asset.FileName}");
                 ItemDoubleClicked?.Invoke(this, asset);
             }
         }
 
-        private void Item_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        private void AssetRepeater_RightTapped(object sender, RightTappedRoutedEventArgs e)
         {
-            if (sender is FrameworkElement element && element.DataContext is AssetEntity asset)
+            var asset = FindAssetFromElement(e.OriginalSource as DependencyObject);
+            if (asset != null)
             {
                 var position = e.GetPosition(this);
+                System.Diagnostics.Debug.WriteLine($"[RightTapped] {asset.FileName}");
                 ItemRightTapped?.Invoke(this, (asset, position));
             }
         }
 
-        private void Item_DragStarting(UIElement sender, DragStartingEventArgs args)
+        private AssetEntity? _selectedAsset;
+        private Border? _selectedBorder;
+
+        private void ClearSelectionVisuals()
         {
-            if (sender is FrameworkElement element && element.DataContext is AssetEntity asset)
+            if (_selectedBorder != null)
             {
-                args.Data.SetText(asset.FilePath ?? asset.FileName);
-                args.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+                _selectedBorder.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                _selectedBorder = null;
             }
         }
 
@@ -246,11 +326,18 @@ namespace Pivot.Controls
                 LayoutType.List => "\uE8FD",   // List
                 _ => "\uE80A"
             };
-
-            // Force template refresh by resetting ItemsSource
-            var source = AssetRepeater.ItemsSource;
-            AssetRepeater.ItemsSource = null;
-            AssetRepeater.ItemsSource = source;
+            
+            // Note: No ItemsSource reset - causes thumbnail flickering
+        }
+        
+        /// <summary>
+        /// Set directory filter to show only assets from a specific folder.
+        /// Pass null to clear the filter and show all assets.
+        /// </summary>
+        public void SetDirectoryFilter(string? directoryPath)
+        {
+            if (_viewModel == null) return;
+            _viewModel.SetDirectoryFilter(directoryPath);
         }
 
         private void LayoutButton_Click(object sender, RoutedEventArgs e)
@@ -289,57 +376,118 @@ namespace Pivot.Controls
         }
 
         #endregion
-    }
 
-    /// <summary>
-    /// Helper class for parsing color strings.
-    /// </summary>
-    public static class ColorHelper
-    {
-        public static Windows.UI.Color ParseColor(string? hexColor)
+        #region DirectoryRemovedMessage Handler
+
+        public void Receive(DirectoryRemovedMessage message)
         {
-            if (string.IsNullOrEmpty(hexColor) || !hexColor.StartsWith("#"))
+            // Refresh data when a directory is removed
+            if (_viewModel == null || _collection == null) return;
+
+            DispatcherQueue.TryEnqueue(async () =>
             {
-                return Windows.UI.Color.FromArgb(255, 64, 64, 64); // Default dark gray
+                System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Directory removed: {message.Value}, refreshing...");
+                await _collection.ResetAsync(_viewModel.FilterCriteria);
+                UpdateEmptyState();
+            });
+        }
+
+        #endregion
+
+        #region BulkItemsChangedMessage Handler
+
+        public void Receive(BulkItemsChangedMessage<AssetEntity> message)
+        {
+            if (_viewModel == null || _collection == null) return;
+
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                try
+                {
+                    var criteria = _viewModel.FilterCriteria;
+                    
+                    foreach (var change in message.Value)
+                    {
+                        if (change.Item == null) continue;
+                        
+                        // Check if item matches current filter criteria
+                        if (!MatchesCriteria(change.Item, criteria))
+                        {
+                            continue;
+                        }
+                        
+                        if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Added ||
+                            change.Type == ItemChangeData<AssetEntity>.ChangeType.Updated)
+                        {
+                            // Check if already exists
+                            var existing = _collection.FirstOrDefault(a => a.FilePath == change.Item.FilePath);
+                            if (existing == null)
+                            {
+                                // Add new item at the beginning for immediate visibility
+                                _collection.Insert(0, change.Item);
+                                System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Added: {change.Item.FileName}");
+                            }
+                        }
+                        else if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Deleted)
+                        {
+                            var toRemove = _collection.FirstOrDefault(a => a.FilePath == change.Item.FilePath);
+                            if (toRemove != null)
+                            {
+                                _collection.Remove(toRemove);
+                                System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Removed: {change.Item.FileName}");
+                            }
+                        }
+                    }
+                    
+                    UpdateStatusText();
+                    UpdateEmptyState();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Receive error: {ex.Message}");
+                }
+            });
+        }
+
+        /// <summary>
+        /// Check if an asset matches the current filter criteria.
+        /// </summary>
+        private bool MatchesCriteria(AssetEntity asset, FilterCriteria criteria)
+        {
+            // Check Kind
+            if (criteria.TargetKind.HasValue && asset.Kind != criteria.TargetKind.Value)
+            {
+                return false;
             }
 
-            try
+            // Check Directory filter
+            if (!string.IsNullOrEmpty(criteria.Directory))
             {
-                hexColor = hexColor.TrimStart('#');
-                if (hexColor.Length == 6)
+                var assetDir = System.IO.Path.GetDirectoryName(asset.FilePath)?.Replace('/', '\\').TrimEnd('\\');
+                var filterDir = criteria.Directory.Replace('/', '\\').TrimEnd('\\');
+                
+                if (!string.Equals(assetDir, filterDir, StringComparison.OrdinalIgnoreCase) &&
+                    !(assetDir?.StartsWith(filterDir + "\\", StringComparison.OrdinalIgnoreCase) ?? false))
                 {
-                    byte r = Convert.ToByte(hexColor.Substring(0, 2), 16);
-                    byte g = Convert.ToByte(hexColor.Substring(2, 2), 16);
-                    byte b = Convert.ToByte(hexColor.Substring(4, 2), 16);
-                    return Windows.UI.Color.FromArgb(255, r, g, b);
+                    return false;
                 }
             }
-            catch { }
 
-            return Windows.UI.Color.FromArgb(255, 64, 64, 64);
-        }
-    }
-
-    /// <summary>
-    /// Helper class for formatting file sizes.
-    /// </summary>
-    public static class FileSizeHelper
-    {
-        public static string FormatSize(long? bytes)
-        {
-            if (!bytes.HasValue || bytes.Value <= 0) return "-";
-
-            string[] sizes = { "B", "KB", "MB", "GB" };
-            double value = bytes.Value;
-            int order = 0;
-
-            while (value >= 1024 && order < sizes.Length - 1)
+            // Check Search text
+            if (!string.IsNullOrEmpty(criteria.SearchQuery))
             {
-                order++;
-                value /= 1024;
+                var searchLower = criteria.SearchQuery.ToLowerInvariant();
+                if (!(asset.FileName?.ToLowerInvariant().Contains(searchLower) ?? false))
+                {
+                    return false;
+                }
             }
 
-            return $"{value:0.#} {sizes[order]}";
+            return true;
         }
+
+        #endregion
     }
+
 }
+

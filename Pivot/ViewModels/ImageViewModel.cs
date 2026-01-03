@@ -345,18 +345,12 @@ namespace Pivot.ViewModels
                         var existing = _allImages.FirstOrDefault(i => i.Path == asset.FilePath);
                         if (existing == null)
                         {
-                           var newItem = new TemplateItem { 
-                               Kind = AssetKind.Image, Path = asset.FilePath, Name = asset.FileName, Size = asset.FileSize, LastModified = asset.UpdatedAt 
-                           };
+                           var newItem = AssetMapper.ToTemplateItem(asset);
                            _allImages.Add(newItem);
                         }
                         else
                         {
-                           existing.Size = asset.FileSize;
-                           existing.LastModified = asset.UpdatedAt;
-                           existing.PixelWidth = asset.Width ?? 0;
-                           existing.PixelHeight = asset.Height ?? 0;
-                           existing.AspectRatio = (asset.Height ?? 0) > 0 ? (double)(asset.Width ?? 0) / (asset.Height ?? 0) : 1.0;
+                           AssetMapper.UpdateTemplateItem(existing, asset);
                         }
                     }
                     else if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Deleted)
@@ -368,52 +362,6 @@ namespace Pivot.ViewModels
                 FilterImages(); // Refresh UI
             });
         }
-
-        // Legacy: AssetFileChangedMessage receiver (commented out - use BulkItemsChangedMessage instead)
-        /*
-        public void Receive(AssetFileChangedMessage message)
-        {
-            _dispatcherQueue.TryEnqueue(() => 
-            {
-                try
-                {
-                    switch (message.Type)
-                    {
-                        case AssetFileChangedMessage.ChangeType.Added:
-                            if (message.Asset != null)
-                            {
-                                // var item = AssetToTemplateItem(message.Asset);
-                                // _allImages.Add(item);
-                                // FilterImages();
-                            }
-                            break;
-                        case AssetFileChangedMessage.ChangeType.Updated:
-                            if (message.Asset != null)
-                            {
-                                var existing = _allImages.FirstOrDefault(i => 
-                                    i.Path.Equals(message.FilePath, StringComparison.OrdinalIgnoreCase));
-                                if (existing != null)
-                                {
-                                    // UpdateTemplateItemFromAsset(existing, message.Asset);
-                                }
-                            }
-                            break;
-                        case AssetFileChangedMessage.ChangeType.Deleted:
-                            var toRemove = _allImages.FirstOrDefault(i => 
-                                i.Path.Equals(message.FilePath, StringComparison.OrdinalIgnoreCase));
-                            if (toRemove != null)
-                            {
-                                _allImages.Remove(toRemove);
-                                Images.Remove(toRemove);
-                            }
-                            break;
-                    }
-                }
-                catch { }
-            });
-        }
-        */
-
         /// <summary>
         /// Main load method. DB-first, fallback to filesystem.
         /// </summary>
@@ -421,6 +369,9 @@ namespace Pivot.ViewModels
         {
             if (directories == null) return;
             _currentDirectories = directories.ToList();
+
+            // Rebuild folder tree for navigation pane
+            BuildDirectoryTree(_currentDirectories);
 
             // Phase 3: Load from DB immediately
             await LoadFromDatabaseAsync();
@@ -468,18 +419,8 @@ namespace Pivot.ViewModels
                        }
                    }
 
-                   var item = new TemplateItem 
-                   {
-                       Kind = AssetKind.Image,
-                       Path = asset.FilePath,
-                       Name = asset.FileName,
-                       Size = asset.FileSize,
-                       LastModified = asset.UpdatedAt,
-                       PixelWidth = asset.Width ?? 0,
-                       PixelHeight = asset.Height ?? 0,
-                       AspectRatio = (asset.Height ?? 0) > 0 ? (double)(asset.Width ?? 0) / (asset.Height ?? 0) : 1.0,
-                       ThumbnailPath = thumbnailPath
-                   };
+                   var item = AssetMapper.ToTemplateItem(asset);
+                   item.ThumbnailPath = thumbnailPath; // Override with resolved path
                    
                    // Fallback: If dimensions missing, track for on-the-fly resolution
                    if (item.PixelWidth == 0 && File.Exists(item.Path))
@@ -561,31 +502,8 @@ namespace Pivot.ViewModels
 
         private void BuildDirectoryTree(IEnumerable<string> rootDirectories)
         {
-            FolderTree.Clear();
-            foreach (var dir in rootDirectories)
-            {
-                if (Directory.Exists(dir))
-                {
-                    var node = new FolderNode(new DirectoryInfo(dir).Name, dir);
-                    BuildDirectoryTreeRecursive(node);
-                    FolderTree.Add(node);
-                }
-            }
-        }
-
-        private void BuildDirectoryTreeRecursive(FolderNode node)
-        {
-            try
-            {
-                var subDirs = Directory.GetDirectories(node.FullPath);
-                foreach (var dir in subDirs)
-                {
-                    var subNode = new FolderNode(new DirectoryInfo(dir).Name, dir);
-                    BuildDirectoryTreeRecursive(subNode);
-                    node.Children.Add(subNode);
-                }
-            }
-            catch { }
+            // Delegate to centralized utility
+            Utilities.DirectoryTreeBuilder.BuildTree(FolderTree, rootDirectories);
         }
 
         public void CancelLoads()

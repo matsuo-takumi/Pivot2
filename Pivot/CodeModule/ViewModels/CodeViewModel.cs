@@ -1090,6 +1090,36 @@ namespace Pivot.CodeModule.ViewModels
             SelectedSnippet = null;
         }
 
+        /// <summary>
+        /// Deletes a specific snippet by reference (used by card delete buttons).
+        /// </summary>
+        [RelayCommand]
+        private async Task DeleteSnippetByIdAsync(CodeFile? snippet)
+        {
+            if (snippet == null || snippet.Id == Guid.Empty) return;
+            
+            try
+            {
+                if (_codeService != null)
+                {
+                    await _codeService.DeleteSnippetAsync(snippet);
+                }
+                
+                try { Snippets?.Remove(snippet); } catch { }
+                
+                if (SelectedSnippet == snippet)
+                {
+                    SelectedSnippet = null;
+                }
+                
+                Refresh();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"DeleteSnippetByIdAsync: Error: {ex.Message}");
+            }
+        }
+
         [RelayCommand]
         private async Task Search()
         {

@@ -13,6 +13,8 @@ using Pivot.Models;
 using Pivot.Messages;
 using System.Timers;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using SixLabors.ImageSharp;
 
 namespace Pivot.Services
@@ -20,12 +22,10 @@ namespace Pivot.Services
 	public class FileScannerService : IDisposable
 	{
 		private readonly ILogger<FileScannerService> _logger;
-		private readonly Pivot.Repositories.IAssetRepository _repository;
-		private readonly ICatalogService? _catalogService; // scanモード用
+		private readonly IServiceProvider _serviceProvider;  // For scoped DB access
+		private readonly Pivot.Repositories.IAssetRepository _repository;  // Fallback for non-parallel ops
 		private readonly IThumbnailService? _thumbnailService;
-		private readonly bool _useScanMode;
 		private readonly IMessenger _messenger;
-		private FileSystemWatcher? _watcher;
 		private string? _currentRootPath;
 		// Phase 4: 複数ルート監視に備えたコレクション（段階的導入）
 		private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
@@ -71,14 +71,19 @@ namespace Pivot.Services
 		private const int AssetFlushIntervalMs = 300; // Phase 6: move to config
 		private const int AssetFlushBatchMax = 100;   // Phase 6: move to config
 
-		public FileScannerService(ILogger<FileScannerService> logger, Pivot.Repositories.IAssetRepository repository, IMessenger messenger, IConfiguration? configuration = null, ICatalogService? catalogService = null, IThumbnailService? thumbnailService = null)
+		public FileScannerService(
+			ILogger<FileScannerService> logger, 
+			IServiceProvider serviceProvider,
+			Pivot.Repositories.IAssetRepository repository, 
+			IMessenger messenger, 
+			IThumbnailService? thumbnailService = null)
 		{
 			_logger = logger;
+			_serviceProvider = serviceProvider;
 			_repository = repository;
 			_messenger = messenger;
 			_thumbnailService = thumbnailService;
-			_useScanMode = bool.TryParse(configuration?["AppSettings:UseScanMode"], out var flag) && flag;
-			_catalogService = catalogService;
+
 
 			// Start periodic flush timer for asset changes
 			_assetFlushTimer = new System.Timers.Timer(AssetFlushIntervalMs)
@@ -91,26 +96,83 @@ namespace Pivot.Services
 				try { FlushAssetBuffer(); }
 				catch (Exception ex) { _logger.LogError(ex, "FlushAssetBuffer failed"); }
 			};
+
+			// Subscribe to directory changes for real-time sync
+			_messenger.Register<DirectoryChangedMessage>(this, async (recipient, message) =>
+			{
+				try
+				{
+					await HandleDirectoryChangedAsync(message.Value);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "HandleDirectoryChangedAsync failed");
+				}
+			});
+		}
+
+		/// <summary>
+		/// Reconcile database with current settings - delete orphaned assets.
+		/// Should be called on startup before scanning.
+		/// </summary>
+		public async Task ReconcileAsync(IEnumerable<string> validRootPaths, CancellationToken ct = default)
+		{
+			if (validRootPaths == null) return;
+
+			var validPaths = validRootPaths
+				.Where(p => !string.IsNullOrWhiteSpace(p))
+				.Select(p => p.Replace('/', '\\').TrimEnd('\\'))
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+			_logger.LogInformation("ReconcileAsync: Valid paths = {Paths}", string.Join(", ", validPaths));
+
+			if (validPaths.Count == 0)
+			{
+				// No valid paths - delete ALL assets
+				_logger.LogWarning("ReconcileAsync: No valid directories, clearing all assets from database");
+				using var scope = _serviceProvider.CreateScope();
+				var context = scope.ServiceProvider.GetRequiredService<Pivot.Data.PivotDbContext>();
+				
+				var count = await context.Assets.CountAsync(ct);
+				if (count > 0)
+				{
+					context.Assets.RemoveRange(context.Assets);
+					await context.SaveChangesAsync(ct);
+					_logger.LogInformation("ReconcileAsync: Deleted {Count} orphaned assets", count);
+				}
+				return;
+			}
+
+			// Get all directories from database
+			using var repoScope = _serviceProvider.CreateScope();
+			var repository = repoScope.ServiceProvider.GetRequiredService<Pivot.Repositories.IAssetRepository>();
+			var dbDirectories = await repository.GetAllDirectoriesAsync(ct: ct);
+
+			// Find orphaned directories (not under any valid root)
+			var orphanedDirs = dbDirectories
+				.Where(dbDir => !validPaths.Any(vp => 
+					dbDir.Equals(vp, StringComparison.OrdinalIgnoreCase) ||
+					dbDir.StartsWith(vp + "\\", StringComparison.OrdinalIgnoreCase)))
+				.ToList();
+
+			_logger.LogInformation("ReconcileAsync: Found {Count} orphaned directories", orphanedDirs.Count);
+
+			// Delete orphaned assets
+			int totalDeleted = 0;
+			foreach (var orphanDir in orphanedDirs)
+			{
+				var deleted = await repository.DeleteByDirectoryAsync(orphanDir, ct);
+				totalDeleted += deleted;
+			}
+
+			if (totalDeleted > 0)
+			{
+				_logger.LogInformation("ReconcileAsync: Deleted {Count} orphaned assets", totalDeleted);
+			}
 		}
 
 		public async Task ScanAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
 		{
-			if (_useScanMode)
-			{
-				try
-				{
-					var catalog = _catalogService ?? new JsonCatalogService();
-					await catalog.InitializeAsync(rootPaths, cancellationToken);
-					progress?.Report(100);
-					_logger.LogInformation("ScanAsync: UseScanMode enabled. Delegated to JsonCatalogService.");
-					return;
-				}
-				catch (Exception ex)
-				{
-					_logger.LogError(ex, "ScanAsync: JsonCatalogService initialization failed in UseScanMode.");
-					// フォールバック: 従来経路
-				}
-			}
 
 			// 既存のWatcherを完全停止（複数対応）
 			StopWatchers();
@@ -172,55 +234,7 @@ namespace Pivot.Services
 			try { EnsureWatchers(rootPaths); } catch (Exception ex) { _logger.LogError(ex, "EnsureWatchers failed"); }
 		}
 
-		private void StartWatching(string path)
-		{
-			try
-			{
-				_watcher = new FileSystemWatcher(path)
-				{
-					NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
-					IncludeSubdirectories = true,
-					EnableRaisingEvents = true
-				};
 
-				_watcher.Created += OnCreated;
-				_watcher.Changed += OnChanged;
-				_watcher.Deleted += OnDeleted;
-				_watcher.Renamed += OnRenamed;
-
-				_logger.LogInformation("Started watching directory: {path}", path);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Failed to start FileSystemWatcher for path: {path}", path);
-				StopWatching(); // 失敗した場合は停止
-			}
-		}
-
-		private void StopWatching()
-		{
-			if (_watcher != null)
-			{
-				_watcher.Created -= OnCreated;
-				_watcher.Changed -= OnChanged;
-				_watcher.Deleted -= OnDeleted;
-				_watcher.Renamed -= OnRenamed;
-
-				_watcher.Dispose();
-				_watcher = null;
-				_logger.LogInformation("Stopped watching directory.");
-				// Cancel background processor
-				try
-				{
-					_watcherCts?.Cancel();
-					_watcherProcessingTask = null;
-					_watcherCts?.Dispose();
-					_watcherCts = null;
-					_pendingEvents.Clear();
-				}
-				catch { }
-			}
-		}
 
 		// Phase 4: 複数ルート対応（新規）
 		private void StopWatchers()
@@ -323,7 +337,7 @@ namespace Pivot.Services
 			{
 				await Task.Delay(EventDelayMs, newCts.Token);
 				_delayTokens.TryRemove(path, out _);
-				await ProcessFileChange(path, changeType, newPath, newCts.Token);
+				await ProcessWatcherEventAsync(path, changeType, newPath, newCts.Token);
 			}
 			catch (OperationCanceledException) { /* イベント統合によりキャンセルされた */ }
 			catch (Exception ex)
@@ -379,7 +393,7 @@ namespace Pivot.Services
 						{
 							try
 							{
-								await ProcessFileChange(item.Path, item.ChangeType, item.NewPath, ct);
+								await ProcessWatcherEventAsync(item.Path, item.ChangeType, item.NewPath, ct);
 							}
 							catch (Exception ex)
 							{
@@ -410,6 +424,10 @@ namespace Pivot.Services
 	{
 		try
 		{
+            // Use scoped repository for thread safety
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<Pivot.Repositories.IAssetRepository>();
+
 			if (!File.Exists(path))
 			{
 				_logger.LogWarning("File not found: {Path}", path);
@@ -425,7 +443,7 @@ namespace Pivot.Services
 				return; // Skip non-asset files
 
 			// Quick check: skip if unchanged
-			var existing = await _repository.GetByPathAsync(path, ct);
+			var existing = await repository.GetByPathAsync(path, ct);
 			if (existing != null && 
 			    existing.FileSize == fileInfo.Length && 
 			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc)
@@ -441,7 +459,11 @@ namespace Pivot.Services
 				await _hashSemaphore.WaitAsync(ct);
 				try
 				{
-					hash = await ComputeXxHash64Async(path, ct);
+					// Use SHA256 for fast hashing
+					using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096 * 4);
+					using var sha = SHA256.Create();
+					var hashBytes = await sha.ComputeHashAsync(stream, ct);
+					hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
 				}
 				finally
 				{
@@ -529,7 +551,7 @@ namespace Pivot.Services
 				ContentIndex = contentIndex
 			};
 
-			await _repository.UpsertAsync(asset, ct);
+			await repository.UpsertAsync(asset, ct);
 
 			// Notify UI
 			var changeType = existing == null 
@@ -544,9 +566,9 @@ namespace Pivot.Services
 	}
 
 	/// <summary>
-	/// Old ProcessFileChange for watcher events - needs rewrite
+	/// Process watcher events (Created, Changed, Deleted, Renamed) safely.
 	/// </summary>
-	private async Task ProcessFileChange(string path, WatcherChangeTypes changeType, string? newPath, CancellationToken ct)
+	private async Task ProcessWatcherEventAsync(string path, WatcherChangeTypes changeType, string? newPath, CancellationToken ct)
 	{
 		// Handle deletion
 		if (changeType == WatcherChangeTypes.Deleted)
@@ -581,21 +603,7 @@ namespace Pivot.Services
 		_messenger.Send(new BulkItemsChangedMessage<AssetEntity>(batch));
 	}
 
-		private static string GuessMime(string ext)
-		{
-			if (ImageExtensions.Contains(ext)) return "image/*";
-			switch (ext.ToLowerInvariant())
-			{
-				case ".mp4":
-				case ".mov":
-				case ".avi": return "video/*";
-				case ".pdf": return "application/pdf";
-				case ".fbx":
-				case ".obj":
-				case ".usd": return "model/3d";
-				default: return "application/octet-stream";
-			}
-		}
+
 
 		public void Dispose()
 		{
@@ -611,156 +619,60 @@ namespace Pivot.Services
 			GC.SuppressFinalize(this);
 		}
 
-		private static async Task<string> ComputeMD5Async(string path, CancellationToken ct)
+
+		/// <summary>
+		/// Handle directory settings changes (add/remove directories).
+		/// </summary>
+		private async Task HandleDirectoryChangedAsync(DirectoryChangedMessageData change)
 		{
-			using var md5 = MD5.Create();
-			await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-			var hash = await md5.ComputeHashAsync(stream, ct);
-			return Convert.ToHexString(hash);
-		}
+			_logger.LogInformation("Directory changed: {Type} - {Path}", change.Type, change.Path);
 
-		private static async Task<string> ComputeXxHash64Async(string path, CancellationToken ct)
-		{
-			await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-			var hasher = new XxHash64();
-			var buffer = new byte[8192];
-			while (true)
+			if (change.Type == DirectoryChangedMessageData.ChangeType.Added)
 			{
-				int read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
-				if (read == 0) break;
-				hasher.Append(new ReadOnlySpan<byte>(buffer, 0, read));
-			}
-			return Convert.ToHexString(hasher.GetCurrentHash());
-		}
-
-		// Minimal managed implementation of xxHash64 (public domain algorithm)
-		private class XxHash64
-		{
-			private const ulong PRIME1 = 11400714785074694791UL;
-			private const ulong PRIME2 = 14029467366897019727UL;
-			private const ulong PRIME3 = 1609587929392839161UL;
-			private const ulong PRIME4 = 9650029242287828579UL;
-			private const ulong PRIME5 = 2870177450012600261UL;
-
-			private ulong _v1, _v2, _v3, _v4;
-			private ulong _totalLen;
-			private byte[] _buffer = new byte[32];
-			private int _bufferLen = 0;
-
-			public XxHash64()
-			{
-				_v1 = unchecked(PRIME1 + PRIME2);
-				_v2 = PRIME2;
-				_v3 = 0UL;
-				_v4 = unchecked(ulong.MaxValue - PRIME1);
-				_totalLen = 0;
-			}
-
-			public void Append(ReadOnlySpan<byte> input)
-			{
-				_totalLen += (ulong)input.Length;
-
-				int offset = 0;
-				if (_bufferLen + input.Length < 32)
+				// Start scanning the new directory
+				if (Directory.Exists(change.Path))
 				{
-					input.CopyTo(_buffer.AsSpan(_bufferLen));
-					_bufferLen += input.Length;
-					return;
-				}
-
-				if (_bufferLen > 0)
-				{
-					int need = 32 - _bufferLen;
-					input.Slice(0, need).CopyTo(_buffer.AsSpan(_bufferLen));
-					ProcessChunk(_buffer.AsSpan(0, 32));
-					offset += need;
-					_bufferLen = 0;
-				}
-
-				while (offset + 32 <= input.Length)
-				{
-					ProcessChunk(input.Slice(offset, 32));
-					offset += 32;
-				}
-
-				if (offset < input.Length)
-				{
-					var remaining = input.Slice(offset);
-					remaining.CopyTo(_buffer);
-					_bufferLen = remaining.Length;
+					await ScanAsync(new[] { change.Path });
 				}
 			}
-
-			private static ulong RotateLeft(ulong value, int count) => (value << count) | (value >> (64 - count));
-
-			private void ProcessChunk(ReadOnlySpan<byte> chunk)
+			else if (change.Type == DirectoryChangedMessageData.ChangeType.Removed)
 			{
-				ulong k1 = BitConverter.ToUInt64(chunk.Slice(0, 8));
-				_v1 = RotateLeft(_v1 + k1 * PRIME2, 31) * PRIME1;
-				ulong k2 = BitConverter.ToUInt64(chunk.Slice(8, 8));
-				_v2 = RotateLeft(_v2 + k2 * PRIME2, 31) * PRIME1;
-				ulong k3 = BitConverter.ToUInt64(chunk.Slice(16, 8));
-				_v3 = RotateLeft(_v3 + k3 * PRIME2, 31) * PRIME1;
-				ulong k4 = BitConverter.ToUInt64(chunk.Slice(24, 8));
-				_v4 = RotateLeft(_v4 + k4 * PRIME2, 31) * PRIME1;
-			}
+				// Stop watching and delete assets from database
+				StopWatcherForPath(change.Path);
 
-			public byte[] GetCurrentHash()
-			{
-				ulong h64;
-				if (_totalLen >= 32)
-				{
-					h64 = RotateLeft(_v1, 1) + RotateLeft(_v2, 7) + RotateLeft(_v3, 12) + RotateLeft(_v4, 18);
-					h64 = Mix64(h64, _v1);
-					h64 = Mix64(h64, _v2);
-					h64 = Mix64(h64, _v3);
-					h64 = Mix64(h64, _v4);
-				}
-				else
-				{
-					h64 = PRIME5;
-				}
+				using var scope = _serviceProvider.CreateScope();
+				var repository = scope.ServiceProvider.GetRequiredService<Pivot.Repositories.IAssetRepository>();
+				var deletedCount = await repository.DeleteByDirectoryAsync(change.Path);
+				_logger.LogInformation("Deleted {Count} assets from removed directory: {Path}", deletedCount, change.Path);
 
-				h64 += _totalLen;
-
-				int idx = 0;
-				while (idx + 8 <= _bufferLen)
-				{
-					ulong k1 = BitConverter.ToUInt64(_buffer, idx);
-					h64 = RotateLeft(h64 ^ (k1 * PRIME2), 31) * PRIME1 + PRIME4;
-					idx += 8;
-				}
-
-				while (idx < _bufferLen)
-				{
-					h64 = RotateLeft(h64 ^ ((_buffer[idx]) * PRIME5), 11) * PRIME1;
-					idx++;
-				}
-
-				h64 ^= h64 >> 33;
-				h64 *= PRIME2;
-				h64 ^= h64 >> 29;
-				h64 *= PRIME3;
-				h64 ^= h64 >> 32;
-
-				var outBytes = BitConverter.GetBytes(h64);
-				return outBytes;
-			}
-
-			private static ulong Mix64(ulong h, ulong v)
-			{
-				v *= PRIME2;
-				v = RotateLeft(v, 31);
-				v *= PRIME1;
-				h ^= v;
-				h = h * PRIME1 + PRIME4;
-				return h;
+				// Notify UI about bulk removal
+				_messenger.Send(new DirectoryRemovedMessage(change.Path));
 			}
 		}
 
-
-
-
+		/// <summary>
+		/// Stop watcher for a specific path.
+		/// </summary>
+		private void StopWatcherForPath(string path)
+		{
+			var normalizedPath = path.Replace('/', '\\').TrimEnd('\\');
+			if (_watchers.TryRemove(normalizedPath, out var watcher))
+			{
+				try
+				{
+					watcher.Created -= OnCreated;
+					watcher.Changed -= OnChanged;
+					watcher.Deleted -= OnDeleted;
+					watcher.Renamed -= OnRenamed;
+					watcher.Dispose();
+					_logger.LogInformation("Stopped watcher for removed directory: {Path}", path);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "Error stopping watcher for {Path}", path);
+				}
+			}
+		}
 
 
 	}

@@ -30,6 +30,11 @@ namespace Pivot.Models
         public string? SearchQuery { get; set; }
 
         /// <summary>
+        /// Directory path filter. Null = all directories.
+        /// </summary>
+        public string? Directory { get; set; }
+
+        /// <summary>
         /// Tags to filter by. Null or empty = no tag filter.
         /// </summary>
         public HashSet<string>? Tags { get; set; }
@@ -78,6 +83,7 @@ namespace Pivot.Models
             {
                 TargetKind = TargetKind,
                 SearchQuery = SearchQuery,
+                Directory = Directory,
                 Tags = Tags != null ? new HashSet<string>(Tags) : null,
                 TagMode = TagMode,
                 MinAspectRatio = MinAspectRatio,

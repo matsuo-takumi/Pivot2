@@ -129,5 +129,28 @@ namespace Pivot.Repositories
                 .OrderBy(d => d)
                 .ToListAsync(ct);
         }
+
+        public async Task<int> DeleteByDirectoryAsync(string directoryPath, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(directoryPath))
+                return 0;
+
+            var normalizedDir = directoryPath.Replace('/', '\\').TrimEnd('\\');
+            var dirPattern = normalizedDir + "\\%";
+
+            // Delete assets where Directory matches exactly or is a subdirectory
+            var assetsToDelete = await _context.Assets
+                .Where(a => a.Directory == normalizedDir || 
+                           EF.Functions.Like(a.Directory, dirPattern))
+                .ToListAsync(ct);
+
+            if (assetsToDelete.Count > 0)
+            {
+                _context.Assets.RemoveRange(assetsToDelete);
+                await _context.SaveChangesAsync(ct);
+            }
+
+            return assetsToDelete.Count;
+        }
     }
 }

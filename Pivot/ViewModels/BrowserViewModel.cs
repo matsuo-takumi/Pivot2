@@ -107,6 +107,28 @@ namespace Pivot.ViewModels
             }
         }
 
+        /// <summary>
+        /// Set directory filter to show only assets from a specific folder.
+        /// Pass null to clear the filter (show all).
+        /// </summary>
+        public void SetDirectoryFilter(string? directoryPath)
+        {
+            bool wasFiltered = FilterCriteria.Directory != null;
+            bool isClearing = directoryPath == null;
+            
+            if (FilterCriteria.Directory != directoryPath || (isClearing && wasFiltered))
+            {
+                FilterCriteria.Directory = directoryPath;
+                _logger.LogDebug("BrowserViewModel: Directory filter set to {Directory}", directoryPath ?? "(all)");
+                OnCriteriaChanged();
+            }
+            else if (isClearing)
+            {
+                // Force refresh even if already null (user clicked "Show All")
+                OnCriteriaChanged();
+            }
+        }
+
         partial void OnCurrentLayoutChanged(LayoutType value)
         {
             _logger.LogDebug("BrowserViewModel: Layout changed to {Layout}", value);

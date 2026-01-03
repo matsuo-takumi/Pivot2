@@ -28,5 +28,11 @@ namespace Pivot.Services
         /// </summary>
         /// <param name="extensions">許可するファイル拡張子</param>
         Task<IReadOnlyList<string>> PickFilesAsync(IEnumerable<string>? extensions = null);
+
+        /// <summary>
+        /// 複数フォルダ選択を可能にするダイアログを表示。
+        /// ユーザーがキャンセルするまで連続して選択可能。
+        /// </summary>
+        Task<IReadOnlyList<string>> PickMultipleFoldersAsync();
     }
 }

@@ -22,4 +22,15 @@ namespace Pivot.Messages
             Removed
         }
     }
+
+    /// <summary>
+    /// Message sent after assets are deleted from a removed directory.
+    /// UI should refresh to remove stale data.
+    /// </summary>
+    public class DirectoryRemovedMessage : ValueChangedMessage<string>
+    {
+        public DirectoryRemovedMessage(string directoryPath) : base(directoryPath)
+        {
+        }
+    }
 }

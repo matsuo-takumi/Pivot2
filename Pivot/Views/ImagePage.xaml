@@ -13,48 +13,7 @@
     Background="Transparent">
 
     <Page.Resources>
-        <conv:FileSizeConverter x:Key="FileSizeConverter"/>
-        <conv:BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
-        <conv:BitmapImageDecodeConverter x:Key="BitmapDecode"/>
-        <conv:CachedBitmapImageConverter x:Key="CachedBitmapDecode"/>
-        <conv:KindToVisibilityConverter x:Key="KindToVisibility"/>
-        <conv:SelectionToBorderBrushConverter x:Key="SelectionToBorderBrushConverter"/>
-        <conv:SelectionToBorderThicknessConverter x:Key="SelectionToBorderThicknessConverter"/>
-        <conv:SelectionToBackgroundConverter x:Key="SelectionToBackgroundConverter"/>
-        <conv:SelectionToPaddingConverter x:Key="SelectionToPaddingConverter"/>
-        <conv:DateTimeFormatConverter x:Key="DateTimeConverter"/>
-
-        <DataTemplate x:Key="MasonryItemTemplate" x:DataType="models:TemplateItem">
-            <Border BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBorderBrushConverter}}" 
-                    BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBorderThicknessConverter}}" 
-                    CornerRadius="6" 
-                    Padding="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToPaddingConverter}}" 
-                    Margin="4" 
-                    Background="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionToBackgroundConverter}}"
-                    CanDrag="True"
-                    PointerPressed="ImageItem_PointerPressed"
-                    PointerMoved="ImageItem_PointerMoved"
-                    PointerReleased="ImageItem_PointerReleased"
-                    DragStarting="ImageItem_DragStarting"
-                    DoubleTapped="ImageItem_DoubleTapped"
-                    RightTapped="ImageItem_RightTapped">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <!-- Phase 0: Placeholder -->
-                    <Grid Grid.Row="0" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" x:Phase="0" Tag="{x:Bind}"/>
-                    
-                    <!-- Phase 1: Image -->
-                    <Image Grid.Row="0" Stretch="Uniform" Source="{x:Bind ThumbnailPath, Converter={StaticResource CachedBitmapDecode}, ConverterParameter=300}" x:Phase="1"/>
-                    
-                    <!-- Text Footer -->
-                    <TextBlock Grid.Row="1" Text="{x:Bind Name}" FontSize="12" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                </Grid>
-            </Border>
-        </DataTemplate>
+        <!-- Note: UnifiedBrowserControl handles all display, these converters are no longer needed -->
     </Page.Resources>
 
     <Grid Padding="0,12,12,12">
@@ -70,6 +29,19 @@
                         PaneTitle="フォルダー">
             <NavigationView.PaneFooter>
                 <StackPanel Spacing="0" Margin="0,8,0,12">
+                    <!-- Show All Button -->
+                    <Button x:Name="ShowAllButton"
+                            Click="ShowAllButton_Click"
+                            Background="Transparent" 
+                            Padding="12,8"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left"
+                            Height="40">
+                        <StackPanel Orientation="Horizontal" Spacing="16">
+                            <FontIcon Glyph="&#xE8B9;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
+                            <TextBlock Text="すべて表示" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <!-- Tags (Placeholder) -->
                     <Button IsEnabled="False"
                             Background="Transparent" 

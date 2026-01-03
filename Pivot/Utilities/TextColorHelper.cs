@@ -25,7 +25,7 @@ namespace Pivot.Utilities
             {
                 var trimmed = value.StartsWith("#") ? value : "#" + value;
                 if (trimmed.Length != 7) return false;
-                result = ColorHelper.FromArgb(255,
+                result = Microsoft.UI.ColorHelper.FromArgb(255,
                     Convert.ToByte(trimmed.Substring(1, 2), 16),
                     Convert.ToByte(trimmed.Substring(3, 2), 16),
                     Convert.ToByte(trimmed.Substring(5, 2), 16));

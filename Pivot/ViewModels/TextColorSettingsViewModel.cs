@@ -194,7 +194,7 @@ namespace Pivot.ViewModels
             {
                 var value = hex.StartsWith("#") ? hex : "#" + hex;
                 if (value.Length != 7) return false;
-                result = ColorHelper.FromArgb(255,
+                result = Microsoft.UI.ColorHelper.FromArgb(255,
                     Convert.ToByte(value.Substring(1, 2), 16),
                     Convert.ToByte(value.Substring(3, 2), 16),
                     Convert.ToByte(value.Substring(5, 2), 16));

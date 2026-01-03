@@ -31,8 +31,6 @@ namespace Pivot.Models
         // Code filters (for code file types / languages)
         public List<CustomFilter> CodeFilters { get; set; } = new List<CustomFilter>();
 
-        // Code categories (groups for Code tab navigation)
-        public List<CodeCategory> CodeCategories { get; set; } = new List<CodeCategory>();
 
         // Export settings
         public string ExportOutputDirectory { get; set; } = string.Empty;
