@@ -18,8 +18,6 @@ namespace Pivot.Services
         // In-memory cache
         private MaterialParams _materialParams = new();
         private List<MaterialPreset> _customMaterialPresets = new();
-        private LightingPreset? _currentLightingState;
-        private MaterialPreset? _currentMaterialState;
         
         // Key bindings
         private string _assetLitShortcut = "Alt+1";

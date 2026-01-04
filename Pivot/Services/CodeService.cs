@@ -101,8 +101,30 @@ namespace Pivot.Services
                 // Fallback: Generate generic path in user code dir
                 var dirs = _directorySettings.CodeDirectories;
                 var root = dirs?.FirstOrDefault();
+                
+                // If no code directory configured, use fallback in Documents
                 if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
-                    throw new InvalidOperationException("No valid code directory configured to save new snippet.");
+                {
+                    root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Pivot", "CodeSnippets");
+                    try
+                    {
+                        if (!Directory.Exists(root))
+                        {
+                            Directory.CreateDirectory(root);
+                        }
+                        _logger.LogInformation("Created fallback code directory: {Path}", root);
+                        
+                        // Register this fallback directory with DirectorySettingsService
+                        // so that GetAllSnippetsAsync can find snippets saved here
+                        await _directorySettings.AddDirectoryAsync(DirectoryCategory.Code, root);
+                        _logger.LogInformation("Registered fallback directory with DirectorySettingsService: {Path}", root);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to create fallback code directory: {Path}", root);
+                        throw new InvalidOperationException($"No valid code directory configured and failed to create fallback: {root}", ex);
+                    }
+                }
                 
                 var ext = !string.IsNullOrEmpty(file.Language) ? $".{file.Language}" : ".txt";
                 var safeTitle = string.Join("_", (file.Title ?? "Untitled").Split(Path.GetInvalidFileNameChars()));

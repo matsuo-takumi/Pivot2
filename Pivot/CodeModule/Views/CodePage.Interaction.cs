@@ -604,6 +604,7 @@ namespace Pivot.CodeModule.Views
 
         private void QuickAddBox_KeyDown(object sender, KeyRoutedEventArgs e)
         {
+            System.Diagnostics.Debug.WriteLine($"[CodePage] QuickAddBox_KeyDown: Key = {e.Key}");
             try
             {
                 // If QuickAdd has special tab mode enabled, intercept Tab to insert a tab character
@@ -626,6 +627,7 @@ namespace Pivot.CodeModule.Views
                 var isShiftDown = IsShiftDown();
                 if (e.Key == Windows.System.VirtualKey.Enter)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[CodePage] QuickAddBox_KeyDown: Enter pressed, Shift={isShiftDown}");
                     if (isShiftDown)
                     {
                         // Shift+Enter: insert newline
@@ -708,17 +710,32 @@ namespace Pivot.CodeModule.Views
 
         private async void CommitQuickAdd()
         {
+            System.Diagnostics.Debug.WriteLine("[CodePage] CommitQuickAdd called");
             try
             {
                 EnsureUIElementsCached();
-                if (_quickAddBox == null) return;
+                if (_quickAddBox == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[CodePage] CommitQuickAdd: _quickAddBox is null");
+                    return;
+                }
                 var text = (_quickAddBox.Text ?? string.Empty).Trim();
-                if (string.IsNullOrWhiteSpace(text)) return;
+                System.Diagnostics.Debug.WriteLine($"[CodePage] CommitQuickAdd: text = '{text}'");
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    System.Diagnostics.Debug.WriteLine("[CodePage] CommitQuickAdd: text is empty, returning");
+                    return;
+                }
 
                 // Use ViewModel to create and save snippet
                 var vm = DataContext as CodeViewModel;
-                if (vm == null) return;
+                if (vm == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[CodePage] CommitQuickAdd: ViewModel is null");
+                    return;
+                }
 
+                System.Diagnostics.Debug.WriteLine("[CodePage] CommitQuickAdd: Creating snippet...");
                 var newSnippet = await vm.CreateSnippetFromTextAsync(text);
 
                 // Handle UI updates (scroll into view)

@@ -20,7 +20,9 @@ namespace Pivot.CodeModule.ViewModels
     {
         private readonly CodeService? _codeService;
         private readonly FilterSettingsService? _filterSettings;
-        private List<CodeFile> _allSnippets = new List<CodeFile>();
+        private readonly CodeTagService? _tagService;
+        private readonly CodeNavigationService? _navigationService;
+        // REMOVED: private List<CodeFile> _allSnippets - now using Snippets as single source of truth
         private HashSet<string> _selectedCodeTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         
         [ObservableProperty]
@@ -73,10 +75,19 @@ namespace Pivot.CodeModule.ViewModels
         /// <summary>
         /// Main constructor using CodeService (new architecture).
         /// </summary>
-        public CodeViewModel(CodeService codeService, FilterSettingsService filterSettings)
+        /// <summary>
+        /// Main constructor using CodeService (new architecture).
+        /// </summary>
+        public CodeViewModel(
+            CodeService codeService, 
+            FilterSettingsService filterSettings,
+            CodeTagService tagService,
+            CodeNavigationService navigationService)
         {
             _codeService = codeService;
             _filterSettings = filterSettings;
+            _tagService = tagService;
+            _navigationService = navigationService;
             _snippets = new ObservableCollection<CodeFile>();
             InitializeTagInfrastructure();
 
@@ -102,8 +113,9 @@ namespace Pivot.CodeModule.ViewModels
         {
             _codeService = null;
             _filterSettings = null;
+            _tagService = null;
+            _navigationService = null;
             _snippets = new ObservableCollection<CodeFile>();
-            _allSnippets = _snippets.ToList();
             InitializeTagInfrastructure();
 
             System.Diagnostics.Debug.WriteLine("CodeViewModel: constructed WITHOUT CodeService (fallback).");
@@ -141,23 +153,19 @@ namespace Pivot.CodeModule.ViewModels
 
         public RelayCommand EmptyTrashCommand { get; private set; } = null!;
 
-        private void ExecuteEmptyTrash()
+        private async void ExecuteEmptyTrash()
         {
             if (_codeService == null) return;
             
-            // Get all logical deleted snippets from _allSnippets
-            var trash = _allSnippets.Where(x => x.IsDeleted).ToList();
+            // Get deleted snippets from current UI list (already filtered by IsTrashMode)
+            var trash = Snippets?.Where(x => x.IsDeleted).ToList() ?? new List<CodeFile>();
             if (!trash.Any()) return;
 
             foreach (var snippet in trash)
             {
-                // Hard delete via CodeService
                 try 
                 {
-                    _ = _codeService.HardDeleteSnippetAsync(snippet);
-                    
-                    // Remove from internal list
-                    _allSnippets.Remove(snippet);
+                    await _codeService.HardDeleteSnippetAsync(snippet);
                 }
                 catch (Exception ex)
                 {
@@ -165,8 +173,8 @@ namespace Pivot.CodeModule.ViewModels
                 }
             }
 
-            // Refresh UI
-            ShowDeletedSnippets();
+            // Reload from DB to update UI
+            await LoadFromDbAsync();
         }
 
         private void InitializeTags()
@@ -185,70 +193,17 @@ namespace Pivot.CodeModule.ViewModels
 
         private IEnumerable<string> CollectTagNames()
         {
-            // Only collect tags that exist in preferences
-            // This ensures that tags deleted from preferences are not shown in the UI
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var preferenceTags = CollectPreferenceTagNames().ToHashSet(StringComparer.OrdinalIgnoreCase);
-            
-            // Only add tags that exist in preferences
-            foreach (var name in preferenceTags)
+            if (_tagService != null)
             {
-                names.Add(name);
+                return _tagService.CollectAvailableTags(Snippets);
             }
-            
-            // Also include tags from snippets, but only if they exist in preferences
-            foreach (var snippet in _allSnippets)
-            {
-                foreach (var tag in ParseTagList(snippet.Tags))
-                {
-                    // Only add tags that exist in preferences
-                    if (preferenceTags.Contains(tag))
-                    {
-                        names.Add(tag);
-                    }
-                }
-            }
-            return names.OrderBy(name => name);
+
+            // Fallback (should ideally not be hit if DI works)
+            return new List<string>();
         }
 
-        private IEnumerable<string> CollectPreferenceTagNames()
-        {
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                // Use the local GetAllTags() method which extracts tags from _allSnippets
-                var repoTags = GetAllTags();
-                foreach (var tag in repoTags)
-                {
-                    var name = (tag?.Name ?? string.Empty).Trim();
-                    if (!string.IsNullOrEmpty(name))
-                    {
-                        names.Add(name);
-                    }
-                }
-            }
-            catch { }
+        // CollectPreferenceTagNames removed - replaced by CodeTagService logic logic
 
-            if (names.Count == 0)
-            {
-                try
-                {
-                    var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
-                    var filters = filterSettings?.GetCodeFilters() ?? new List<CustomFilter>();
-                    foreach (var filter in filters)
-                    {
-                        var name = (filter?.Name ?? string.Empty).Trim();
-                        if (!string.IsNullOrEmpty(name))
-                        {
-                            names.Add(name);
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            return names;
-        }
 
         private void AttachTagHandler(TagItem tag)
         {
@@ -265,7 +220,7 @@ namespace Pivot.CodeModule.ViewModels
         private void UpdateFilteredTags()
         {
             FilteredTags.Clear();
-            var allowedTags = GetAllowedPreferenceTagNames();
+            var allowedTags = _tagService?.GetAllowedPreferenceTags() ?? new HashSet<string>();
             
             // If no preferences are set, show all tags (backward compatibility)
             var shouldFilter = allowedTags.Count > 0;
@@ -325,18 +280,28 @@ namespace Pivot.CodeModule.ViewModels
 
         private List<string> FilterSnippetTagsByPreferences(CodeFile? snippet)
         {
-            var tags = ParseTagList(snippet?.Tags);
-            var allowed = GetAllowedPreferenceTagNames();
+            // _tagService.ValidateAndCleanTags modifies the snippet directly
+            // We want to return listing here, but ValidateAndCleanTags also saves?
+            // Existing logic: "FilterSnippetTagsByPreferences" returns filtered list AND updates snippet if needed.
+            
+            if (snippet == null || _tagService == null) return new List<string>();
+            
+            // Actually, simply using ValidateAndCleanTags handles the update logic
+            // But this method returns the list.
+            
+            var tags = ParseTagList(snippet.Tags);
+            var allowed = _tagService.GetAllowedPreferenceTags();
             if (allowed.Count == 0) return tags;
 
-            var filtered = tags.Where(tag => allowed.Contains(tag)).ToList();
-            if (snippet != null && filtered.Count != tags.Count)
+            // Use service logic to validate and clean if needed
+            if (_tagService.ValidateAndCleanTags(snippet))
             {
-                snippet.Tags = string.Join(", ", filtered);
-                snippet.Updated = DateTime.Now;
                 _ = PersistSnippetAsync(snippet, refreshAfterSave: false);
+                // Re-parse updated tags
+                tags = ParseTagList(snippet.Tags);
             }
-            return filtered;
+            
+            return tags; 
         }
 
         /// <summary>
@@ -345,38 +310,18 @@ namespace Pivot.CodeModule.ViewModels
         /// </summary>
         private void RemoveInvalidTagsFromSnippets(List<CodeFile> snippets)
         {
-            if (snippets == null || !snippets.Any()) return;
-
-            var allowed = GetAllowedPreferenceTagNames();
-            // If no preferences are set, don't filter (allow all tags)
-            if (allowed.Count == 0) return;
-
-            var updated = false;
+            if (snippets == null || !snippets.Any() || _tagService == null) return;
+            
+            // Optimization: check if any preferences exist first (inside service)
+            // But ValidateAndCleanTags checks GetAllowedPreferenceTags internally.
+            
+            bool updated = false;
             foreach (var snippet in snippets)
             {
-                if (string.IsNullOrWhiteSpace(snippet.Tags)) continue;
-
-                var tags = ParseTagList(snippet.Tags);
-                var filtered = tags.Where(tag => allowed.Contains(tag)).ToList();
-                
-                if (filtered.Count != tags.Count)
+                if (_tagService.ValidateAndCleanTags(snippet))
                 {
-                    snippet.Tags = filtered.Count > 0 ? string.Join(", ", filtered) : string.Empty;
-                    snippet.Updated = DateTime.Now;
+                    _ = PersistSnippetAsync(snippet, refreshAfterSave: false);
                     updated = true;
-                    
-                    // Persist the change
-                    try
-                    {
-                        if (_codeService != null)
-                        {
-                            _ = _codeService.SaveSnippetAsync(snippet);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"RemoveInvalidTagsFromSnippets: Failed to save snippet {snippet.Id}: {ex.Message}");
-                    }
                 }
             }
 
@@ -386,28 +331,7 @@ namespace Pivot.CodeModule.ViewModels
             }
         }
 
-        private HashSet<string> GetAllowedPreferenceTagNames()
-        {
-            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
-                var filters = filterSettings?.GetCodeFilters();
-                if (filters != null)
-                {
-                    foreach (var filter in filters)
-                    {
-                        var name = (filter?.Name ?? string.Empty).Trim();
-                        if (!string.IsNullOrEmpty(name))
-                        {
-                            result.Add(name);
-                        }
-                    }
-                }
-            }
-            catch { }
-            return result;
-        }
+        // GetAllowedPreferenceTagNames removed - use _tagService.GetAllowedPreferenceTags()
 
         private void ToggleTag(TagItem? tag)
         {
@@ -469,27 +393,16 @@ namespace Pivot.CodeModule.ViewModels
         private async Task SyncTagWithSnippetAsync(TagItem tag)
         {
             var snippet = SelectedSnippet;
-            if (snippet == null || string.IsNullOrWhiteSpace(tag.Name)) return;
-            var tagName = NormalizeTagName(tag.Name);
-            if (string.IsNullOrEmpty(tagName)) return;
+            if (snippet == null || string.IsNullOrWhiteSpace(tag.Name) || _tagService == null) return;
+            
+            bool changed = tag.IsSelected 
+                ? _tagService.AddTagToSnippet(snippet, tag.Name)
+                : _tagService.RemoveTagFromSnippet(snippet, tag.Name);
 
-            var tags = ParseTagList(snippet.Tags);
-            var contains = tags.Any(t => string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase));
-            if (tag.IsSelected)
+            if (changed)
             {
-                if (!contains)
-                {
-                    tags.Add(tagName);
-                }
+                await PersistSnippetAsync(snippet, refreshAfterSave: false);
             }
-            else
-            {
-                tags.RemoveAll(t => string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase));
-            }
-
-            snippet.Tags = string.Join(", ", tags);
-            snippet.Updated = DateTime.Now;
-            await PersistSnippetAsync(snippet, refreshAfterSave: false);
         }
 
         private async Task PersistSnippetAsync(CodeFile snippet, bool refreshAfterSave = true)
@@ -534,22 +447,12 @@ namespace Pivot.CodeModule.ViewModels
 
         private List<string> ParseTagList(string? raw)
         {
-            var result = new List<string>();
-            if (string.IsNullOrWhiteSpace(raw)) return result;
-            var parts = raw.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var item in parts)
-            {
-                var trimmed = item.Trim();
-                if (string.IsNullOrEmpty(trimmed)) continue;
-                if (result.Any(existing => string.Equals(existing, trimmed, StringComparison.OrdinalIgnoreCase))) continue;
-                result.Add(trimmed);
-            }
-            return result;
+            return _tagService?.ParseTagList(raw) ?? new List<string>();
         }
 
         private string NormalizeTagName(string? input)
         {
-            return (input ?? string.Empty).Trim();
+            return _tagService?.NormalizeTagName(input) ?? (input ?? string.Empty).Trim();
         }
 
         #region Navigation Logic (moved from CodePage.xaml.cs)
@@ -562,30 +465,20 @@ namespace Pivot.CodeModule.ViewModels
             try
             {
                 NavigationItems.Clear();
-
-                // Add "All Snippets" item
-                var allItem = NavigationItem.CreateAllSnippets();
-                NavigationItems.Add(allItem);
-
-                // Get filters from settings
-                var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
-                var filters = filterSettings?.GetCodeFilters() ?? new List<CustomFilter>();
-
-                foreach (var f in filters.OrderBy(f => f.SortOrder).ThenBy(f => f.Name))
+                if (_navigationService != null)
                 {
-                    try
+                    var items = _navigationService.GetNavigationItems();
+                    foreach (var item in items)
                     {
-                        var navItem = NavigationItem.CreateFilter(f.Name, f.Id);
-                        NavigationItems.Add(navItem);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"BuildNavigationItems: Error adding filter '{f.Name}': {ex.Message}");
+                        NavigationItems.Add(item);
                     }
                 }
-
-                // Select "All Snippets" by default
-                SelectedNavigationItem = allItem;
+                
+                // Select "All Snippets" by default if available
+                if (NavigationItems.Count > 0 && SelectedNavigationItem == null)
+                {
+                    SelectedNavigationItem = NavigationItems[0];
+                }
             }
             catch (Exception ex)
             {
@@ -674,71 +567,85 @@ namespace Pivot.CodeModule.ViewModels
 
         public void Refresh()
         {
-            _ = RefreshAsync();
+            _ = LoadFromDbAsync();
         }
 
-        public async Task RefreshAsync()
+        /// <summary>
+        /// Loads snippets from database. DB is the single source of truth.
+        /// This replaces the old RefreshAsync/ApplyCodeTagFilters pattern.
+        /// </summary>
+        public async Task LoadFromDbAsync()
         {
             if (_codeService == null) return;
             try
             {
+                System.Diagnostics.Debug.WriteLine("[CodeViewModel] LoadFromDbAsync: Loading from DB...");
+                
+                // Get all non-deleted snippets from DB
                 var all = await _codeService.GetAllSnippetsAsync();
-                if (all.Any())
+                
+                // Filter out deleted snippets for normal view
+                var visible = IsTrashMode 
+                    ? all.Where(s => s.IsDeleted).ToList()
+                    : all.Where(s => !s.IsDeleted).ToList();
+                
+                // Apply tag filters if any
+                if (_selectedCodeTags.Any())
                 {
-                    // Remove tags that don't exist in preferences from all snippets
-                    RemoveInvalidTagsFromSnippets(all);
-                    _allSnippets = all;
-                    ApplyCodeTagFilters();
+                    visible = visible.Where(s =>
+                    {
+                        var snippetTags = (s.Tags ?? string.Empty)
+                            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(t => t.Trim())
+                            .ToList();
+                        return _selectedCodeTags.Any(sel => 
+                            snippetTags.Any(st => string.Equals(st, sel, StringComparison.OrdinalIgnoreCase)));
+                    }).ToList();
+                }
+                
+                // Update UI on dispatcher thread
+                var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+                if (dispatcher != null)
+                {
+                    dispatcher.TryEnqueue(() =>
+                    {
+                        try
+                        {
+                            // Simply replace the collection - clean and simple
+                            Snippets = new ObservableCollection<CodeFile>(visible);
+                            System.Diagnostics.Debug.WriteLine($"[CodeViewModel] LoadFromDbAsync: Loaded {visible.Count} snippets");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[CodeViewModel] LoadFromDbAsync: UI update error: {ex.Message}");
+                        }
+                    });
+                }
+                else
+                {
+                    Snippets = new ObservableCollection<CodeFile>(visible);
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"CodeViewModel.RefreshAsync: Error refreshing snippets: {ex.Message}");
-                // Keep existing snippets if refresh fails
+                System.Diagnostics.Debug.WriteLine($"[CodeViewModel] LoadFromDbAsync: Error: {ex.Message}");
             }
         }
+
+        // Alias for backward compatibility
+        public Task RefreshAsync() => LoadFromDbAsync();
 
         // Show snippets that are in Trash (soft-deleted) and still within the restore window.
         public void ShowDeletedSnippets()
         {
-            _ = ShowDeletedSnippetsAsync();
-        }
-
-        private async Task ShowDeletedSnippetsAsync()
-        {
-            if (_codeService == null) return;
-            try
-            {
-                // Get all snippets and filter for deleted ones
-                var all = await _codeService.GetAllSnippetsAsync();
-                var deleted = all.Where(x => x.IsDeleted).ToList();
-                _allSnippets = deleted;
-                IsTrashMode = true;
-                ApplyCodeTagFilters();
-            }
-            catch { }
+            IsTrashMode = true;
+            _ = LoadFromDbAsync();
         }
 
         public void FilterSnippets()
         {
-            // Filter snippets using in-memory _allSnippets
-            if (_activeFilters.Any())
-            {
-                var filtered = _allSnippets.Where(s =>
-                {
-                    var snippetTags = s.Tags?.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                                        .Select(t => t.Trim().ToLowerInvariant())
-                                        .ToList() ?? new List<string>();
-                    // Active filters are GUIDs - for new architecture, this filtering may need adjustment
-                    // For now, just skip if no matching logic
-                    return true;
-                }).ToList();
-                UpdateSnippetsOnUi(filtered);
-            }
-            else
-            {
-                UpdateSnippetsOnUi(_allSnippets);
-            }
+            // Filtering is now handled by LoadFromDbAsync with _selectedCodeTags
+            _ = LoadFromDbAsync();
         }
 
         private void OnTagSelection(TagSelectionMessage msg)
@@ -749,32 +656,16 @@ namespace Pivot.CodeModule.ViewModels
                 if (!string.Equals(tabId, "Code", StringComparison.OrdinalIgnoreCase)) return;
                 if (isSelected) _selectedCodeTags.Add(tagName);
                 else _selectedCodeTags.Remove(tagName);
-                ApplyCodeTagFilters();
+                // Reload from DB with new filters
+                _ = LoadFromDbAsync();
             }
             catch { }
         }
 
         private void ApplyCodeTagFilters()
         {
-            try
-            {
-                if (_selectedCodeTags == null || !_selectedCodeTags.Any())
-                {
-                    UpdateSnippetsOnUi(_allSnippets);
-                    return;
-                }
-
-                var filtered = _allSnippets.Where(s =>
-                {
-                    var snippetTags = (s.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(t => t.Trim()).ToList();
-                    // match if any selected tag is present on the snippet
-                    return _selectedCodeTags.Any(sel => snippetTags.Any(st => string.Equals(st, sel, StringComparison.OrdinalIgnoreCase)));
-                }).ToList();
-
-                UpdateSnippetsOnUi(filtered);
-            }
-            catch { }
+            // Filtering is now handled by LoadFromDbAsync with _selectedCodeTags
+            _ = LoadFromDbAsync();
         }
 
         private void UpdateSnippetsOnUi(IEnumerable<CodeFile> snippetSource)
@@ -888,21 +779,8 @@ namespace Pivot.CodeModule.ViewModels
             if (SelectedSnippet is null) return;
             var snippet = SelectedSnippet;
             
-            // If snippet has no content, do not persist
-            if (string.IsNullOrWhiteSpace(snippet.Content))
-            {
-                try
-                {
-                    Snippets.Remove(snippet);
-                    SelectedSnippet = null;
-                    IsDirty = false;
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"CodeViewModel.SaveSnippetAsync: Error removing empty snippet: {ex.Message}");
-                }
-            }
+            // Do NOT automatically delete if content is empty - allow empty snippets
+            // CodeViewModel.SaveSnippetAsync: Logic removed
 
             if (_codeService != null)
             {
@@ -959,19 +837,8 @@ namespace Pivot.CodeModule.ViewModels
 #if DEBUG
                 System.Diagnostics.Debug.WriteLine($"[DEBUG] SaveSnippetFileAsync: invoked for id={file.Id}");
 #endif
-                // If this snippet has no content, skip save
-                if (string.IsNullOrWhiteSpace(file.Content))
-                {
-                    try
-                    {
-                        App.Current.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
-                        {
-                            try { Snippets.Remove(file); } catch { }
-                        });
-                    }
-                    catch { }
-                    return;
-                }
+                // Do NOT automatically delete if content is empty
+                // CodeViewModel.SaveSnippetFileAsync: Logic removed
 
                 // Use CodeService for save
                 if (_codeService != null)
@@ -1030,37 +897,23 @@ namespace Pivot.CodeModule.ViewModels
                 {
                     try
                     {
-                        var existing = _allSnippets.FirstOrDefault(s => s.Id == file.Id);
+                        // Update in Snippets collection (single source of truth)
+                        var existing = Snippets?.FirstOrDefault(s => s.Id == file.Id);
                         if (existing != null)
                         {
                             CopySnippetValues(file, existing);
                             
-                            // Snippetsコレクション内のインスタンスも更新
-                            var inSnippets = Snippets.FirstOrDefault(s => s.Id == file.Id);
-                            if (inSnippets != null && !ReferenceEquals(inSnippets, existing))
+                            // Update SelectedSnippet if it's the same file
+                            if (SelectedSnippet != null && SelectedSnippet.Id == file.Id && !ReferenceEquals(SelectedSnippet, existing))
                             {
-                                CopySnippetValues(file, inSnippets);
+                                CopySnippetValues(file, SelectedSnippet);
                             }
-                            
-                            // SelectedSnippetがSnippetsコレクション内のインスタンスを参照している場合も更新
-                            if (SelectedSnippet != null && SelectedSnippet.Id == file.Id)
-                            {
-                                if (!ReferenceEquals(SelectedSnippet, existing) && !ReferenceEquals(SelectedSnippet, inSnippets))
-                                {
-                                    CopySnippetValues(file, SelectedSnippet);
-                                }
-                            }
-                            
-                            // Refresh visible collection
-                            ApplyCodeTagFilters();
                         }
                         else
                         {
-                            // Insert after placeholder if present
-                            if (_allSnippets == null) _allSnippets = new List<CodeFile>();
-                            var insertIndex = _allSnippets.Count > 0 && _allSnippets[0].Id == Guid.Empty ? 1 : 0;
-                            _allSnippets.Insert(insertIndex, file);
-                            ApplyCodeTagFilters();
+                            // Insert new snippet
+                            if (Snippets == null) Snippets = new ObservableCollection<CodeFile>();
+                            Snippets.Insert(0, file);
                         }
                     }
                     catch { }
@@ -1139,25 +992,14 @@ namespace Pivot.CodeModule.ViewModels
         // Helper: Returns all unique tags from loaded snippets
         public IEnumerable<Pivot.CodeModule.Models.CodeTag> GetAllTags()
         {
-            // Get tags from _allSnippets instead of legacy _repo
-            var tagNames = _allSnippets
-                .Where(s => !string.IsNullOrEmpty(s.Tags))
-                .SelectMany(s => s.Tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
-                .Select(t => t.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase);
-            
-            return tagNames.Select(name => new Pivot.CodeModule.Models.CodeTag { Name = name });
+            // Get tags using service
+            var tags = _tagService?.CollectAvailableTags(Snippets) ?? Enumerable.Empty<string>();
+            return tags.Select(name => new Pivot.CodeModule.Models.CodeTag { Name = name });
         }
 
         public IEnumerable<CodeFile> GetSnippetsByTag(string tagName)
         {
-            if (string.IsNullOrWhiteSpace(tagName)) return Enumerable.Empty<CodeFile>();
-            var matches = _allSnippets.Where(s =>
-            {
-                var tags = (s.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim());
-                return tags.Any(t => string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase));
-            });
-            return matches;
+            return _tagService?.FindSnippetsByTag(Snippets, tagName) ?? Enumerable.Empty<CodeFile>();
         }
 
         // ApplyCachedValuesAsync removed - no longer using SnippetCacheService
@@ -1343,17 +1185,36 @@ namespace Pivot.CodeModule.ViewModels
                 Updated = DateTime.Now
             };
 
+            // Save to DB (this is the single source of truth)
             await _codeService.SaveSnippetAsync(newSnippet);
+            System.Diagnostics.Debug.WriteLine($"[CodeViewModel] CreateSnippetFromTextAsync: Saved snippet '{title}' to DB");
 
-            // Add to UI collection
-            if (Snippets != null)
+            // Update UI - insert at beginning of list
+            var dispatcher = App.Current.MainWindow?.DispatcherQueue;
+            if (dispatcher != null)
             {
-                var insertIndex = Snippets.Count > 0 && Snippets[0].Id == Guid.Empty ? 1 : 0;
-                Snippets.Insert(insertIndex, newSnippet);
+                dispatcher.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        if (Snippets == null)
+                        {
+                            Snippets = new ObservableCollection<CodeFile>();
+                        }
+                        Snippets.Insert(0, newSnippet);
+                        System.Diagnostics.Debug.WriteLine($"[CodeViewModel] CreateSnippetFromTextAsync: Added to UI, total count: {Snippets.Count}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[CodeViewModel] CreateSnippetFromTextAsync: UI update error: {ex.Message}");
+                    }
+                });
             }
             else
             {
-                Refresh();
+                // Direct update (if on UI thread already)
+                Snippets ??= new ObservableCollection<CodeFile>();
+                Snippets.Insert(0, newSnippet);
             }
 
             return newSnippet;

@@ -88,12 +88,17 @@ namespace Pivot.Services
             if (!string.IsNullOrWhiteSpace(criteria.Directory))
             {
                 var normalizedDir = criteria.Directory.Replace('/', '\\').TrimEnd('\\');
-                // Use LIKE for SQLite compatibility (StartsWith can have case-sensitivity issues)
-                var dirPattern = normalizedDir + "\\%";
-                System.Diagnostics.Debug.WriteLine($"[AssetQueryService] Directory filter: criteria='{criteria.Directory}', normalized='{normalizedDir}', pattern='{dirPattern}'");
+                // For SQLite LIKE: use forward slash or escape backslash properly
+                // SQLite doesn't require escaping backslash in LIKE by default, but let's use a more robust approach
+                // Match: exact directory OR any subdirectory (path starts with dir + backslash)
+                var dirPatternWithSeparator = normalizedDir + "\\%";
+                
+                _logger.LogDebug("Directory filter: normalized='{NormalizedDir}', pattern='{Pattern}'", 
+                    normalizedDir, dirPatternWithSeparator);
+                
                 query = query.Where(a => 
                     a.Directory == normalizedDir ||
-                    EF.Functions.Like(a.Directory, dirPattern));
+                    a.Directory.StartsWith(normalizedDir + "\\"));
             }
 
             // File name search (LIKE pattern)

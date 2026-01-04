@@ -168,6 +168,8 @@ namespace Pivot
             
             // New Code Logic Layer
             sc.AddScoped<CodeService>();
+            sc.AddSingleton<CodeTagService>();
+            sc.AddSingleton<CodeNavigationService>();
 
             
             // Phase 2: Query and Indexing Services
