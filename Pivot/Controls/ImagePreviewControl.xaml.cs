@@ -472,12 +472,82 @@ namespace Pivot.Controls
             // 閉じるボタン自体のクリックは無視（ボタンのClickイベントで処理）
             if (IsOrDescendant(e.OriginalSource as DependencyObject, ImagePreviewCloseButton)) return;
             
-            // ズーム後も正しく動作するように、ImagePreviewContainer（Border）の領域でチェック
-            // ImagePreviewImageだとズーム時に座標変換が正しく機能しない場合がある
-            if (IsPointInsideElement(e.GetCurrentPoint(overlay).Position, ImagePreviewContainer, overlay)) return;
+            // ツールバー（PatternPreviewToggle等）のクリックは無視
+            if (IsOrDescendant(e.OriginalSource as DependencyObject, PatternPreviewToggle)) return;
+            
+            var clickPos = e.GetCurrentPoint(overlay).Position;
+            
+            // ズームアウト時は画像の実際の表示サイズを計算してチェック
+            // ImagePreviewContainerではなく、実際のコンテンツ領域をチェック
+            if (IsPointInsideZoomedContent(clickPos, overlay)) return;
 
             Close();
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// ズームを考慮して、実際に表示されているコンテンツ領域内かどうか判定
+        /// </summary>
+        private bool IsPointInsideZoomedContent(Windows.Foundation.Point clickPoint, FrameworkElement overlay)
+        {
+            try
+            {
+                // Get the current zoom factor
+                var zoomFactor = ImagePreviewScrollViewer.ZoomFactor;
+                
+                // Get the visible content element (single image or pattern grid)
+                FrameworkElement? contentElement = _isPatternPreviewEnabled && PatternGrid.Visibility == Visibility.Visible
+                    ? PatternGrid
+                    : ImagePreviewImage;
+
+                if (contentElement == null) return false;
+                
+                // Get actual content size (before zoom)
+                var contentWidth = contentElement.ActualWidth;
+                var contentHeight = contentElement.ActualHeight;
+                
+                if (contentWidth <= 0 || contentHeight <= 0) return false;
+                
+                // Calculate zoomed size
+                var zoomedWidth = contentWidth * zoomFactor;
+                var zoomedHeight = contentHeight * zoomFactor;
+                
+                // Calculate content position within overlay
+                // The ScrollViewer centers content, so we need to find the actual displayed bounds
+                var scrollViewerTransform = ImagePreviewScrollViewer.TransformToVisual(overlay);
+                var scrollViewerBounds = scrollViewerTransform.TransformBounds(
+                    new Windows.Foundation.Rect(0, 0, ImagePreviewScrollViewer.ActualWidth, ImagePreviewScrollViewer.ActualHeight));
+                
+                // Calculate the visible content bounds within the ScrollViewer
+                // When zoomed out, content is centered within ScrollViewer
+                var viewportWidth = ImagePreviewScrollViewer.ViewportWidth;
+                var viewportHeight = ImagePreviewScrollViewer.ViewportHeight;
+                
+                // Content is centered when smaller than viewport
+                var contentLeftInViewport = Math.Max(0, (viewportWidth - zoomedWidth) / 2);
+                var contentTopInViewport = Math.Max(0, (viewportHeight - zoomedHeight) / 2);
+                
+                // Adjust for scroll position
+                contentLeftInViewport -= ImagePreviewScrollViewer.HorizontalOffset;
+                contentTopInViewport -= ImagePreviewScrollViewer.VerticalOffset;
+                
+                // Translate to overlay coordinates
+                var contentLeft = scrollViewerBounds.X + contentLeftInViewport;
+                var contentTop = scrollViewerBounds.Y + contentTopInViewport;
+                
+                var contentBounds = new Windows.Foundation.Rect(
+                    contentLeft, 
+                    contentTop, 
+                    Math.Min(zoomedWidth, viewportWidth), 
+                    Math.Min(zoomedHeight, viewportHeight));
+                
+                return contentBounds.Contains(clickPoint);
+            }
+            catch 
+            { 
+                // Fallback: use container bounds
+                return IsPointInsideElement(clickPoint, ImagePreviewContainer, overlay);
+            }
         }
 
         private bool IsPointInsideElement(Windows.Foundation.Point point, FrameworkElement element, FrameworkElement reference)

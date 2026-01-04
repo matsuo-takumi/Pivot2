@@ -9,31 +9,23 @@ namespace Pivot.Converters
     {
         public object Convert(object value, Type targetType, object parameter, string language)
         {
-            if (value is bool isSelected && isSelected)
+            // IMPORTANT: Return the SAME thickness for both selected and unselected states
+            // to prevent layout shift. The visual difference is achieved through BorderBrush color only.
+            double thickness = 2.0; // Default thickness
+            
+            try
             {
-                // parameterとしてViewModelのSelectionBorderThicknessが渡される場合
-                if (parameter is double thickness && thickness > 0)
+                var themeSettings = App.Current?.Services?.GetService(typeof(ThemeSettingsService)) as ThemeSettingsService;
+                if (themeSettings != null)
                 {
-                    return new Thickness(thickness);
+                    thickness = themeSettings.ImageSelectionBorderThickness;
                 }
-                
-                // ThemeSettingsServiceから設定値を取得
-                try
-                {
-                    var themeSettings = App.Current?.Services?.GetService(typeof(ThemeSettingsService)) as ThemeSettingsService;
-                    if (themeSettings != null)
-                    {
-                        var thicknessValue = themeSettings.ImageSelectionBorderThickness;
-                        return new Thickness(thicknessValue);
-                    }
-                }
-                catch { }
-                
-                // Fallback: Default 2px border
-                return new Thickness(2.0);
             }
-            // Not selected: 薄いボーダーでカードの境界を表示
-            return new Thickness(1.0);
+            catch { }
+            
+            // Always return the same thickness regardless of selection state
+            // This prevents layout reflow when selection changes
+            return new Thickness(thickness);
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, string language)

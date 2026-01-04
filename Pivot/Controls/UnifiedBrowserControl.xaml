@@ -17,56 +17,60 @@
         <converters:SelectionToBorderThicknessConverter x:Key="SelectionThicknessConverter"/>
         <!-- Card Template for Masonry/Grid layouts -->
         <DataTemplate x:Key="AssetCardTemplate" x:DataType="models:AssetEntity">
-            <Border x:Name="ItemBorder" 
-                    Margin="4"
-                    CornerRadius="6"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThicknessConverter}}"
-                    BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionConverter}}"
-                    CanDrag="True"
-                    DragStarting="ItemBorder_DragStarting">
-                <Grid Background="Transparent">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <!-- Placeholder background using DominantColor - Height set from AspectRatio -->
-                    <Border Grid.Row="0" 
-                            CornerRadius="6,6,0,0"
-                            MinHeight="120">
-                        <Border.Background>
-                            <SolidColorBrush Color="{x:Bind utils:ColorHelper.ParseColor(DominantColor), FallbackValue='#404040'}"/>
-                        </Border.Background>
+            <Grid Margin="2" CanDrag="True" DragStarting="ItemBorder_DragStarting">
+                <!-- Card content (no selection border here) -->
+                <Border x:Name="ItemBorder" 
+                        CornerRadius="4"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <Grid Background="Transparent">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         
-                        <!-- Thumbnail image with DecodePixelWidth for memory optimization -->
-                        <Image Stretch="UniformToFill"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center">
-                            <Image.Source>
-                                <BitmapImage UriSource="{x:Bind DisplayImageSource}"
-                                             DecodePixelWidth="300"
-                                             DecodePixelType="Logical"/>
-                            </Image.Source>
-                        </Image>
-                    </Border>
-                    
-                    <!-- File name footer -->
-                    <TextBlock Grid.Row="1" 
-                               Text="{x:Bind FileName}"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               TextTrimming="CharacterEllipsis"
-                               Padding="8,6"
-                               MaxLines="1"/>
-                </Grid>
-            </Border>
+                        <!-- Placeholder background using DominantColor -->
+                        <Border Grid.Row="0" 
+                                CornerRadius="4,4,0,0"
+                                MinHeight="120">
+                            <Border.Background>
+                                <SolidColorBrush Color="{x:Bind utils:ColorHelper.ParseColor(DominantColor), FallbackValue='#404040'}"/>
+                            </Border.Background>
+                            
+                            <!-- Thumbnail image -->
+                            <Image Stretch="UniformToFill"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center">
+                                <Image.Source>
+                                    <BitmapImage UriSource="{x:Bind DisplayImageSource}"
+                                                 DecodePixelWidth="300"
+                                                 DecodePixelType="Logical"/>
+                                </Image.Source>
+                            </Image>
+                        </Border>
+                        
+                        <!-- File name footer -->
+                        <TextBlock Grid.Row="1" 
+                                   Text="{x:Bind FileName}"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Padding="6,4"
+                                   MaxLines="1"/>
+                    </Grid>
+                </Border>
+                
+                <!-- Selection overlay border (on top of content, doesn't affect layout) -->
+                <Border CornerRadius="4"
+                        BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThicknessConverter}}"
+                        BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionConverter}}"
+                        IsHitTestVisible="False"/>
+            </Grid>
         </DataTemplate>
 
         <!-- List Template for detailed row view -->
         <DataTemplate x:Key="AssetListTemplate" x:DataType="models:AssetEntity">
             <Border x:Name="ItemBorder"
                     Margin="2" 
-                    Padding="8"
+                    Padding="6"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     CornerRadius="4"
                     BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThicknessConverter}}"
@@ -221,11 +225,11 @@
                            ElementPrepared="AssetRepeater_ElementPrepared"
                            ElementClearing="AssetRepeater_ElementClearing">
                 <ItemsRepeater.Layout>
-                    <UniformGridLayout MinItemWidth="200"
-                                       MinItemHeight="200"
-                                       MinRowSpacing="4"
-                                       MinColumnSpacing="4"
-                                       ItemsStretch="Fill"/>
+                    <UniformGridLayout MinItemWidth="180"
+                                       MinItemHeight="180"
+                                       MinRowSpacing="2"
+                                       MinColumnSpacing="2"
+                                       ItemsStretch="Uniform"/>
                 </ItemsRepeater.Layout>
             </ItemsRepeater>
         </ScrollViewer>
