@@ -4,258 +4,101 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:vm="using:Pivot.CodeModule.ViewModels"
-    xmlns:models="using:Pivot.CodeModule.Models"
-    xmlns:ctrls="using:Pivot.Controls"
-    xmlns:conv="using:Pivot.CodeModule.Converters"
-    xmlns:common="using:Pivot.Converters"
+    xmlns:local="using:Pivot.CodeModule.Controls"
+    xmlns:models="using:Pivot.Models"
+    xmlns:converters="using:Pivot.Converters"
     mc:Ignorable="d">
 
     <Page.Resources>
-        <conv:CardPanelSizeConverter x:Key="CardPanelSizeConverter" />
-        <common:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:CodeLayoutConverter x:Key="LayoutConverter"/>
+        <converters:BoolToIconConverter x:Key="BoolToIconConverter"/>
     </Page.Resources>
 
-    <Grid x:Name="CodePageRoot" RowDefinitions="Auto,*" Padding="0,12,12,12" PointerPressed="Root_PointerPressed">
-        <!-- Header row removed - tab title shown in main window -->
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <!-- NavigationView hosts the left pane and the main content to avoid gaps in Compact mode -->
-        <NavigationView x:Name="CodeNav" Grid.Row="1" PaneDisplayMode="Left" IsSettingsVisible="False" IsBackEnabled="False" IsBackButtonVisible="Collapsed" SelectionFollowsFocus="Disabled" ItemInvoked="CodeNav_ItemInvoked">
-            <NavigationView.PaneFooter>
-                <NavigationViewItem x:Name="TrashButton" Tag="trash" Content="ごみ箱" Icon="Delete" Tapped="TrashButton_Click" />
-            </NavigationView.PaneFooter>
-            <!-- Items will be populated in code-behind -->
-            <NavigationView.Content>
-                <!-- Editor area: toolbar + editor -->
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+        <!-- Sidebar: Filters -->
+        <Grid Grid.Column="0" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,1,0" Padding="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-                    <!-- Quick add (Google Keep style): type and blur to create card) -->
-                    <StackPanel Grid.Row="0">
-                        <Button Content="ごみ箱を空にする" 
-                                Command="{Binding EmptyTrashCommand}" 
-                                Visibility="{Binding IsTrashMode, Converter={StaticResource BooleanToVisibilityConverter}}" 
-                                HorizontalAlignment="Right" 
-                                Margin="0,0,0,8" 
-                                Style="{StaticResource AccentButtonStyle}"/>
-                        <InfoBar x:Name="QuickAddInfoBar" IsOpen="False" Severity="Success" Margin="0,0,0,8" Message="Saved" />
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,0,8">
-                            <TextBox x:Name="QuickAddBox" AcceptsReturn="False" TextWrapping="Wrap" PlaceholderText="Type code... First line becomes the title. Blur to save" GotFocus="QuickAddBox_GotFocus" LostFocus="QuickAddBox_LostFocus" KeyDown="QuickAddBox_KeyDown" FontFamily="Consolas" FontSize="12" MaxHeight="120" ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-                        </Border>
-                    </StackPanel>
+            <!-- Header with Layout Toggle -->
+            <Grid Grid.Row="0" Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Code Library" Style="{StaticResource TitleTextBlockStyle}" VerticalAlignment="Center"/>
+                
+                <Button Grid.Column="1" 
+                        Command="{x:Bind ViewModel.ListVM.ToggleLayoutCommand}"
+                        Background="Transparent" 
+                        BorderThickness="0"
+                        Padding="8">
+                    <FontIcon Glyph="{x:Bind ViewModel.ListVM.IsGridLayout, Mode=OneWay, Converter={StaticResource BoolToIconConverter}, ConverterParameter='Grid'}" FontSize="16"/>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Toggle Layout"/>
+                    </ToolTipService.ToolTip>
+                </Button>
+            </Grid>
+            
+            <TextBox Grid.Row="1" 
+                     PlaceholderText="Search snippets..." 
+                     Text="{x:Bind ViewModel.ListVM.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="0,0,0,12" />
 
-                    <!-- Main area: show cards when no selection, editor when selected -->
-                    <Grid Grid.Row="1">
-                        <Grid x:Name="CardPanel">
-                            <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollMode="Auto">
-                                <ListView x:Name="SnippetListView" ItemsSource="{Binding Snippets}" SelectedItem="{Binding SelectedSnippet, Mode=TwoWay}" SelectionMode="Single" CanDragItems="True" CanReorderItems="True" AllowDrop="True" IsItemClickEnabled="True" ItemClick="SnippetListView_ItemClick" DragItemsCompleted="SnippetListView_DragItemsCompleted">
-                                    <ListView.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <ItemsWrapGrid MaximumRowsOrColumns="4" Orientation="Horizontal" />
-                                        </ItemsPanelTemplate>
-                                    </ListView.ItemsPanel>
-                                    <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="models:CodeFile">
-                                        <Border x:Name="SnippetCardBorder" Width="260" Height="150" Margin="8" Padding="12" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                                            <Border.ContextFlyout>
-                                                <MenuFlyout>
-                                                    <MenuFlyoutItem Text="Delete" Click="CardDeleteFlyout_Click" Tag="{x:Bind Id}" />
-                                                    <MenuFlyoutItem Text="Restore" Click="CardRestoreFlyout_Click" Tag="{x:Bind Id}" />
-                                                </MenuFlyout>
-                                            </Border.ContextFlyout>
-                                            <Grid>
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="*" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
+            <!-- Tag List -->
+            <ListView Grid.Row="2" 
+                      ItemsSource="{x:Bind ViewModel.FilterVM.Tags, Mode=OneWay}"
+                      SelectionMode="Single"
+                      SelectedItem="{x:Bind ViewModel.FilterVM.SelectedTag, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Padding="0,4">
+                            <FontIcon Glyph="&#xE8EC;" FontSize="12" Opacity="0.6"/>
+                            <TextBlock Text="{x:Bind}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
 
-                                                <!-- Title row with delete icon on the right -->
-                                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
-                                                    <TextBlock Grid.Column="0" Text="{x:Bind Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
-                                                    <!-- Open directory button -->
-                                                    <Button Grid.Column="1" Click="CardOpenDirectoryButton_Click" Tag="{x:Bind Id}" Margin="6,0,0,0" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Open containing folder">
-                                                        <SymbolIcon Symbol="Folder"/>
-                                                    </Button>
-                                                    <!-- Copy button -->
-                                                    <Button Grid.Column="2" Click="CardCopyButton_Click" Tag="{x:Bind Id}" Margin="6,0,0,0" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Copy">
-                                                        <FontIcon Glyph="&#xE8C8;" FontFamily="Segoe MDL2 Assets"/>
-                                                    </Button>
-                                                    <!-- Delete button -->
-                                                    <Button Grid.Column="3" Click="CardDeleteButton_Click" Tag="{x:Bind Id}" Margin="6,0,0,0" Padding="4" MinWidth="28" MinHeight="28" ToolTipService.ToolTip="Delete">
-                                                        <FontIcon Glyph="&#xE74D;" FontFamily="Segoe MDL2 Assets"/>
-                                                    </Button>
-                                                </Grid>
+        <!-- Main Content -->
+        <Grid Grid.Column="1" Padding="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-                                                <TextBlock Grid.Row="1" Text="{x:Bind Content}" Foreground="{ThemeResource AppTextBodyBrush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxLines="6" />
+            <!-- Quick Add Bar (Google Keep style) -->
+            <local:QuickAddControl x:Name="QuickAddBar" 
+                                   Grid.Row="0" 
+                                   Margin="0,0,0,24"
+                                   SnippetCreated="QuickAddBar_SnippetCreated"/>
 
+            <!-- Snippet Grid -->
+            <ScrollViewer Grid.Row="1">
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.ListVM.Snippets, Mode=OneWay}"
+                               Layout="{x:Bind ViewModel.ListVM.IsGridLayout, Mode=OneWay, Converter={StaticResource LayoutConverter}}">
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="models:AssetEntity">
+                            <local:SnippetCardControl Asset="{x:Bind}" PointerPressed="SnippetCard_PointerPressed"/>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+        </Grid>
 
-                                                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                                                    <TextBlock Text="·" Foreground="{ThemeResource AppTextSecondaryBrush}" />
-                                                    <TextBlock Text="{x:Bind Updated}" Foreground="{ThemeResource AppTextSecondaryBrush}" FontSize="12" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
-                            </ScrollViewer>
-
-                            <!-- Scratchpad overlay moved into CardPanel so it covers the card area only -->
-                            <Grid x:Name="ScratchpadOverlay" Visibility="Collapsed" Background="#66000000" IsHitTestVisible="True" PointerPressed="ScratchpadOverlay_PointerPressed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <Border x:Name="ScratchpadContainer" MinWidth="320" MinHeight="240" MaxWidth="900" MaxHeight="640" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8" Padding="8" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                                        <Grid RowDefinitions="Auto,Auto,*,Auto" ColumnDefinitions="*">
-                                            <!-- Header: editable title -->
-                                            <Grid Grid.Row="0" ColumnDefinitions="*">
-                                                <TextBox x:Name="ScratchpadTitleBox" PlaceholderText="Title" TextChanged="ScratchpadTitleBox_TextChanged" KeyDown="ScratchpadTitleBox_KeyDown" FontSize="16" FontWeight="SemiBold" BorderThickness="0" />
-                                            </Grid>
-
-
-                                            <!-- Editor area (scrollable) -->
-                                            <Grid Grid.Row="2">
-                                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                                                    <TextBox x:Name="ScratchpadEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" TabIndex="20" IsTabStop="True" KeyDown="ScratchpadEditor_KeyDown" />
-                                                </ScrollViewer>
-                                                <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0" Background="Transparent" BorderThickness="0" ToolTipService.ToolTip="Copy" Command="{x:Bind ViewModel.CopyScratchpadContentCommand}">
-                                                    <Button.Content>
-                                                        <SymbolIcon Symbol="Copy" />
-                                                    </Button.Content>
-                                                </Button>
-                                            </Grid>
-
-                                            <!-- Footer: action buttons (separated from editor) -->
-                                            <Grid Grid.Row="3" Margin="0,8,0,0">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="12">
-                                                    <Button x:Name="TagMenuButton" ToolTipService.ToolTip="タグ" Background="Transparent" BorderThickness="0">
-                                                        <Button.Content>
-                                                            <SymbolIcon Symbol="Tag" />
-                                                        </Button.Content>
-                                                        <Button.Flyout>
-                                                            <Flyout Placement="Bottom">
-                                                                <Border Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" CornerRadius="10" Padding="12" MaxWidth="320">
-                                                                    <StackPanel Width="280" Spacing="8">
-                                                                        <AutoSuggestBox x:Name="TagFilterBox" PlaceholderText="タグを検索" TextChanged="TagFilterBox_TextChanged" />
-                                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                                                                            <TextBox
-                                                                                x:Name="NewTagBox"
-                                                                                PlaceholderText="新しいタグを入力"
-                                                                                Text="{x:Bind ViewModel.NewTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                                KeyDown="NewTagBox_KeyDown" />
-                                                                            <Button
-                                                                                Grid.Column="1"
-                                                                                Content="追加"
-                                                                                Padding="12,0"
-                                                                                VerticalAlignment="Center"
-                                                                                Command="{x:Bind ViewModel.AddTagCommand}" />
-                                                                        </Grid>
-                                                                        <ListView
-                                                                            ItemsSource="{x:Bind ViewModel.FilteredTags}"
-                                                                            SelectionMode="None"
-                                                                            MaxHeight="260"
-                                                                            HorizontalAlignment="Stretch"
-                                                                            ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                                                            ScrollViewer.VerticalScrollMode="Auto"
-                                                                            ScrollViewer.HorizontalScrollMode="Disabled"
-                                                                            IsItemClickEnabled="False">
-                                                                            <ListView.ItemsPanel>
-                                                                                <ItemsPanelTemplate>
-                                                                                    <ItemsStackPanel Orientation="Vertical" />
-                                                                                </ItemsPanelTemplate>
-                                                                            </ListView.ItemsPanel>
-                                                                            <ListView.ItemTemplate>
-                                                                                <DataTemplate x:DataType="models:TagItem">
-                                                                                    <ToggleButton
-                                                                                        HorizontalAlignment="Stretch"
-                                                                                        HorizontalContentAlignment="Left"
-                                                                                        Padding="8,6"
-                                                                                        Margin="0,2,0,0"
-                                                                                        IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
-                                                                                        Command="{Binding DataContext.ToggleTagCommand, ElementName=CodePageRoot}"
-                                                                                        CommandParameter="{Binding}">
-                                                                                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" HorizontalAlignment="Left">
-                                                                                            <FontIcon
-                                                                                                Glyph=""
-                                                                                                FontFamily="Segoe MDL2 Assets"
-                                                                                                Visibility="{Binding IsSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                                                                            <TextBlock Text="{x:Bind Name}" HorizontalAlignment="Left" />
-                                                                                        </StackPanel>
-                                                                                    </ToggleButton>
-                                                                                </DataTemplate>
-                                                                            </ListView.ItemTemplate>
-                                                                        </ListView>
-                                                                    </StackPanel>
-                                                                </Border>
-                                                            </Flyout>
-                                                        </Button.Flyout>
-                                                    </Button>
-                                                    <Button Background="Transparent" BorderThickness="0" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                        <SymbolIcon Symbol="Favorite" />
-                                                    </Button>
-                                                </StackPanel>
-                                                <Border Grid.Column="1" />
-                                                <Button x:Name="ScratchpadCloseButton" Margin="8,0,0,0" TabIndex="30" IsTabStop="True" Click="ScratchpadCloseButton_Click" Grid.Column="2" HorizontalAlignment="Right" Background="Transparent" BorderThickness="0">
-                                                    <Button.Content>
-                                                        <SymbolIcon Symbol="Cancel" />
-                                                    </Button.Content>
-                                                </Button>
-                                            </Grid>
-                                        </Grid>
-                                    </Border>
-                                </Grid>
-                            </Grid>
-
-                            <!-- Scratchpad copy toast -->
-                            <Border x:Name="ScratchpadCopyToast" Background="#CC000000" CornerRadius="6" Padding="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" IsHitTestVisible="False" Visibility="{x:Bind ViewModel.IsCopyToastVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBlock Text="コピーしました" Foreground="{ThemeResource AppTextHighlightBrush}" FontSize="12" FontWeight="SemiBold" />
-                            </Border>
-                            <!-- Small transient saved toast positioned at CardPanel bottom-right -->
-                            <Border x:Name="CardSavedOverlay" Visibility="Collapsed" Background="#CC000000" CornerRadius="6" Padding="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" IsHitTestVisible="False">
-                                <TextBlock Text="Saved" Foreground="{ThemeResource AppTextHighlightBrush}" FontSize="12" FontWeight="SemiBold" />
-                            </Border>
-
-                        </Grid>
-
-                        <Grid x:Name="EditorPanel" Visibility="Collapsed">
-                            <Border Background="Transparent" Padding="8">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="EditorHeader" Text="Code" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                        <Button x:Name="EditorCopyButton" Content="Copy" Click="EditorCopyButton_Click" />
-                                        <Button Content="Collapse" Click="EditorCollapseButton_Click" Margin="8,0,0,0" />
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-
-                            <!-- Tag picker moved into main editor area so tags appear in the main section instead of the overlay -->
-                            <!-- Tag picker area removed pending new implementation -->
-
-                            <TextBox x:Name="CodeEditor" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" TabIndex="10" IsTabStop="True" KeyDown="CodeEditor_KeyDown" GotFocus="CodeEditor_GotFocus" LostFocus="CodeEditor_LostFocus" />
-                            <Border x:Name="PlaceholderBorder" Background="#80FFFFFF" Visibility="Collapsed">
-                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <TextBlock Text="Select a snippet or create a new one" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-                                    <TextBlock Text="左の一覧から選択するか「＋ New」を押してください" Foreground="{ThemeResource AppTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,0" />
-                                </StackPanel>
-                            </Border>
-                        </Grid>
-                    </Grid>
-                </Grid>
-            </NavigationView.Content>
-        </NavigationView>
-        <!-- (Original overlay removed; scratchpad overlay moved into CardPanel) -->
+        <!-- Overlay Editor -->
+        <local:OverlayEditorControl Grid.ColumnSpan="2"
+                                    Visibility="{x:Bind ViewModel.EditorVM.IsEditing, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                    DataContext="{x:Bind ViewModel.EditorVM}"/>
     </Grid>
 </Page>
-
-

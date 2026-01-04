@@ -197,13 +197,23 @@ namespace Pivot.Services
 				
 				int total = allFiles.Count;
 
+				// ===== BATCH PRELOAD: Load existing assets once instead of N queries =====
+				Dictionary<string, AssetEntity> existingAssetsCache;
+				using (var scope = _serviceProvider.CreateScope())
+				{
+					var repository = scope.ServiceProvider.GetRequiredService<Pivot.Repositories.IAssetRepository>();
+					existingAssetsCache = await repository.GetExistingAssetsInDirectoryAsync(rootPath, cancellationToken);
+					_logger.LogInformation("Preloaded {Count} existing assets for batch lookup", existingAssetsCache.Count);
+				}
+
 				int processed = 0;
 				// Use Parallel.ForEachAsync to control scan parallelism
 				await Parallel.ForEachAsync(allFiles, new ParallelOptions { MaxDegreeOfParallelism = scanDop, CancellationToken = cancellationToken }, async (path, ct) =>
 				{
 					try
 					{
-						await ProcessFileChangeAsync(path, ct);
+						// Use cached lookup instead of DB query per file
+						await ProcessFileWithCacheAsync(path, existingAssetsCache, ct);
 					}
 					catch (Exception ex)
 					{
@@ -555,6 +565,150 @@ namespace Pivot.Services
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Error processing file: {Path}", path);
+		}
+	}
+
+	/// <summary>
+	/// Optimized file processing for initial scan using pre-loaded cache (eliminates N+1 queries).
+	/// </summary>
+	private async Task ProcessFileWithCacheAsync(string path, Dictionary<string, AssetEntity> existingAssetsCache, CancellationToken ct)
+	{
+		try
+		{
+			// Use scoped repository for DB writes only
+			using var scope = _serviceProvider.CreateScope();
+			var repository = scope.ServiceProvider.GetRequiredService<Pivot.Repositories.IAssetRepository>();
+
+			if (!File.Exists(path))
+			{
+				return; // Silently skip missing files during initial scan
+			}
+
+			var fileInfo = new FileInfo(path);
+			string ext = fileInfo.Extension ?? string.Empty;
+
+			// Determine asset kind
+			var kind = FileScannerExtensions.DetermineAssetKind(ext);
+			if (kind == AssetKind.General)
+				return; // Skip non-asset files
+
+			// Quick check: O(1) lookup from pre-loaded cache instead of DB query
+			existingAssetsCache.TryGetValue(path, out var existing);
+			if (existing != null && 
+			    existing.FileSize == fileInfo.Length && 
+			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc)
+			{
+				return; // No change
+			}
+
+			// Hash calculation
+			string? hash = existing?.Hash;
+			if (existing == null || existing.FileSize != fileInfo.Length)
+			{
+				_hashSemaphore ??= new SemaphoreSlim(Math.Max(1, Environment.ProcessorCount - 1));
+				await _hashSemaphore.WaitAsync(ct);
+				try
+				{
+					using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096 * 4);
+					using var sha = SHA256.Create();
+					var hashBytes = await sha.ComputeHashAsync(stream, ct);
+					hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+				}
+				finally
+				{
+					_hashSemaphore.Release();
+				}
+			}
+
+			// Extract metadata for images
+			int? width = null;
+			int? height = null;
+			double? aspectRatio = null;
+			string? thumbnailPath = null;
+			
+			// Code specific metadata
+			string? language = null;
+			string? tool = null;
+			string? contentIndex = null;
+
+			if (kind == AssetKind.Image)
+			{
+				try
+				{
+					var imageInfo = await SixLabors.ImageSharp.Image.IdentifyAsync(path);
+					if (imageInfo != null)
+					{
+						width = imageInfo.Width;
+						height = imageInfo.Height;
+						aspectRatio = height > 0 ? (double)width / height : null;
+					}
+				}
+				catch (Exception dimEx)
+				{
+					_logger.LogDebug(dimEx, "Failed to read image dimensions: {Path}", path);
+				}
+
+				// Generate thumbnail
+				if (_thumbnailService != null)
+				{
+					try
+					{
+						thumbnailPath = await _thumbnailService.GetOrCreateThumbnailAsync(path, 300, 200);
+					}
+					catch (Exception thumbEx)
+					{
+						_logger.LogDebug(thumbEx, "Failed to generate thumbnail: {Path}", path);
+					}
+				}
+			}
+			else if (kind == AssetKind.Script || kind == AssetKind.Code)
+			{
+				try
+				{
+					if (fileInfo.Length < 1024 * 1024) 
+					{
+						contentIndex = await File.ReadAllTextAsync(path, ct);
+					}
+					language = ext.TrimStart('.').ToLowerInvariant();
+				}
+				catch (Exception codeEx)
+				{
+					_logger.LogDebug(codeEx, "Failed to read code content: {Path}", path);
+				}
+			}
+
+			// Create or update AssetEntity
+			var asset = new AssetEntity
+			{
+				FilePath = path,
+				FileName = Path.GetFileName(path),
+				Directory = Path.GetDirectoryName(path) ?? string.Empty,
+				Extension = ext,
+				FileSize = fileInfo.Length,
+				LastModifiedUtc = fileInfo.LastWriteTimeUtc,
+				Hash = hash,
+				Kind = kind,
+				Width = width,
+				Height = height,
+				AspectRatio = aspectRatio,
+				ThumbnailPath = thumbnailPath,
+				ThumbnailGeneratedAt = thumbnailPath != null ? DateTime.UtcNow : null,
+				Language = language,
+				Tool = tool,
+				ContentIndex = contentIndex
+			};
+
+			await repository.UpsertAsync(asset, ct);
+
+			// Notify UI
+			var changeType = existing == null 
+				? ItemChangeData<AssetEntity>.ChangeType.Added 
+				: ItemChangeData<AssetEntity>.ChangeType.Updated;
+			_assetChangeBuffer.Enqueue(new ItemChangeData<AssetEntity>(changeType, asset));
+		}
+		catch (Exception ex)
+		{
+			_logger.LogError(ex, "Error processing file with cache: {Path}", path);
 		}
 	}
 

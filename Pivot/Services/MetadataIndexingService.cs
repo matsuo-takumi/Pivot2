@@ -30,6 +30,16 @@ namespace Pivot.Services
         private const int MaxDegreeOfParallelism = 4;
         private const int ThumbnailSizeForColorExtraction = 32;
 
+        /// <summary>
+        /// Supported image extensions for ImageSharp processing.
+        /// Files with other extensions will be skipped to avoid unnecessary exceptions.
+        /// </summary>
+        private static readonly HashSet<string> SupportedImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".gif", ".bmp",
+            ".webp", ".tga", ".tiff", ".tif", ".qoi", ".pbm"
+        };
+
         public MetadataIndexingService(
             ILogger<MetadataIndexingService> logger,
             IServiceProvider serviceProvider)
@@ -58,6 +68,7 @@ namespace Pivot.Services
                     var db = scope.ServiceProvider.GetRequiredService<PivotDbContext>();
                     pendingIds = await db.Assets
                         .Where(a => !a.IsDeleted && 
+                                   a.Kind == AssetKind.Image &&  // Only process images
                                    (a.Width == null || a.Height == null || a.AspectRatio == null))
                         .OrderBy(a => a.Id)
                         .Take(BatchSize)
@@ -144,6 +155,14 @@ namespace Pivot.Services
 
                 if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
                 {
+                    return null;
+                }
+
+                // Check if file extension is supported by ImageSharp
+                var extension = Path.GetExtension(filePath);
+                if (!SupportedImageExtensions.Contains(extension))
+                {
+                    // Silently skip unsupported formats (no warning log)
                     return null;
                 }
 

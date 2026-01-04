@@ -191,17 +191,17 @@ namespace Pivot.ViewModels
                     {
                         // Use CodeService to remove tag from all snippets
                         var codeService = App.Current.Services.GetService(typeof(Pivot.Services.CodeService)) as Pivot.Services.CodeService;
-                        if (codeService != null)
+                        var codeTagService = App.Current.Services.GetService(typeof(Pivot.Services.CodeTagService)) as Pivot.Services.CodeTagService;
+
+                        if (codeService != null && codeTagService != null)
                         {
                             var all = await codeService.GetAllSnippetsAsync();
-                            foreach (var snippet in all.Where(s => s.Tags?.Contains(tagName, StringComparison.OrdinalIgnoreCase) == true))
+                            foreach (var snippet in all)
                             {
-                                var tags = snippet.Tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                                    .Select(t => t.Trim())
-                                    .Where(t => !string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase))
-                                    .Distinct(StringComparer.OrdinalIgnoreCase);
-                                snippet.Tags = string.Join(", ", tags);
-                                await codeService.SaveSnippetAsync(snippet);
+                                if (codeTagService.RemoveTagFromSnippet(snippet, tagName))
+                                {
+                                    await codeService.SaveSnippetAsync(snippet);
+                                }
                             }
                         }
                     }

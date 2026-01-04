@@ -1,0 +1,120 @@
+<UserControl
+    x:Class="Pivot.CodeModule.Controls.OverlayEditorControl"
+    x:Name="Root"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:Pivot.CodeModule.ViewModels"
+    xmlns:converters="using:Pivot.Converters"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance Type=vm:CodeEditorViewModel}">
+
+    <UserControl.Resources>
+        <converters:TagSelectionConverter x:Key="TagSelectionConverter"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- Dimmed Background -->
+        <Border Background="#80000000" 
+                PointerPressed="Background_PointerPressed"/>
+
+        <!-- Editor Card -->
+        <Grid HorizontalAlignment="Center" 
+              VerticalAlignment="Center"
+              Width="800"
+              Height="600"
+              CornerRadius="12"
+              Background="{ThemeResource LayerFillColorDefaultBrush}"
+              BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+              BorderThickness="1"
+              Padding="24">
+              <Grid.Shadow>
+                  <ThemeShadow />
+              </Grid.Shadow>
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/> <!-- Title -->
+                <RowDefinition Height="*"/>    <!-- Text Editor -->
+                <RowDefinition Height="Auto"/> <!-- Tags -->
+                <RowDefinition Height="Auto"/> <!-- Actions -->
+            </Grid.RowDefinitions>
+
+            <!-- Title -->
+            <TextBox Text="{x:Bind ViewModel.CurrentSnippet.FileName, Mode=TwoWay}"
+                     PlaceholderText="Title"
+                     FontSize="24"
+                     FontWeight="SemiBold"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Margin="0,0,0,16"/>
+
+            <!-- Code Editor -->
+            <TextBox Text="{x:Bind ViewModel.TextContent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     Grid.Row="1"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     FontFamily="Cascadia Code, Consolas, monospace"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     Margin="0,0,0,16"/>
+
+            <!-- Tags (Placeholder for now, need Smart Tags logic later) -->
+            <!-- Tags -->
+            <StackPanel Grid.Row="2" Margin="0,0,0,16">
+                 <TextBlock Text="Tags" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,0,0,8"/>
+                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <!-- Existing Tags Selection -->
+                        <ItemsRepeater x:Name="ExistingTagsRepeater"
+                                       ItemsSource="{x:Bind ViewModel.AvailableTags, Mode=OneWay}"
+                                       ElementPrepared="ExistingTagsRepeater_ElementPrepared">
+                            <ItemsRepeater.Layout>
+                                <StackLayout Orientation="Horizontal" Spacing="8"/>
+                            </ItemsRepeater.Layout>
+                            <ItemsRepeater.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <ToggleButton Content="{x:Bind}" 
+                                                  CornerRadius="16"
+                                                  FontSize="12"
+                                                  Padding="12,4"
+                                                  Click="Tag_Click"/>
+                                </DataTemplate>
+                            </ItemsRepeater.ItemTemplate>
+                        </ItemsRepeater>
+                        
+                        <!-- Add New Tag -->
+                        <Grid>
+                             <TextBox x:Name="NewTagBox" 
+                                      PlaceholderText="+ New Tag" 
+                                      CornerRadius="16"
+                                      BorderThickness="0"
+                                      Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                      KeyDown="NewTagBox_KeyDown"
+                                      MinWidth="80"/>
+                        </Grid>
+                    </StackPanel>
+                 </ScrollViewer>
+            </StackPanel>
+
+            <!-- Actions -->
+            <Grid Grid.Row="3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Content="Delete" 
+                        Foreground="Red"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Command="{x:Bind ViewModel.DeleteCommand}"/>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Content="Close" Click="CloseButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

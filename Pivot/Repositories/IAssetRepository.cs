@@ -35,5 +35,13 @@ namespace Pivot.Repositories
         /// Delete all assets in the specified directory and its subdirectories.
         /// </summary>
         Task<int> DeleteByDirectoryAsync(string directoryPath, CancellationToken ct = default);
+
+        /// <summary>
+        /// Get all existing assets under a directory for batch lookup (initial scan optimization).
+        /// Returns dictionary keyed by FilePath for O(1) lookup.
+        /// </summary>
+        Task<Dictionary<string, AssetEntity>> GetExistingAssetsInDirectoryAsync(
+            string directoryPath, 
+            CancellationToken ct = default);
     }
 }

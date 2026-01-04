@@ -197,6 +197,9 @@ namespace Pivot
             sc.AddSingleton<FilterService>();
 
             sc.AddTransient<CodeViewModel>();
+            sc.AddTransient<CodeFilterViewModel>();
+            sc.AddTransient<CodeListViewModel>();
+            sc.AddTransient<CodeEditorViewModel>();
             
             Services = sc.BuildServiceProvider();
 

@@ -155,5 +155,24 @@ namespace Pivot.Repositories
 
             return assetsToDelete.Count;
         }
+
+        public async Task<Dictionary<string, AssetEntity>> GetExistingAssetsInDirectoryAsync(
+            string directoryPath, 
+            CancellationToken ct = default)
+        {
+            var normalizedDir = directoryPath.Replace('/', '\\').TrimEnd('\\');
+            
+            // Get all assets in directory and subdirectories
+            var assets = await _context.Assets
+                .AsNoTracking()  // Read-only for performance
+                .Where(a => !a.IsDeleted && a.Directory.StartsWith(normalizedDir))
+                .ToListAsync(ct);
+
+            // Build dictionary keyed by FilePath (case-insensitive for Windows)
+            return assets.ToDictionary(
+                a => a.FilePath, 
+                a => a, 
+                StringComparer.OrdinalIgnoreCase);
+        }
     }
 }

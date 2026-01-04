@@ -1,0 +1,113 @@
+<UserControl
+    x:Class="Pivot.CodeModule.Controls.QuickAddControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    GotFocus="UserControl_GotFocus"
+    LostFocus="UserControl_LostFocus"
+    KeyDown="UserControl_KeyDown">
+
+    <Grid x:Name="RootGrid"
+          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+          BorderThickness="1"
+          CornerRadius="8"
+          Padding="16">
+
+        <!-- Collapsed State -->
+        <TextBox x:Name="CollapsedTextBox"
+                 PlaceholderText="新しいコードを追加..."
+                 BorderThickness="0"
+                 Background="Transparent"
+                 GotFocus="CollapsedTextBox_GotFocus"/>
+
+        <!-- Expanded State -->
+        <Grid x:Name="ExpandedPanel" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title -->
+            <TextBox x:Name="TitleBox"
+                     Grid.Row="0"
+                     PlaceholderText="タイトル (任意)"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     FontWeight="SemiBold"
+                     Margin="0,0,0,8"/>
+
+            <!-- Code Editor -->
+            <TextBox x:Name="CodeEditor"
+                     Grid.Row="1"
+                     PlaceholderText="コードを入力..."
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     FontFamily="Cascadia Code, Consolas, monospace"
+                     MinHeight="120"
+                     MaxHeight="300"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     Margin="0,0,0,12"/>
+
+            <!-- Tags Section (Google Keep style) -->
+            <Grid Grid.Row="2" Margin="0,0,0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Existing Tags (Toggle Chips) -->
+                <ItemsRepeater x:Name="ExistingTagsRepeater" Grid.Row="0" Margin="0,0,0,8">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Orientation="Horizontal" Spacing="6"/>
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <ToggleButton Content="{x:Bind}" 
+                                          Padding="8,4" 
+                                          CornerRadius="12"
+                                          FontSize="12"
+                                          MinHeight="28"
+                                          MinWidth="0"/>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+
+                <!-- New Tag Input -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                    <TextBox x:Name="NewTagBox"
+                             PlaceholderText="+ 新しいタグ"
+                             Width="150"
+                             Height="28"
+                             Padding="8,2"
+                             FontSize="12"
+                             BorderThickness="1"
+                             CornerRadius="12"
+                             KeyDown="NewTagBox_KeyDown"/>
+                    <Button x:Name="AddTagButton" 
+                            Content="追加"
+                            Height="28"
+                            Padding="12,2"
+                            FontSize="12"
+                            CornerRadius="12"
+                            Click="AddTagButton_Click"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Action Buttons -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <TextBlock Text="Ctrl+Enter で保存" 
+                           VerticalAlignment="Center"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Margin="0,0,12,0"/>
+                <Button x:Name="CancelButton" Content="キャンセル" Click="CancelButton_Click"/>
+                <Button x:Name="SaveButton" Content="保存" Style="{StaticResource AccentButtonStyle}" Click="SaveButton_Click"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

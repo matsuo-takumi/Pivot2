@@ -57,18 +57,18 @@ namespace Pivot.Controls
                         return;
                     }
 
-                    // Fallback: try code service and derive tags from snippets
+                    // Fallback: try code service and derive tags using CodeTagService
                     var codeService = App.Current.Services.GetService(typeof(Pivot.Services.CodeService)) as Pivot.Services.CodeService;
-                    if (codeService == null)
+                    var codeTagService = App.Current.Services.GetService(typeof(CodeTagService)) as CodeTagService;
+
+                    if (codeService != null && codeTagService != null)
                     {
                         TagItems.ItemsSource = null;
+                        _ = LoadCodeTagsAsync(codeService, codeTagService);
                         return;
                     }
 
-                    // Use async loading (will be triggered by separate async initialization)
-                    // For now, return empty and let the page trigger async loading if needed
                     TagItems.ItemsSource = null;
-                    _ = LoadCodeTagsAsync(codeService);
                     return;
                 }
                 catch { TagItems.ItemsSource = null; return; }
@@ -116,22 +116,18 @@ namespace Pivot.Controls
         /// <summary>
         /// Async helper to load code tags without blocking the UI thread.
         /// </summary>
-        private async Task LoadCodeTagsAsync(Pivot.Services.CodeService codeService)
+        private async Task LoadCodeTagsAsync(Pivot.Services.CodeService codeService, CodeTagService tagService)
         {
             try
             {
                 var all = await codeService.GetAllSnippetsAsync();
-                var derived = all
-                    .SelectMany(f => (f.Tags ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()))
-                    .Where(s => !string.IsNullOrWhiteSpace(s))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Select(n => new TagItem { Name = n, IsSelected = false })
-                    .ToList();
-                TagItems.ItemsSource = derived;
+                // Use CodeTagService to logic
+                var names = tagService.CollectAvailableTags(all);
+
+                var items = names.Select(n => new TagItem { Name = n, IsSelected = false }).ToList();
+                TagItems.ItemsSource = items;
             }
             catch { TagItems.ItemsSource = null; }
         }
     }
 }
-
-
