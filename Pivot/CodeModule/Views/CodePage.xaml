@@ -7,12 +7,14 @@
     xmlns:local="using:Pivot.CodeModule.Controls"
     xmlns:models="using:Pivot.Models"
     xmlns:converters="using:Pivot.Converters"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    x:Name="RootPage">
 
     <Page.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <converters:CodeLayoutConverter x:Key="LayoutConverter"/>
         <converters:BoolToIconConverter x:Key="BoolToIconConverter"/>
+        <converters:SelectionToBackgroundConverter x:Key="SelectionToBackgroundConverter"/>
     </Page.Resources>
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
@@ -34,10 +36,40 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="Code Library" Style="{StaticResource TitleTextBlockStyle}" VerticalAlignment="Center"/>
                 
+                <!-- Delete Selected Button (Visible when Selection Mode) -->
                 <Button Grid.Column="1" 
+                        Command="{x:Bind ViewModel.ListVM.DeleteSelectedCommand}"
+                        Visibility="{x:Bind ViewModel.ListVM.IsSelectionMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                        Background="Transparent" 
+                        BorderThickness="0"
+                        Padding="8"
+                        Margin="0,0,4,0">
+                    <FontIcon Glyph="&#xE74D;" FontSize="16" Foreground="Red"/>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Delete Selected"/>
+                    </ToolTipService.ToolTip>
+                </Button>
+
+                <!-- Select Mode Toggle -->
+                <Button Grid.Column="2" 
+                        Command="{x:Bind ViewModel.ListVM.ToggleSelectionModeCommand}"
+                        Background="{x:Bind ViewModel.ListVM.IsSelectionMode, Mode=OneWay, Converter={StaticResource SelectionToBackgroundConverter}}"
+                        BorderThickness="0"
+                        Padding="8"
+                        Margin="0,0,4,0">
+                    <FontIcon Glyph="&#xE762;" FontSize="16"/>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Select Items"/>
+                    </ToolTipService.ToolTip>
+                </Button>
+
+                <!-- Layout Toggle -->
+                <Button Grid.Column="3" 
                         Command="{x:Bind ViewModel.ListVM.ToggleLayoutCommand}"
                         Background="Transparent" 
                         BorderThickness="0"

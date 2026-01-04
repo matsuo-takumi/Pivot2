@@ -46,10 +46,62 @@ namespace Pivot.CodeModule.ViewModels
             IsGridLayout = !IsGridLayout;
         }
 
+        [ObservableProperty]
+        private bool _isGridLayout = true;
+
+        [ObservableProperty]
+        private bool _isSelectionMode = false;
+
+        [RelayCommand]
+        private void ToggleLayout()
+        {
+            IsGridLayout = !IsGridLayout;
+        }
+
+        [RelayCommand]
+        private void ToggleSelectionMode()
+        {
+            IsSelectionMode = !IsSelectionMode;
+            if (!IsSelectionMode)
+            {
+                // Clear selection when exiting mode
+                foreach (var s in Snippets) s.IsSelected = false;
+            }
+        }
+
+        [RelayCommand]
+        private async Task DeleteSelectedAsync()
+        {
+            var selected = Snippets.Where(s => s.IsSelected).ToList();
+            if (!selected.Any()) return;
+
+            // Confirm? (Skip for now)
+
+            foreach (var item in selected)
+            {
+                // Logic to delete item (call CodeService)
+                // We should ideally have a BatchDelete in CodeService
+                await _codeService.DeleteSnippetAsync(item);
+                Snippets.Remove(item);
+                _allSnippets.Remove(item);
+            }
+            IsSelectionMode = false;
+        }
+
         public async Task LoadSnippetsAsync()
         {
             var data = await _codeService.GetAllSnippetsAsync();
-            _allSnippets = data ?? new List<AssetEntity>();
+            if (data != null)
+            {
+                // Sort by SortOrder, then UpdatedAt
+                _allSnippets = data.OrderBy(s => s.SortOrder)
+                                   .ThenByDescending(s => s.UpdatedAt)
+                                   .ToList();
+            }
+            else
+            {
+                _allSnippets = new List<AssetEntity>();
+            }
             ApplyFilters();
         }
 
@@ -90,17 +142,82 @@ namespace Pivot.CodeModule.ViewModels
             Snippets = new ObservableCollection<AssetEntity>(query);
         }
         
-        partial void OnSelectedSnippetChanged(AssetEntity? value)
+        [RelayCommand]
+        private async Task MoveItemUpAsync(AssetEntity item)
         {
-            // Notify EditorVM via Messenger or Parent Coordinator?
-            // Messenger is decoupled. 
-            // We can send a generic AssetSelectionMessage or specific CodeSelectionMessage.
-            // For now, let's assume Coordinator (CodeViewModel) observes this property or we send a message.
-            // Sending message is cleanest for separation.
-            // Or EditorVM subscribes to this VM? No.
-            
-            // Let's implement "CodeSnippetSelectedMessage" later if needed.
-            // For now, just property change.
+            if (item == null || !_allSnippets.Contains(item)) return;
+
+            var index = Snippets.IndexOf(item);
+            if (index > 0)
+            {
+                var prevItem = Snippets[index - 1];
+                
+                // Swap SortOrder
+                // If SortOrder is 0, we might need to initialize them
+                // Simple logic: Swap SortOrder. BUT if they are equal, we need to distinguish.
+                // Better approach: Assign new SortOrders based on current view index.
+                
+                // For simple "Swap":
+                // If SortOrders are same, decrement target item's SortOrder.
+                
+                int itemOrder = item.SortOrder;
+                int prevOrder = prevItem.SortOrder;
+                
+                if (itemOrder == prevOrder)
+                {
+                    // If equal, force prevItem to be higher (larger value? Sort is Ascending or Descending?)
+                    // CodeListViewModel sorts by SortOrder (Ascending presumed from OrderBy(s => s.SortOrder))
+                    // So to move UP (visual up, index 0), SortOrder must be SMALLER.
+                    item.SortOrder = prevOrder - 1;
+                }
+                else
+                {
+                    item.SortOrder = prevOrder;
+                    prevItem.SortOrder = itemOrder;
+                }
+
+                // Update UI Collection (Swap)
+                Snippets.Move(index, index - 1);
+
+                // Save both
+                await _codeService.SaveSnippetAsync(item);
+                await _codeService.SaveSnippetAsync(prevItem);
+            }
+        }
+
+        [RelayCommand]
+        private async Task MoveItemDownAsync(AssetEntity item)
+        {
+            if (item == null || !_allSnippets.Contains(item)) return;
+
+            var index = Snippets.IndexOf(item);
+            if (index < Snippets.Count - 1)
+            {
+                var nextItem = Snippets[index + 1];
+
+                // Swap SortOrder
+                // To move DOWN (visual down, index increase), SortOrder must be LARGER.
+                
+                int itemOrder = item.SortOrder;
+                int nextOrder = nextItem.SortOrder;
+
+                if (itemOrder == nextOrder)
+                {
+                    item.SortOrder = nextOrder + 1;
+                }
+                else
+                {
+                    item.SortOrder = nextOrder;
+                    nextItem.SortOrder = itemOrder;
+                }
+
+                // Update UI Collection
+                Snippets.Move(index, index + 1);
+
+                // Save both
+                await _codeService.SaveSnippetAsync(item);
+                await _codeService.SaveSnippetAsync(nextItem);
+            }
         }
     }
 }
