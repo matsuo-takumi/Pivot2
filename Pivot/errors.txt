@@ -1,0 +1,1 @@
+﻿   1:7>C:\Users\takum\.nuget\packages\microsoft.windows.sdk.buildtools.msix\1.7.20250829.1\build\Microsoft.Windows.SDK.BuildTools.MSIX.Packaging.targets(3866,5): error : Packaged .NET applications with an app host exe cannot be ProcessorArchitecture neutral. Please specify a RuntimeIdentifier or a Platform other than AnyCPU. [D:\Repositry\Product\Pivot2\Pivot\Pivot.csproj]

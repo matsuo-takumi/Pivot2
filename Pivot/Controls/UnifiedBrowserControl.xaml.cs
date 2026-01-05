@@ -42,7 +42,6 @@ namespace Pivot.Controls
         public event EventHandler<AssetEntity>? ItemClicked;
         public event EventHandler<AssetEntity>? ItemDoubleClicked;
         public event EventHandler<(AssetEntity Asset, Windows.Foundation.Point Position)>? ItemRightTapped;
-        public event DragItemsStartingEventHandler? ItemDragStarting;
 
         public UnifiedBrowserControl()
         {

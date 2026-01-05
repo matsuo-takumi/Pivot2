@@ -47,16 +47,7 @@ namespace Pivot.CodeModule.ViewModels
         }
 
         [ObservableProperty]
-        private bool _isGridLayout = true;
-
-        [ObservableProperty]
         private bool _isSelectionMode = false;
-
-        [RelayCommand]
-        private void ToggleLayout()
-        {
-            IsGridLayout = !IsGridLayout;
-        }
 
         [RelayCommand]
         private void ToggleSelectionMode()

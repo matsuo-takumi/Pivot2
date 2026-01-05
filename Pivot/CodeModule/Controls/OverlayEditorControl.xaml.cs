@@ -34,7 +34,7 @@ namespace Pivot.CodeModule.Controls
             }
         }
 
-        private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (e.PropertyName == "CurrentSnippet")
             {
@@ -108,7 +108,7 @@ namespace Pivot.CodeModule.Controls
                     {
                         ViewModel.Tags.Add(tag);
                     }
-                    (sender as TextBox).Text = string.Empty;
+                    if (sender is TextBox textBox) textBox.Text = string.Empty;
                 }
             }
         }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Pivot.Data;
 
@@ -10,9 +11,11 @@ using Pivot.Data;
 namespace Pivot.Data.Migrations
 {
     [DbContext(typeof(PivotDbContext))]
-    partial class PivotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260105_AddSortOrderToAsset")]
+    partial class AddSortOrderToAsset
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.0");
@@ -38,6 +41,10 @@ namespace Pivot.Data.Migrations
                     b.Property<string>("Directory")
                         .IsRequired()
                         .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DominantColor")
+                        .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Extension")
@@ -74,22 +81,18 @@ namespace Pivot.Data.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("Rating")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("DominantColor")
-                        .HasMaxLength(10)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Language")
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("LastModifiedUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("ThumbnailGeneratedAt")
                         .HasColumnType("TEXT");
@@ -113,6 +116,9 @@ namespace Pivot.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AspectRatio")
+                        .HasDatabaseName("IX_Asset_AspectRatio");
+
                     b.HasIndex("Directory");
 
                     b.HasIndex("FilePath")
@@ -123,9 +129,6 @@ namespace Pivot.Data.Migrations
                     b.HasIndex("Kind");
 
                     b.HasIndex("LastModifiedUtc");
-
-                    b.HasIndex("AspectRatio")
-                        .HasDatabaseName("IX_Asset_AspectRatio");
 
                     b.HasIndex("Rating")
                         .HasDatabaseName("IX_Asset_Rating");

@@ -11,6 +11,12 @@
     <UserControl.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <converters:JsonTagsToCollectionConverter x:Key="JsonTagsToCollectionConverter"/>
+        <MenuFlyout x:Key="CardContextMenu">
+            <MenuFlyoutItem Text="Move Up" Command="{Binding DataContext.ViewModel.ListVM.MoveItemUpCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}"/>
+            <MenuFlyoutItem Text="Move Down" Command="{Binding DataContext.ViewModel.ListVM.MoveItemDownCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}"/>
+            <MenuFlyoutSeparator />
+            <MenuFlyoutItem Text="Delete" Command="{Binding DataContext.ViewModel.ListVM.DeleteSelectedCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}" Foreground="Red"/>
+        </MenuFlyout>
     </UserControl.Resources>
 
     <Grid CornerRadius="8" 
@@ -19,17 +25,6 @@
           BorderThickness="1"
           Padding="12"
           ContextFlyout="{StaticResource CardContextMenu}">
-        
-        <Grid.Resources>
-            <FlyoutBase.AttachedFlyout>
-                <MenuFlyout x:Key="CardContextMenu">
-                    <MenuFlyoutItem Text="Move Up" Command="{Binding DataContext.ViewModel.ListVM.MoveItemUpCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}"/>
-                    <MenuFlyoutItem Text="Move Down" Command="{Binding DataContext.ViewModel.ListVM.MoveItemDownCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}"/>
-                    <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="Delete" Command="{Binding DataContext.ViewModel.ListVM.DeleteSelectedCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}" Foreground="Red"/>
-                </MenuFlyout>
-            </FlyoutBase.AttachedFlyout>
-        </Grid.Resources>
 
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

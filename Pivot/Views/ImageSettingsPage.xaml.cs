@@ -49,7 +49,7 @@ namespace Pivot.Views
             if (SelectionColorPicker != null)
             {
                 var converter = new HexToColorConverter();
-                if (converter.Convert(ViewModel.SelectionColor, typeof(Windows.UI.Color), null, null) is Windows.UI.Color color)
+                if (converter.Convert(ViewModel.SelectionColor, typeof(Windows.UI.Color), null!, null!) is Windows.UI.Color color)
                 {
                     SelectionColorPicker.Color = color;
                 }

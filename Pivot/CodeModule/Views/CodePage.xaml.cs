@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Navigation;
 using Pivot.CodeModule.ViewModels;
 using Pivot.CodeModule.Controls;
 using Microsoft.Extensions.DependencyInjection;
+using System;
 using System.Threading.Tasks;
 using Pivot.Models;
 
@@ -26,7 +27,8 @@ namespace Pivot.CodeModule.Views
             saveAccelerator.Invoked += SaveAccelerator_Invoked;
             this.KeyboardAccelerators.Add(saveAccelerator);
             // Resolve ViewModel from App Services
-            ViewModel = ((App)Application.Current).Services.GetService<CodeViewModel>();
+            ViewModel = ((App)Application.Current).Services.GetService<CodeViewModel>() 
+                ?? throw new InvalidOperationException("CodeViewModel not registered in DI");
             this.DataContext = ViewModel;
         }
 
