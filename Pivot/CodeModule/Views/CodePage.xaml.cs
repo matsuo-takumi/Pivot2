@@ -86,6 +86,9 @@ namespace Pivot.CodeModule.Views
 
             if (newSnippet != null)
             {
+                // Small delay to ensure DB transaction commits
+                await Task.Delay(100);
+                
                 // Refresh list to show new item
                 await ViewModel.ListVM.LoadSnippetsAsync();
                 // Also refresh tags
@@ -97,10 +100,11 @@ namespace Pivot.CodeModule.Views
 
         private async void SnippetCard_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
         {
-             if (sender is FrameworkElement fe && fe.DataContext is AssetEntity asset)
-             {
-                 await ViewModel.EditorVM.SetSnippetAsync(asset);
-             }
+            // SnippetCardControl uses Asset dependency property, not DataContext
+            if (sender is SnippetCardControl card && card.Asset != null)
+            {
+                await ViewModel.EditorVM.SetSnippetAsync(card.Asset);
+            }
         }
     }
 }

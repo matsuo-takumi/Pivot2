@@ -16,12 +16,15 @@
           CornerRadius="8"
           Padding="16">
 
-        <!-- Collapsed State -->
-        <TextBox x:Name="CollapsedTextBox"
-                 PlaceholderText="新しいコードを追加..."
-                 BorderThickness="0"
-                 Background="Transparent"
-                 GotFocus="CollapsedTextBox_GotFocus"/>
+        <!-- Collapsed State: Use a clickable placeholder instead of TextBox to avoid focus issues -->
+        <Border x:Name="CollapsedPlaceholder"
+                Background="Transparent"
+                PointerPressed="CollapsedPlaceholder_PointerPressed"
+                Padding="0,8">
+            <TextBlock Text="新しいコードを追加..."
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       IsHitTestVisible="False"/>
+        </Border>
 
         <!-- Expanded State -->
         <Grid x:Name="ExpandedPanel" Visibility="Collapsed">

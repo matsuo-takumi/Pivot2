@@ -51,7 +51,7 @@ namespace Pivot.CodeModule.Controls
             if (_isExpanded) return;
             _isExpanded = true;
 
-            CollapsedTextBox.Visibility = Visibility.Collapsed;
+            CollapsedPlaceholder.Visibility = Visibility.Collapsed;
             ExpandedPanel.Visibility = Visibility.Visible;
 
             // Focus on code editor (Google Keep style: focus on content)
@@ -64,7 +64,7 @@ namespace Pivot.CodeModule.Controls
             _isExpanded = false;
 
             ExpandedPanel.Visibility = Visibility.Collapsed;
-            CollapsedTextBox.Visibility = Visibility.Visible;
+            CollapsedPlaceholder.Visibility = Visibility.Visible;
 
             if (clearFields)
             {
@@ -100,8 +100,9 @@ namespace Pivot.CodeModule.Controls
 
         #region Event Handlers
 
-        private void CollapsedTextBox_GotFocus(object sender, RoutedEventArgs e)
+        private void CollapsedPlaceholder_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            // Direct click handler - no focus issues
             Expand();
         }
 
@@ -112,20 +113,27 @@ namespace Pivot.CodeModule.Controls
 
         private void UserControl_LostFocus(object sender, RoutedEventArgs e)
         {
-            // Check if focus moved outside this control
-            var focusedElement = FocusManager.GetFocusedElement(this.XamlRoot);
-            if (focusedElement is DependencyObject dep)
+            // Defer the collapse check to allow focus to settle
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
             {
-                var current = dep;
-                while (current != null)
+                // Check if still expanded
+                if (!_isExpanded) return;
+                
+                // Check if focus moved outside this control
+                var focusedElement = FocusManager.GetFocusedElement(this.XamlRoot);
+                if (focusedElement is DependencyObject dep)
                 {
-                    if (current == this) return; // Still inside
-                    current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
+                    var current = dep;
+                    while (current != null)
+                    {
+                        if (current == this) return; // Still inside
+                        current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
+                    }
                 }
-            }
 
-            // Focus moved outside - collapse without saving
-            Collapse(clearFields: true);
+                // Focus moved outside - collapse without saving
+                Collapse(clearFields: true);
+            });
         }
 
         private void OnKeyDownHandler(object sender, KeyRoutedEventArgs e)

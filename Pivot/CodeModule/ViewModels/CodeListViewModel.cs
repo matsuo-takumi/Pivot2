@@ -61,22 +61,38 @@ namespace Pivot.CodeModule.ViewModels
         }
 
         [RelayCommand]
-        private async Task DeleteSelectedAsync()
+        private async Task DeleteSelectedAsync(AssetEntity? singleItem = null)
         {
+            // If a single item is passed (from context menu), delete just that item
+            if (singleItem != null)
+            {
+                await DeleteItemInternalAsync(singleItem);
+                return;
+            }
+            
+            // Otherwise delete all selected items
             var selected = Snippets.Where(s => s.IsSelected).ToList();
             if (!selected.Any()) return;
 
-            // Confirm? (Skip for now)
-
             foreach (var item in selected)
             {
-                // Logic to delete item (call CodeService)
-                // We should ideally have a BatchDelete in CodeService
-                await _codeService.DeleteSnippetAsync(item);
-                Snippets.Remove(item);
-                _allSnippets.Remove(item);
+                await DeleteItemInternalAsync(item);
             }
             IsSelectionMode = false;
+        }
+
+        [RelayCommand]
+        private async Task DeleteItemAsync(AssetEntity item)
+        {
+            if (item == null) return;
+            await DeleteItemInternalAsync(item);
+        }
+        
+        private async Task DeleteItemInternalAsync(AssetEntity item)
+        {
+            await _codeService.DeleteSnippetAsync(item);
+            Snippets.Remove(item);
+            _allSnippets.Remove(item);
         }
 
         public async Task LoadSnippetsAsync()
