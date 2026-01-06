@@ -32,6 +32,26 @@ namespace Pivot
 
 			// メッセージの受信を開始
 			Services.GetRequiredService<IMessenger>().Register<ThemeChangedMessage>(this);
+			
+			// Handle unhandled exceptions to work around WinUI SystemBackdrop bug
+			this.UnhandledException += App_UnhandledException;
+		}
+		
+		private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+		{
+			// Workaround for WinUI bug: MicaBackdrop and SystemBackdrop-based classes throw
+			// "ArgumentException: The parameter is incorrect" during theme changes.
+			// This happens in OnDefaultSystemBackdropConfigurationChanged internally.
+			if (e.Exception is ArgumentException argEx && 
+			    argEx.Message.Contains("The parameter is incorrect"))
+			{
+				System.Diagnostics.Debug.WriteLine($"[App] Suppressed SystemBackdrop theme change exception: {argEx.Message}");
+				e.Handled = true;
+				return;
+			}
+			
+			// Log other unhandled exceptions for debugging
+			System.Diagnostics.Debug.WriteLine($"[App] UnhandledException: {e.Exception}");
 		}
 
 		protected override async void OnLaunched(LaunchActivatedEventArgs args)
