@@ -104,6 +104,14 @@ namespace Pivot.Controls
                 {
                     _viewModel.IsLoading = isLoading;
                 }
+                
+                // When loading completes, invalidate MasonryLayout to recalculate with correct aspect ratios
+                // This fixes the issue where images appear squished on initial load because
+                // AspectRatio data wasn't available when the layout was first calculated.
+                if (!isLoading && AssetRepeater.Layout is MasonryLayout masonryLayout)
+                {
+                    masonryLayout.Invalidate();
+                }
             });
         }
 
