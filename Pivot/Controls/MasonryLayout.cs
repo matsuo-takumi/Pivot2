@@ -79,7 +79,8 @@ namespace Pivot.Controls
             // Loop through ALL items to determine visible range and realizing them
             // Optimization: Could use binary search if sorted by Y, but Masonry isn't strictly sorted by Y.
             // Linear scan O(N) is fast enough for 10k items (calculating intersection).
-            for (int i = 0; i < context.ItemCount; i++)
+            int itemsToProcess = Math.Min(context.ItemCount, _layoutCache.Count);
+            for (int i = 0; i < itemsToProcess; i++)
             {
                 var rect = _layoutCache[i];
                 
@@ -117,7 +118,8 @@ namespace Pivot.Controls
         {
             var realizationRect = context.RealizationRect;
             
-            for (int i = 0; i < context.ItemCount; i++)
+            int itemsToProcess = Math.Min(context.ItemCount, _layoutCache.Count);
+            for (int i = 0; i < itemsToProcess; i++)
             {
                 var rect = _layoutCache[i];
                  // Check intersection again to arrange only realized items
@@ -169,10 +171,14 @@ namespace Pivot.Controls
 
                 // 2. Calculate Item Height
                 double aspect = 1.0;
-                var item = context.GetItemAt(i) as TemplateItem;
-                if (item != null && item.AspectRatio > 0)
+                var item = context.GetItemAt(i);
+                if (item is TemplateItem templateItem && templateItem.AspectRatio > 0)
                 {
-                    aspect = item.AspectRatio;
+                    aspect = templateItem.AspectRatio;
+                }
+                else if (item is AssetEntity assetEntity && assetEntity.AspectRatio.HasValue && assetEntity.AspectRatio.Value > 0)
+                {
+                    aspect = assetEntity.AspectRatio.Value;
                 }
                 
                 double h = (actualColumnWidth / aspect) + FooterHeight;

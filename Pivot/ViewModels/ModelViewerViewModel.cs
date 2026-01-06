@@ -49,10 +49,20 @@ namespace Pivot.ViewModels
 
         private void OnThemeChanged(Pivot.Messages.ThemeChangedMessage message)
         {
-            // テーマ変更時はMatchThemeの場合のみ再適用
-            if (_backgroundMode == ViewportBackgroundMode.MatchTheme)
+            try
             {
-                ApplyThemeBasedBackground();
+                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] OnThemeChanged: {message.Value}, _backgroundMode={_backgroundMode}");
+                // テーマ変更時はMatchThemeの場合のみ再適用
+                if (_backgroundMode == ViewportBackgroundMode.MatchTheme)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] Applying theme-based background");
+                    ApplyThemeBasedBackground();
+                    System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] ApplyThemeBasedBackground completed");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] OnThemeChanged ERROR: {ex}");
             }
         }
         

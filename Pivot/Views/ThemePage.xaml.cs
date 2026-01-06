@@ -8,15 +8,17 @@ namespace Pivot.Views
 {
     public sealed partial class ThemePage : UserControl
     {
+        public ThemeViewModel ViewModel { get; }
+
         public ThemePage()
         {
-            this.InitializeComponent();
+            // Set ThemeViewModel BEFORE InitializeComponent() because x:Bind expressions
+            // are evaluated during InitializeComponent() and need ViewModel to be available
+            ViewModel = App.Current.Services.GetRequiredService<ThemeViewModel>();
+            this.DataContext = ViewModel;
             
-            // Set ThemeViewModel as DataContext to manage all theme-related settings
-            this.DataContext = App.Current.Services.GetRequiredService<ThemeViewModel>();
+            this.InitializeComponent();
         }
-
-        public ThemeViewModel ViewModel => (ThemeViewModel)this.DataContext;
 
         private void BackdropButton_Click(object sender, RoutedEventArgs e)
         {

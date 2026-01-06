@@ -222,7 +222,8 @@ namespace Pivot.Services
         {
             _appTheme = theme;
             await _settingsStore.UpsertAsync("AppTheme", theme.ToString());
-            _messenger.Send(new ThemeChangedMessage(theme));
+            // Note: Do NOT send ThemeChangedMessage here - the ViewModel sends it with EffectiveTheme
+            // Sending it twice causes race conditions and potential crashes
         }
 
         public async Task SetBackdropTypeAsync(BackdropType type)

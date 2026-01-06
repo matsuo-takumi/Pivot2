@@ -444,11 +444,12 @@ namespace Pivot.Controls
             // Update ItemsRepeater layout
             AssetRepeater.Layout = layoutType switch
             {
-                LayoutType.Masonry => new StaggeredLayout
+                LayoutType.Masonry => new MasonryLayout
                 {
-                    DesiredColumnWidth = 220,
+                    ColumnWidth = 220,
                     ColumnSpacing = 8,
-                    RowSpacing = 8
+                    RowSpacing = 8,
+                    FooterHeight = 32
                 },
                 LayoutType.Grid => new UniformGridLayout
                 {

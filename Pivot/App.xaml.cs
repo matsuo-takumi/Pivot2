@@ -208,10 +208,10 @@ namespace Pivot
 
 		public void Receive(ThemeChangedMessage message)
 		{
-			if (MainWindow != null && MainWindow.Content is FrameworkElement root)
-			{
-				root.RequestedTheme = message.Value;
-			}
+			// Note: MainWindow.Receive already handles RequestedTheme setting.
+			// Setting it twice can cause WinUI internal issues during theme transitions.
+			// So we do nothing here to avoid the duplicate setting.
+			System.Diagnostics.Debug.WriteLine($"[App] Receive(ThemeChangedMessage): {message.Value} (delegated to MainWindow)");
 		}
 	}
 }

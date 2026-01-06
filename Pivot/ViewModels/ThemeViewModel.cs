@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Pivot.Messages;
 using Pivot.Models;
 using Pivot.Services;
+using System;
 using System.Threading.Tasks;
 
 namespace Pivot.ViewModels
@@ -42,20 +43,40 @@ namespace Pivot.ViewModels
         partial void OnAppThemeChanged(ElementTheme value)
         {
             if (_isLoadingThemeSettings) return;
-            Utilities.SafeAsync.FireAndForget(
-                _themeSettings.SetThemeAsync(value),
-                nameof(OnAppThemeChanged));
-            // Send EffectiveTheme (resolved to Light/Dark) so UI applies correctly
-            _messenger.Send(new ThemeChangedMessage(_themeSettings.EffectiveTheme));
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"[ThemeViewModel] OnAppThemeChanged: {value}");
+                Utilities.SafeAsync.FireAndForget(
+                    _themeSettings.SetThemeAsync(value),
+                    nameof(OnAppThemeChanged));
+                // Send EffectiveTheme (resolved to Light/Dark) so UI applies correctly
+                var effectiveTheme = _themeSettings.EffectiveTheme;
+                System.Diagnostics.Debug.WriteLine($"[ThemeViewModel] Sending ThemeChangedMessage: {effectiveTheme}");
+                _messenger.Send(new ThemeChangedMessage(effectiveTheme));
+                System.Diagnostics.Debug.WriteLine($"[ThemeViewModel] ThemeChangedMessage sent successfully");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ThemeViewModel] OnAppThemeChanged ERROR: {ex}");
+            }
         }
 
         partial void OnAppBackdropTypeChanged(BackdropType value)
         {
             if (_isLoadingThemeSettings) return;
-            Utilities.SafeAsync.FireAndForget(
-                _themeSettings.SetBackdropTypeAsync(value),
-                nameof(OnAppBackdropTypeChanged));
-            _messenger.Send(new BackdropTypeChangedMessage(value));
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"[ThemeViewModel] OnAppBackdropTypeChanged: {value}");
+                Utilities.SafeAsync.FireAndForget(
+                    _themeSettings.SetBackdropTypeAsync(value),
+                    nameof(OnAppBackdropTypeChanged));
+                _messenger.Send(new BackdropTypeChangedMessage(value));
+                System.Diagnostics.Debug.WriteLine($"[ThemeViewModel] BackdropTypeChangedMessage sent successfully");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ThemeViewModel] OnAppBackdropTypeChanged ERROR: {ex}");
+            }
         }
 
         private void LoadCurrentSettings()
@@ -65,25 +86,23 @@ namespace Pivot.ViewModels
         }
 
         [RelayCommand]
-        private async Task SetAppTheme(ElementTheme theme)
+        private void SetAppTheme(ElementTheme theme)
         {
+            // Just set the property - OnAppThemeChanged handles the rest
+            // This avoids duplicate message sending and race conditions
             if (AppTheme != theme)
             {
                 AppTheme = theme;
-                await _themeSettings.SetThemeAsync(theme);
-                // Send EffectiveTheme (resolved to Light/Dark) so UI applies correctly
-                _messenger.Send(new ThemeChangedMessage(_themeSettings.EffectiveTheme));
             }
         }
 
         [RelayCommand]
-        private async Task SetAppBackdropType(BackdropType type)
+        private void SetAppBackdropType(BackdropType type)
         {
+            // Just set the property - OnAppBackdropTypeChanged handles the rest
             if (AppBackdropType != type)
             {
                 AppBackdropType = type;
-                await _themeSettings.SetBackdropTypeAsync(type);
-                _messenger.Send(new BackdropTypeChangedMessage(type));
             }
         }
     }

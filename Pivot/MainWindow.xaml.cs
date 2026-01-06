@@ -155,14 +155,22 @@ namespace Pivot
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine($"[MainWindow] Receive(ThemeChangedMessage): {message.Value}");
                 if (Content is FrameworkElement root)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[MainWindow] Setting RequestedTheme to {message.Value}");
                     root.RequestedTheme = message.Value;
+                    System.Diagnostics.Debug.WriteLine($"[MainWindow] RequestedTheme set successfully");
                 }
                 // Update backdrop theme to match
+                System.Diagnostics.Debug.WriteLine($"[MainWindow] Calling _backdropService.UpdateTheme");
                 _backdropService.UpdateTheme(message.Value);
+                System.Diagnostics.Debug.WriteLine($"[MainWindow] _backdropService.UpdateTheme completed");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MainWindow] Receive(ThemeChangedMessage) ERROR: {ex}");
+            }
         }
 
         public void SetSystemBackdrop(BackdropType type)

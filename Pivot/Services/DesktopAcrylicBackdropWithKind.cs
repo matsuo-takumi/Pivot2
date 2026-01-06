@@ -74,6 +74,24 @@ namespace Pivot.Services
             }
         }
 
+        /// <summary>
+        /// Override to handle theme changes safely. Without this override, WinUI's base implementation
+        /// throws ArgumentException ("The parameter is incorrect") during theme changes.
+        /// </summary>
+        protected override void OnDefaultSystemBackdropConfigurationChanged(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
+        {
+            // Do NOT call base.OnDefaultSystemBackdropConfigurationChanged - it throws an error.
+            // Instead, we handle theme changes ourselves through OnActualThemeChanged.
+            // This is because we use DesktopAcrylicController directly instead of relying
+            // on the default system backdrop configuration mechanism.
+            
+            // Update configuration based on current theme if needed
+            if (_configurationSource != null && xamlRoot?.Content is FrameworkElement rootElement)
+            {
+                _configurationSource.Theme = ConvertToSystemBackdropTheme(rootElement.ActualTheme);
+            }
+        }
+
         private static SystemBackdropTheme ConvertToSystemBackdropTheme(ElementTheme theme)
         {
             return theme switch
