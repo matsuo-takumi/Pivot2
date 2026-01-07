@@ -197,6 +197,12 @@ namespace Pivot.Controls
 
         public void Invalidate()
         {
+            // Clear layout cache to force full recalculation
+            // This is critical when the collection changes (e.g., directory filter)
+            // even if the item count happens to be the same
+            _layoutCache.Clear();
+            _lastAvailableWidth = -1;
+            _lastItemCount = -1;
             InvalidateMeasure();
         }
     }
