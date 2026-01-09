@@ -24,7 +24,7 @@
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
                            FontSize="12"/>
                 
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                         CornerRadius="8" 
                         Padding="16">
                     <Grid RowSpacing="12">

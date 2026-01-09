@@ -14,7 +14,10 @@
     Background="Transparent">
 
     <Page.Resources>
-        <!-- Note: UnifiedBrowserControl handles all display, these converters are no longer needed -->
+        <!-- NavigationViewのコンテンツ領域を透明にするリソース -->
+        <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent"/>
+        <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent"/>
+        <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent"/>
     </Page.Resources>
 
     <Grid Padding="0,12,12,12">
@@ -27,7 +30,8 @@
                         OpenPaneLength="260"
                         CompactPaneLength="48"
                         SelectionChanged="FolderNavigationView_SelectionChanged"
-                        PaneTitle="フォルダー">
+                        PaneTitle="フォルダー"
+                        Background="Transparent">
             <NavigationView.PaneFooter>
                 <StackPanel Spacing="0" Margin="0,8,0,12">
                     <!-- Show All Button -->

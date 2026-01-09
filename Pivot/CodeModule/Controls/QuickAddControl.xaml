@@ -10,7 +10,7 @@
     KeyDown="UserControl_KeyDown">
 
     <Grid x:Name="RootGrid"
-          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+          Background="{ThemeResource SubtleFillColorSecondaryBrush}"
           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
           BorderThickness="1"
           CornerRadius="8"

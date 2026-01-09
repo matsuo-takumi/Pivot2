@@ -55,7 +55,7 @@
                     Margin="0,0,16,16"
                     Padding="12,8"
                     CornerRadius="8"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     Visibility="Collapsed">

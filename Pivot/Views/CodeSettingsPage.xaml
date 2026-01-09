@@ -25,7 +25,7 @@
                                 <ComboBoxItem Content="Markdown (.md)" Tag="Markdown" />
                             </ComboBox>
                         </StackPanel>
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Output directory for saved snippets" FontWeight="SemiBold" />
                                 <StackPanel Orientation="Horizontal" Spacing="8">

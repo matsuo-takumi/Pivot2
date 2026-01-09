@@ -20,7 +20,7 @@
     </UserControl.Resources>
 
     <Grid CornerRadius="8" 
-          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
           BorderThickness="1"
           Padding="12"

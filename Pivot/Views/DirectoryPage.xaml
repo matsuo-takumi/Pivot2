@@ -31,7 +31,7 @@
         
         <!-- Section 1: Asset Directories -->
         <Border Grid.Column="0" MinWidth="360"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
@@ -99,7 +99,7 @@
 
         <!-- Section 2: Image Directories -->
         <Border Grid.Column="1" MinWidth="360"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
@@ -167,7 +167,7 @@
 
         <!-- Section 3: Project Directories -->
         <Border Grid.Column="2" MinWidth="360" Margin="10,0,10,0"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
@@ -235,7 +235,7 @@
         
         <!-- Section 4: Code Directories -->
         <Border Grid.Column="3" MinWidth="360"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="8"

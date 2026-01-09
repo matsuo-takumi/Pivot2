@@ -23,6 +23,10 @@ namespace Pivot.Controls
         private Windows.Foundation.Point _lastMousePosition;
         private bool _isPatternPreviewEnabled = false;
 
+        // 固定サイズ設定: すべての画像で統一されたズームと表示サイズ
+        private const double FixedDisplaySize = 800.0;       // 初期表示時の最大サイズ (幅または高さ)
+        private const double MaxZoomDisplaySize = 3200.0;    // ズーム時の最大表示サイズ (幅または高さ)
+
         public bool IsOpen => ImagePreviewOverlay.Visibility == Visibility.Visible;
 
         public ImagePreviewControl()
@@ -308,11 +312,12 @@ namespace Pivot.Controls
             var windowWidth = ActualWidth > 0 ? ActualWidth : 1200;
             var windowHeight = ActualHeight > 0 ? ActualHeight : 800;
 
-            var maxDisplayWidth = Math.Max(400, windowWidth * 0.9);
-            var maxDisplayHeight = Math.Max(300, windowHeight * 0.9);
+            // 固定表示サイズを使用
+            var availableWidth = Math.Min(windowWidth * 0.9, FixedDisplaySize);
+            var availableHeight = Math.Min(windowHeight * 0.9, FixedDisplaySize);
             
-            var wRatio = maxDisplayWidth / actualW;
-            var hRatio = maxDisplayHeight / actualH;
+            var wRatio = availableWidth / actualW;
+            var hRatio = availableHeight / actualH;
             var fitZoom = Math.Min(wRatio, hRatio);
             if (fitZoom > 1.0) fitZoom = 1.0;
             fitZoom = Math.Max(fitZoom, 0.1);
@@ -406,56 +411,52 @@ namespace Pivot.Controls
             var actualH = _currentPreviewBitmap.PixelHeight;
             if (actualW == 0 || actualH == 0) return;
 
+            // 固定表示領域サイズ（すべての画像で一律）
             var windowWidth = ActualWidth > 0 ? ActualWidth : 1200;
             var windowHeight = ActualHeight > 0 ? ActualHeight : 800;
-
-            // マージンを考慮した最大表示エリア (画面の98%: ほとんどいっぱいまで表示)
-            var maxDisplayWidth = Math.Max(400, windowWidth * 0.98);
-            var maxDisplayHeight = Math.Max(300, windowHeight * 0.98);
             
-            // フィット倍率の計算
-            var wRatio = maxDisplayWidth / actualW;
-            var hRatio = maxDisplayHeight / actualH;
+            // 表示領域: ウィンドウから固定マージンを引いたサイズ（一律）
+            var fixedViewportWidth = windowWidth - 60;   // 左右30pxずつ
+            var fixedViewportHeight = windowHeight - 100; // 上60px、下40px
+            
+            // フィット倍率の計算 (画像全体が表示されるように)
+            var wRatio = fixedViewportWidth / actualW;
+            var hRatio = fixedViewportHeight / actualH;
             var fitZoom = Math.Min(wRatio, hRatio);
-             
+            
             // 小さい画像は拡大しない (最大1.0倍)
             if (fitZoom > 1.0) fitZoom = 1.0;
             
-            // ScrollViewerのMinZoomFactorを、フィット倍率が0.1未満の場合にも対応できるように更新
-            // fitZoomが極端に小さい場合 (例: 0.05)、MinZoomFactorが0.1だとフィットしないため
-            if (fitZoom < ImagePreviewScrollViewer.MinZoomFactor)
-            {
-                ImagePreviewScrollViewer.MinZoomFactor = (float)fitZoom;
-            }
-
-            var displayW = actualW * fitZoom;
-            var displayH = actualH * fitZoom;
-
-            // コンテナサイズをフィットサイズに設定 (余白がクリックに反応しないように)
-            ImagePreviewContainer.Width = displayW;
-            ImagePreviewContainer.Height = displayH;
+            // MinZoomFactorを先に設定（fitZoomより小さい場合に備えて）
+            var minZoom = Math.Min(fitZoom, 0.1);
+            ImagePreviewScrollViewer.MinZoomFactor = (float)minZoom;
             
-            // 画像自体は本来のピクセルサイズを設定し、ScrollViewerのズーム機能に任せる
+            // 最大ズーム倍率を計算
+            var maxDimension = Math.Max(actualW, actualH);
+            var maxZoom = MaxZoomDisplaySize / maxDimension;
+            maxZoom = Math.Max(maxZoom, 1.0);
+            maxZoom = Math.Min(maxZoom, 10.0);
+            ImagePreviewScrollViewer.MaxZoomFactor = (float)maxZoom;
+            
+            // 画像のサイズを設定（元のピクセルサイズ）
             ImagePreviewImage.Width = actualW;
             ImagePreviewImage.Height = actualH;
 
-            // レイアウト更新後にChangeViewを呼ぶことで確実に適用させる
+            // レイアウト更新を強制
             ImagePreviewScrollViewer.UpdateLayout();
-
-            // 現在「フィット表示」に近い状態、または初期表示なら、新しいフィット倍率を適用
-            // _currentZoomFactorは初期値1.0だが、ShowAsyncでリセットされる
-            bool isNearFit = Math.Abs(_previewImageAspectRatio - fitZoom) < 0.001 || _currentZoomFactor == 0;
             
-            // 簡易的に、リサイズ時は常にフィットさせる（ユーザー体験として一般的）
-            // ただしユーザーが拡大中なら維持したいが、コンテナサイズが変わると維持も難しい
-            if (!ImagePreviewScrollViewer.ChangeView(null, null, (float)fitZoom, true))
+            // ズームを適用（非同期で確実に適用、位置はScrollViewerの中央配置に任せる）
+            var zoomToApply = (float)fitZoom;
+            DispatcherQueue.TryEnqueue(() =>
             {
-                 // ChangeViewが失敗した場合のリトライ（稀にある）または同期呼び出し的な処理が必要か検討
-                 // ここでは念のためDisableAnimationでもう一度試行
-                 ImagePreviewScrollViewer.ChangeView(null, null, (float)fitZoom, true);
-            }
+                try
+                {
+                    // スクロール位置はnullでScrollViewerの中央配置に任せる
+                    ImagePreviewScrollViewer.ChangeView(null, null, zoomToApply, true);
+                }
+                catch { }
+            });
             
-            // 次回の比較用にフィット倍率を保存
             _previewImageAspectRatio = fitZoom;
         }
 

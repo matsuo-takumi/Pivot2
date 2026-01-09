@@ -60,7 +60,7 @@
             </StackPanel>
             
             <!-- Gesture Reference Card -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                     CornerRadius="8" 
                     Padding="16">
                 <StackPanel Spacing="12">

@@ -56,7 +56,7 @@
                                     </ComboBox>
                                 </Grid>
                                 
-                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                                         CornerRadius="4" Padding="8">
                                     <Grid ColumnSpacing="12" RowSpacing="2">
                                         <Grid.ColumnDefinitions>

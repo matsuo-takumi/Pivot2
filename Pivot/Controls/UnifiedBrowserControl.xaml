@@ -21,7 +21,7 @@
                 <!-- Card content (no selection border here) -->
                 <Border x:Name="ItemBorder" 
                         CornerRadius="4"
-                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                     <Grid Background="Transparent">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
@@ -71,7 +71,7 @@
             <Border x:Name="ItemBorder"
                     Margin="2" 
                     Padding="6"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                     CornerRadius="4"
                     BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThicknessConverter}}"
                     BorderBrush="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionConverter}}"
@@ -141,7 +141,7 @@
 
         <!-- FilterBar -->
         <Border Grid.Row="0"
-                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                 Padding="12,8"
                 CornerRadius="6"
                 Margin="0,0,0,8">
@@ -257,7 +257,7 @@
 
         <!-- Status bar -->
         <Border Grid.Row="2"
-                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                 Padding="12,8"
                 CornerRadius="6"
                 Margin="0,8,0,0">

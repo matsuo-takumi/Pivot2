@@ -84,6 +84,7 @@
             <TextBox Grid.Row="1" 
                      PlaceholderText="Search snippets..." 
                      Text="{x:Bind ViewModel.ListVM.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     Background="Transparent"
                      Margin="0,0,0,12" />
 
             <!-- Tag List -->

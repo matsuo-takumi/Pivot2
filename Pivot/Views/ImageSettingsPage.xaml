@@ -34,7 +34,7 @@
                         <TextBlock Text="Customize the appearance of selected image items in the Image page." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
 
                         <!-- Select Section -->
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 CornerRadius="12"

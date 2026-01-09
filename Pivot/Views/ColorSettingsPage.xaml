@@ -35,7 +35,7 @@
                         <TextBlock Text="Customize the colors used for each semantic text role that responds to overlay lightness." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
 
                         <!-- Enable Text Color Customization Toggle -->
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 CornerRadius="12"
@@ -56,7 +56,7 @@
                         </Border>
 
                         <!-- Preset Section -->
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1"
                                 CornerRadius="12"
@@ -93,7 +93,7 @@
                                     </ListView.ItemContainerStyle>
                                     <ListView.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                                     BorderThickness="1"
                                                     CornerRadius="8"
@@ -166,7 +166,7 @@
                                 </ListView.ItemsPanel>
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="viewmodels:TextColorSettingViewModel">
-                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                                 BorderThickness="1"
                                                 CornerRadius="10"

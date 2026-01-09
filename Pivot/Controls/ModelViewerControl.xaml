@@ -43,35 +43,35 @@
             <ToggleButton x:Name="TextureToggleButton" 
                           IsChecked="{x:Bind _viewModel.UseTexture, Mode=TwoWay}"
                           ToolTipService.ToolTip="Texture"
-                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                           Padding="8">
                 <FontIcon Glyph="&#xE8B9;" FontSize="14"/>
             </ToggleButton>
             <ToggleButton x:Name="VertexColorToggleButton" 
                           IsChecked="{x:Bind _viewModel.UseVertexColor, Mode=TwoWay}"
                           ToolTipService.ToolTip="Vertex Color"
-                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                           Padding="8">
                 <FontIcon Glyph="&#xE790;" FontSize="14"/>
             </ToggleButton>
             <ToggleButton x:Name="MaterialToggleButton" 
                           IsChecked="{x:Bind _viewModel.UseMaterial, Mode=TwoWay}"
                           ToolTipService.ToolTip="Material (PBR)"
-                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                           Padding="8">
                 <FontIcon Glyph="&#xE771;" FontSize="14"/>
             </ToggleButton>
             <ToggleButton x:Name="UVCheckerToggleButton" 
                           IsChecked="{x:Bind _viewModel.UseUVChecker, Mode=TwoWay}"
                           ToolTipService.ToolTip="UV Checker"
-                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                           Padding="8">
                 <FontIcon Glyph="&#xED63;" FontSize="14"/>
             </ToggleButton>
             
             <!-- Shading Mode Dropdown -->
             <DropDownButton x:Name="ShadingModeButton" ToolTipService.ToolTip="Shading Mode"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="8">
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}" Padding="8">
                 <FontIcon Glyph="&#xE7B3;" FontSize="14"/>
                 <DropDownButton.Flyout>
                     <MenuFlyout>
@@ -101,7 +101,7 @@
             <!-- Lighting Settings Button -->
             <DropDownButton x:Name="LightingSettingsButton" 
                             ToolTipService.ToolTip="Lighting Settings"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                             Padding="8">
                 <FontIcon Glyph="&#xE706;" FontSize="14"/>
                 <DropDownButton.Flyout>
@@ -114,7 +114,7 @@
             <!-- Material Settings Button -->
             <DropDownButton x:Name="MaterialSettingsButton" 
                             ToolTipService.ToolTip="Material Settings"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
                             Padding="8">
                 <FontIcon Glyph="&#xE771;" FontSize="14"/>
                 <DropDownButton.Flyout>

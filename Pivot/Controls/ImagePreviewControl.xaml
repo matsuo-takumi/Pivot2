@@ -16,9 +16,9 @@
         </Grid.Background>
 
         <Border x:Name="ImagePreviewContainer"
-                HorizontalAlignment="Center" 
-                VerticalAlignment="Center">
-            
+                HorizontalAlignment="Stretch" 
+                VerticalAlignment="Stretch"
+                Margin="20,60,20,20">
             <ScrollViewer x:Name="ImagePreviewScrollViewer"
                           HorizontalScrollBarVisibility="Auto" 
                           VerticalScrollBarVisibility="Auto"
@@ -30,7 +30,8 @@
                           PointerReleased="ImagePreviewScrollViewer_PointerReleased"
                           PointerCanceled="ImagePreviewScrollViewer_PointerReleased"
                           PointerWheelChanged="ImagePreviewScrollViewer_PointerWheelChanged"
-
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center"
                           HorizontalAlignment="Stretch" 
                           VerticalAlignment="Stretch">
                 
@@ -77,7 +78,7 @@
             <ToggleButton x:Name="PatternPreviewToggle"
                           ToolTipService.ToolTip="パターンプレビュー"
                           Click="PatternPreviewToggle_Click"
-                          Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                          Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                           BorderThickness="1"
                           Padding="8"
