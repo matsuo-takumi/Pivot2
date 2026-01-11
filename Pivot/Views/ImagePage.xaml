@@ -10,7 +10,6 @@
     xmlns:controls="using:Pivot.Controls"
     mc:Ignorable="d"
     x:Name="ImagePageRoot"
-    KeyDown="ImagePage_KeyDown"
     Background="Transparent">
 
     <Page.Resources>
@@ -18,6 +17,15 @@
         <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent"/>
         <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent"/>
         <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent"/>
+        
+        <!-- Browser item context menu -->
+        <MenuFlyout x:Key="BrowserItemContextMenu">
+            <MenuFlyoutItem x:Name="OpenDirectoryMenuItem" Text="フォルダーを開く" Click="OpenDirectory_Click">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xE838;"/>
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+        </MenuFlyout>
     </Page.Resources>
 
     <Grid Padding="0,12,12,12">
@@ -72,7 +80,7 @@
                                                 ItemRightTapped="BrowserControl_ItemRightTapped"/>
                 
                 <!-- 画像プレビューオーバーレイ -->
-                <controls:ImagePreviewControl x:Name="PreviewControl" Grid.RowSpan="2" />
+                <controls:ImagePreviewControl x:Name="PreviewControl" Grid.RowSpan="2"/>
             </Grid>
         </NavigationView>
     </Grid>

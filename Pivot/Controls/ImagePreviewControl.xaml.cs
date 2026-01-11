@@ -25,7 +25,7 @@ namespace Pivot.Controls
 
         // 固定サイズ設定: すべての画像で統一されたズームと表示サイズ
         private const double FixedDisplaySize = 800.0;       // 初期表示時の最大サイズ (幅または高さ)
-        private const double MaxZoomDisplaySize = 3200.0;    // ズーム時の最大表示サイズ (幅または高さ)
+        private const double MaxZoomDisplaySize = 50000.0;   // ズーム時の最大表示サイズ (幅または高さ)
 
         public bool IsOpen => ImagePreviewOverlay.Visibility == Visibility.Visible;
 
@@ -435,7 +435,7 @@ namespace Pivot.Controls
             var maxDimension = Math.Max(actualW, actualH);
             var maxZoom = MaxZoomDisplaySize / maxDimension;
             maxZoom = Math.Max(maxZoom, 1.0);
-            maxZoom = Math.Min(maxZoom, 10.0);
+            // 上限は無し（MaxZoomDisplaySizeで制御）
             ImagePreviewScrollViewer.MaxZoomFactor = (float)maxZoom;
             
             // 画像のサイズを設定（元のピクセルサイズ）

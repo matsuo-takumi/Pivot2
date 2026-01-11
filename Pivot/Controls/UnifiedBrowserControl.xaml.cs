@@ -52,6 +52,9 @@ namespace Pivot.Controls
             WeakReferenceMessenger.Default.Register<BulkItemsChangedMessage<AssetEntity>>(this);
             WeakReferenceMessenger.Default.Register<DirectoryRemovedMessage>(this);
             this.Unloaded += (s, e) => WeakReferenceMessenger.Default.UnregisterAll(this);
+            
+            // Register scroll event for incremental loading (ItemsRepeater doesn't support ISupportIncrementalLoading)
+            ContentScrollViewer.ViewChanged += ContentScrollViewer_ViewChanged;
         }
 
         /// <summary>
@@ -81,6 +84,25 @@ namespace Pivot.Controls
 
             UpdateLayout(_viewModel.CurrentLayout);
             UpdateEmptyState();
+        }
+
+        /// <summary>
+        /// Handle scroll events to trigger incremental loading.
+        /// </summary>
+        private async void ContentScrollViewer_ViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+        {
+            if (_collection == null || !_collection.HasMoreItems) return;
+            
+            // Calculate distance from bottom
+            var scrollableHeight = ContentScrollViewer.ScrollableHeight;
+            var verticalOffset = ContentScrollViewer.VerticalOffset;
+            var distanceFromBottom = scrollableHeight - verticalOffset;
+            
+            // Load more when within 300px of bottom
+            if (distanceFromBottom < 300)
+            {
+                await _collection.LoadMoreItemsAsync(50);
+            }
         }
 
         #region Criteria Change Handlers

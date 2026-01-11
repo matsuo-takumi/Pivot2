@@ -24,7 +24,7 @@
                           VerticalScrollBarVisibility="Auto"
                           ZoomMode="Enabled"
                           MinZoomFactor="0.1"
-                          MaxZoomFactor="5.0"
+                          MaxZoomFactor="500.0"
                           PointerPressed="ImagePreviewScrollViewer_PointerPressed"
                           PointerMoved="ImagePreviewScrollViewer_PointerMoved"
                           PointerReleased="ImagePreviewScrollViewer_PointerReleased"

@@ -68,29 +68,6 @@ namespace Pivot.Views
             }
             catch { }
         }
-
-        public async void ImagePage_KeyDown(object sender, KeyRoutedEventArgs e)
-        {
-            // Only handle navigation if Preview is open (or maybe always if focused? User requested Sync during preview)
-            // Let's support it primarily when Preview is open for the "Sync" requirement.
-            if (PreviewControl.IsOpen)
-            {
-                int delta = 0;
-                if (e.Key == Windows.System.VirtualKey.Left) delta = -1;
-                else if (e.Key == Windows.System.VirtualKey.Right) delta = 1;
-                
-                if (delta != 0)
-                {
-                    e.Handled = true;
-                    var newAsset = BrowserControl.MoveSelection(delta);
-                    if (newAsset != null)
-                    {
-                        var item = AssetMapper.ToPreviewItem(newAsset);
-                        await PreviewControl.ShowAsync(item);
-                    }
-                }
-            }
-        }
         
         // Event handlers for BrowserControl
         private void BrowserControl_ItemClicked(object? sender, AssetEntity asset)
@@ -112,8 +89,42 @@ namespace Pivot.Views
         
         private void BrowserControl_ItemRightTapped(object? sender, (AssetEntity Asset, Windows.Foundation.Point Position) args)
         {
-            // Right-click context menu (placeholder for future implementation)
-            System.Diagnostics.Debug.WriteLine($"Right-tapped: {args.Asset.FileName}");
+            _rightTappedAsset = args.Asset;
+            
+            if (Resources.TryGetValue("BrowserItemContextMenu", out var menuObj) && menuObj is MenuFlyout menu)
+            {
+                menu.ShowAt(BrowserControl, args.Position);
+            }
+        }
+        
+        private AssetEntity? _rightTappedAsset;
+        
+        private void OpenDirectory_Click(object sender, RoutedEventArgs e)
+        {
+            if (_rightTappedAsset == null || string.IsNullOrEmpty(_rightTappedAsset.FilePath)) return;
+            
+            try
+            {
+                var filePath = _rightTappedAsset.FilePath;
+                if (System.IO.File.Exists(filePath))
+                {
+                    // Open Explorer and select the file
+                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{filePath}\"");
+                }
+                else
+                {
+                    // If file doesn't exist, just open the directory
+                    var directory = System.IO.Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrEmpty(directory) && System.IO.Directory.Exists(directory))
+                    {
+                        System.Diagnostics.Process.Start("explorer.exe", directory);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"OpenDirectory failed: {ex.Message}");
+            }
         }
 
         public void Receive(SettingsChangedMessage message)

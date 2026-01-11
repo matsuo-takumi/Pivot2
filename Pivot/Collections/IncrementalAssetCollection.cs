@@ -25,8 +25,9 @@ namespace Pivot.Collections
 
         /// <summary>
         /// Page size for incremental loading.
+        /// ItemsRepeater virtualizes rendering, so large page sizes are safe.
         /// </summary>
-        public int PageSize { get; set; } = 50;
+        public int PageSize { get; set; } = 10000;
 
         /// <summary>
         /// Event fired when loading state changes.
@@ -46,31 +47,45 @@ namespace Pivot.Collections
 
         /// <summary>
         /// Reset the collection with new criteria.
+        /// Loads initial batch before updating UI to prevent flickering.
         /// </summary>
         public async Task ResetAsync(FilterCriteria criteria)
         {
             _criteria = criteria.Clone();
             _hasMoreItems = true;
-            Clear();
+            _isLoading = true;
+            LoadingStateChanged?.Invoke(this, true);
 
-            System.Diagnostics.Debug.WriteLine($"[IncrementalCollection] ResetAsync - Directory: '{_criteria.Directory ?? "(null)"}', Kind: {_criteria.TargetKind}");
-
-            // Get total count
-            using var scope = _serviceProvider.CreateScope();
-            var queryService = scope.ServiceProvider.GetRequiredService<AssetQueryService>();
-            _totalCount = await queryService.CountAsync(_criteria);
-
-            System.Diagnostics.Debug.WriteLine($"[IncrementalCollection] Total count: {_totalCount}");
-            CountsUpdated?.Invoke(this, (0, _totalCount));
-
-            // Initial load
-            if (_totalCount > 0)
+            try
             {
-                await LoadMoreItemsAsync((uint)PageSize);
+                System.Diagnostics.Debug.WriteLine($"[IncrementalCollection] ResetAsync - Directory: '{_criteria.Directory ?? "(null)"}', Kind: {_criteria.TargetKind}");
+
+                // Get total count and initial batch BEFORE clearing
+                using var scope = _serviceProvider.CreateScope();
+                var queryService = scope.ServiceProvider.GetRequiredService<AssetQueryService>();
+                _totalCount = await queryService.CountAsync(_criteria);
+
+                System.Diagnostics.Debug.WriteLine($"[IncrementalCollection] Total count: {_totalCount}");
+
+                // Load initial batch
+                var initialItems = _totalCount > 0 
+                    ? await queryService.QueryAsync(_criteria, 0, PageSize)
+                    : new System.Collections.Generic.List<AssetEntity>();
+
+                // Now clear and populate in one batch to prevent flickering
+                Clear();
+                foreach (var item in initialItems)
+                {
+                    Add(item);
+                }
+
+                _hasMoreItems = Count < _totalCount;
+                CountsUpdated?.Invoke(this, (Count, _totalCount));
             }
-            else
+            finally
             {
-                _hasMoreItems = false;
+                _isLoading = false;
+                LoadingStateChanged?.Invoke(this, false);
             }
         }
 
