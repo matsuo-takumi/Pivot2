@@ -75,6 +75,59 @@
                         Style="{StaticResource SubtleButtonStyle}"
                         Padding="12,8"/>
                 </StackPanel>
+                <TextBlock Text="Default mode uses time-based automatic switching (see below)" 
+                           Foreground="{ThemeResource AppTextCaptionBrush}" FontSize="12"/>
+            </StackPanel>
+
+            <!-- Time-Based Theme Settings -->
+            <StackPanel Spacing="10">
+                <TextBlock Text="Time-Based Theme (Default Mode)" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="12">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="When App Theme is set to 'Default', the theme will automatically switch based on time of day." 
+                                   TextWrapping="Wrap" Foreground="{ThemeResource AppTextCaptionBrush}" FontSize="12"/>
+                        
+                        <!-- Light Start Hour -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="8" MinWidth="160">
+                                <TextBlock Text="Light Mode Start" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                                <TextBlock FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" VerticalAlignment="Center">
+                                    <Run Text="{x:Bind ViewModel.LightStartHour, Mode=OneWay}"/>
+                                    <Run Text=":00"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <Slider Grid.Column="1" Minimum="0" Maximum="23" 
+                                    Value="{x:Bind ViewModel.LightStartHour, Mode=TwoWay}"
+                                    TickFrequency="1" StepFrequency="1" />
+                        </Grid>
+                        
+                        <!-- Dark Start Hour -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="8" MinWidth="160">
+                                <TextBlock Text="Dark Mode Start" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                                <TextBlock FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" VerticalAlignment="Center">
+                                    <Run Text="{x:Bind ViewModel.DarkStartHour, Mode=OneWay}"/>
+                                    <Run Text=":00"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <Slider Grid.Column="1" Minimum="0" Maximum="23" 
+                                    Value="{x:Bind ViewModel.DarkStartHour, Mode=TwoWay}"
+                                    TickFrequency="1" StepFrequency="1" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- Overlay Tint Settings -->

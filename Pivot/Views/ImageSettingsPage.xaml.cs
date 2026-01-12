@@ -6,8 +6,6 @@ using Pivot.Converters;
 using Pivot.Services;
 using Pivot.ViewModels;
 using System;
-using System.Collections.Generic;
-using Pivot.Models;
 
 namespace Pivot.Views
 {
@@ -27,24 +25,6 @@ namespace Pivot.Views
 
         private void ImageSettingsPage_Loaded(object sender, RoutedEventArgs e)
         {
-            // Initialize common filter settings view
-            var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
-            var logger = App.Current.Services.GetService(typeof(Microsoft.Extensions.Logging.ILogger<FilterSettingsViewModel>)) as Microsoft.Extensions.Logging.ILogger<FilterSettingsViewModel>;
-            
-            if (filterSettings != null)
-            {
-                var filterView = this.FindName("FilterSettingsView") as FilterSettingsView;
-                if (filterView != null)
-                {
-                    filterView.ViewModel = new FilterSettingsViewModel(
-                        filterSettings,
-                        FilterType.Image,
-                        "Image",
-                        GetDefaultImageFilters,
-                        logger);
-                }
-            }
-            
             // Initialize ColorPicker with current color
             if (SelectionColorPicker != null)
             {
@@ -54,19 +34,6 @@ namespace Pivot.Views
                     SelectionColorPicker.Color = color;
                 }
             }
-        }
-
-        private static List<CustomFilter> GetDefaultImageFilters()
-        {
-            return new List<CustomFilter>
-            {
-                new CustomFilter 
-                { 
-                    Name = "Images", 
-                    AllowedExtensions = new List<string>{ ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tga", ".tif", ".tiff" }, 
-                    IsBuiltIn = true 
-                }
-            };
         }
 
         private void SelectionColorButton_Click(object sender, RoutedEventArgs e)

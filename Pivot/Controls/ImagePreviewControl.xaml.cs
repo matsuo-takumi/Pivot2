@@ -23,9 +23,9 @@ namespace Pivot.Controls
         private Windows.Foundation.Point _lastMousePosition;
         private bool _isPatternPreviewEnabled = false;
 
-        // 固定サイズ設定: すべての画像で統一されたズームと表示サイズ
-        private const double FixedDisplaySize = 800.0;       // 初期表示時の最大サイズ (幅または高さ)
-        private const double MaxZoomDisplaySize = 50000.0;   // ズーム時の最大表示サイズ (幅または高さ)
+        // サイズ設定: 設定から読み込み、または既定値を使用
+        private double _fixedDisplaySize = 800.0;       // 初期表示時の最大サイズ (幅または高さ)
+        private double _maxZoom = 50.0;                 // 最大ズーム倍率
 
         public bool IsOpen => ImagePreviewOverlay.Visibility == Visibility.Visible;
 
@@ -34,6 +34,18 @@ namespace Pivot.Controls
             this.InitializeComponent();
             this.SizeChanged += ImagePreviewControl_SizeChanged;
             ImagePreviewScrollViewer.ViewChanged += ImagePreviewScrollViewer_ViewChanged;
+            
+            // Load settings
+            try
+            {
+                var themeSettings = App.Current.Services.GetService(typeof(Services.ThemeSettingsService)) as Services.ThemeSettingsService;
+                if (themeSettings != null)
+                {
+                    _fixedDisplaySize = themeSettings.PreviewFixedDisplaySize;
+                    _maxZoom = themeSettings.PreviewMaxZoom;
+                }
+            }
+            catch { }
         }
 
         private void PatternPreviewToggle_Click(object sender, RoutedEventArgs e)
@@ -313,8 +325,8 @@ namespace Pivot.Controls
             var windowHeight = ActualHeight > 0 ? ActualHeight : 800;
 
             // 固定表示サイズを使用
-            var availableWidth = Math.Min(windowWidth * 0.9, FixedDisplaySize);
-            var availableHeight = Math.Min(windowHeight * 0.9, FixedDisplaySize);
+            var availableWidth = Math.Min(windowWidth * 0.9, _fixedDisplaySize);
+            var availableHeight = Math.Min(windowHeight * 0.9, _fixedDisplaySize);
             
             var wRatio = availableWidth / actualW;
             var hRatio = availableHeight / actualH;
@@ -431,11 +443,9 @@ namespace Pivot.Controls
             var minZoom = Math.Min(fitZoom, 0.1);
             ImagePreviewScrollViewer.MinZoomFactor = (float)minZoom;
             
-            // 最大ズーム倍率を計算
-            var maxDimension = Math.Max(actualW, actualH);
-            var maxZoom = MaxZoomDisplaySize / maxDimension;
+            // 最大ズーム倍率を設定から取得
+            var maxZoom = _maxZoom;
             maxZoom = Math.Max(maxZoom, 1.0);
-            // 上限は無し（MaxZoomDisplaySizeで制御）
             ImagePreviewScrollViewer.MaxZoomFactor = (float)maxZoom;
             
             // 画像のサイズを設定（元のピクセルサイズ）

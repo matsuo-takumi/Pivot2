@@ -22,6 +22,12 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private BackdropType _appBackdropType;
 
+        [ObservableProperty]
+        private int _lightStartHour;
+
+        [ObservableProperty]
+        private int _darkStartHour;
+
         public OverlayTintViewModel OverlayTint { get; }
 
         public ThemeViewModel(ThemeSettingsService themeSettings, IMessenger messenger)
@@ -79,10 +85,28 @@ namespace Pivot.ViewModels
             }
         }
 
+        partial void OnLightStartHourChanged(int value)
+        {
+            if (_isLoadingThemeSettings) return;
+            Utilities.SafeAsync.FireAndForget(
+                _themeSettings.SetLightStartHourAsync(value),
+                nameof(OnLightStartHourChanged));
+        }
+
+        partial void OnDarkStartHourChanged(int value)
+        {
+            if (_isLoadingThemeSettings) return;
+            Utilities.SafeAsync.FireAndForget(
+                _themeSettings.SetDarkStartHourAsync(value),
+                nameof(OnDarkStartHourChanged));
+        }
+
         private void LoadCurrentSettings()
         {
             AppTheme = _themeSettings.AppTheme;
             AppBackdropType = _themeSettings.AppBackdropType;
+            LightStartHour = _themeSettings.LightStartHour;
+            DarkStartHour = _themeSettings.DarkStartHour;
         }
 
         [RelayCommand]

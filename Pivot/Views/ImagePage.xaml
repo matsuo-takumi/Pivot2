@@ -20,7 +20,7 @@
         
         <!-- Browser item context menu -->
         <MenuFlyout x:Key="BrowserItemContextMenu">
-            <MenuFlyoutItem x:Name="OpenDirectoryMenuItem" Text="フォルダーを開く" Click="OpenDirectory_Click">
+            <MenuFlyoutItem x:Name="OpenDirectoryMenuItem" Text="Open Folder" Click="OpenDirectory_Click">
                 <MenuFlyoutItem.Icon>
                     <FontIcon Glyph="&#xE838;"/>
                 </MenuFlyoutItem.Icon>

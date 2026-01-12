@@ -43,6 +43,13 @@ namespace Pivot.Collections
         {
             _serviceProvider = serviceProvider;
             _criteria = criteria.Clone();
+            
+            // Load PageSize from settings
+            var themeSettings = serviceProvider.GetService<ThemeSettingsService>();
+            if (themeSettings != null)
+            {
+                PageSize = themeSettings.PageSize;
+            }
         }
 
         /// <summary>

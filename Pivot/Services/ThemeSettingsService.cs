@@ -22,6 +22,10 @@ namespace Pivot.Services
         private ElementTheme _appTheme = ElementTheme.Default;
         private BackdropType _appBackdropType = BackdropType.Mica;
         
+        // Time-based theme settings
+        private int _lightStartHour = 6;   // Light mode starts at 6:00 AM
+        private int _darkStartHour = 18;   // Dark mode starts at 6:00 PM
+        
         // Overlay
         private string _overlayTintColor = "#0000FF";
         private double _overlayTintOpacity = 0.7;
@@ -56,12 +60,22 @@ namespace Pivot.Services
         // Menu Display Mode
         private MenuDisplayMode _menuDisplayMode = MenuDisplayMode.Auto;
 
+        // Browser Settings
+        private int _thumbnailSize = 180;
+        private int _decodePixelWidth = 300;
+        private int _pageSize = 10000;
+        
+        // Preview Settings
+        private double _previewMaxZoom = 50.0;
+        private double _previewFixedDisplaySize = 800.0;
+
         // Public Properties
         public ElementTheme AppTheme => _appTheme;
+        public int LightStartHour => _lightStartHour;
+        public int DarkStartHour => _darkStartHour;
         
         /// <summary>
-        /// Gets the effective theme to apply. When AppTheme is Default, returns the actual system theme (Light or Dark).
-        /// This is necessary because WinUI 3's ElementTheme.Default always results in Dark, not the system theme.
+        /// Gets the effective theme to apply. When AppTheme is Default, returns time-based theme (Light or Dark).
         /// </summary>
         public ElementTheme EffectiveTheme
         {
@@ -69,7 +83,7 @@ namespace Pivot.Services
             {
                 if (_appTheme == ElementTheme.Default)
                 {
-                    return GetSystemTheme();
+                    return GetTimeBasedTheme();
                 }
                 return _appTheme;
             }
@@ -92,6 +106,36 @@ namespace Pivot.Services
             catch
             {
                 return ElementTheme.Dark; // Fallback to Dark if detection fails
+            }
+        }
+        
+        /// <summary>
+        /// Gets the theme based on current time of day.
+        /// </summary>
+        public ElementTheme GetTimeBasedTheme()
+        {
+            var currentHour = DateTime.Now.Hour;
+            
+            // Handle case where light period crosses midnight (e.g., light 22:00 to 6:00)
+            if (_lightStartHour < _darkStartHour)
+            {
+                // Normal case: light during day, dark at night
+                // Light: lightStart <= current < darkStart
+                if (currentHour >= _lightStartHour && currentHour < _darkStartHour)
+                {
+                    return ElementTheme.Light;
+                }
+                return ElementTheme.Dark;
+            }
+            else
+            {
+                // Inverted case: light at night, dark during day (unusual but supported)
+                // Dark: darkStart <= current < lightStart
+                if (currentHour >= _darkStartHour && currentHour < _lightStartHour)
+                {
+                    return ElementTheme.Dark;
+                }
+                return ElementTheme.Light;
             }
         }
         public BackdropType AppBackdropType => _appBackdropType;
@@ -123,6 +167,15 @@ namespace Pivot.Services
         public string ImageDragSelectionColor => _imageDragSelectionColor;
         public double ImageDragSelectionOpacity => _imageDragSelectionOpacity;
         public MenuDisplayMode MenuDisplayMode => _menuDisplayMode;
+        
+        // Browser Settings
+        public int ThumbnailSize => _thumbnailSize;
+        public int DecodePixelWidth => _decodePixelWidth;
+        public int PageSize => _pageSize;
+        
+        // Preview Settings
+        public double PreviewMaxZoom => _previewMaxZoom;
+        public double PreviewFixedDisplaySize => _previewFixedDisplaySize;
 
         public ThemeSettingsService(
             ILogger<ThemeSettingsService> logger,
@@ -144,6 +197,10 @@ namespace Pivot.Services
 
             var backdropStr = await _settingsStore.GetAsync("AppBackdropType");
             if (Enum.TryParse<BackdropType>(backdropStr, out var b)) _appBackdropType = b;
+
+            // Time-based theme settings
+            _lightStartHour = await LoadInt("Theme.LightStartHour", 6);
+            _darkStartHour = await LoadInt("Theme.DarkStartHour", 18);
 
             // Overlay
             var overlayColor = await _settingsStore.GetAsync("Color.OverlayTintColor");
@@ -193,6 +250,15 @@ namespace Pivot.Services
             // Menu Display Mode
             var menuModeStr = await _settingsStore.GetAsync("MenuDisplayMode");
             if (Enum.TryParse<MenuDisplayMode>(menuModeStr, out var mm)) _menuDisplayMode = mm;
+
+            // Browser Settings
+            _thumbnailSize = await LoadInt("Browser.ThumbnailSize", 180);
+            _decodePixelWidth = await LoadInt("Browser.DecodePixelWidth", 300);
+            _pageSize = await LoadInt("Browser.PageSize", 10000);
+            
+            // Preview Settings
+            _previewMaxZoom = await LoadDouble("Preview.MaxZoom", 50.0);
+            _previewFixedDisplaySize = await LoadDouble("Preview.FixedDisplaySize", 800.0);
         }
 
         // Helpers
@@ -230,6 +296,22 @@ namespace Pivot.Services
         {
             _appBackdropType = type;
             await _settingsStore.UpsertAsync("AppBackdropType", type.ToString());
+        }
+
+        public async Task SetLightStartHourAsync(int hour)
+        {
+            hour = Math.Clamp(hour, 0, 23);
+            _lightStartHour = hour;
+            await _settingsStore.UpsertAsync("Theme.LightStartHour", hour.ToString());
+            _messenger.Send(new SettingsChangedMessage("LightStartHour"));
+        }
+
+        public async Task SetDarkStartHourAsync(int hour)
+        {
+            hour = Math.Clamp(hour, 0, 23);
+            _darkStartHour = hour;
+            await _settingsStore.UpsertAsync("Theme.DarkStartHour", hour.ToString());
+            _messenger.Send(new SettingsChangedMessage("DarkStartHour"));
         }
 
         public async Task SetOverlayTintColorAsync(string color)
@@ -394,6 +476,43 @@ namespace Pivot.Services
         {
             _menuDisplayMode = mode;
             await _settingsStore.UpsertAsync("MenuDisplayMode", mode.ToString());
+        }
+
+        // Browser Settings
+        public async Task SetThumbnailSizeAsync(int size)
+        {
+            _thumbnailSize = size;
+            await _settingsStore.UpsertAsync("Browser.ThumbnailSize", size.ToString());
+            _messenger.Send(new SettingsChangedMessage("ThumbnailSize"));
+        }
+
+        public async Task SetDecodePixelWidthAsync(int width)
+        {
+            _decodePixelWidth = width;
+            await _settingsStore.UpsertAsync("Browser.DecodePixelWidth", width.ToString());
+            _messenger.Send(new SettingsChangedMessage("DecodePixelWidth"));
+        }
+
+        public async Task SetPageSizeAsync(int size)
+        {
+            _pageSize = size;
+            await _settingsStore.UpsertAsync("Browser.PageSize", size.ToString());
+            _messenger.Send(new SettingsChangedMessage("PageSize"));
+        }
+
+        // Preview Settings
+        public async Task SetPreviewMaxZoomAsync(double zoom)
+        {
+            _previewMaxZoom = zoom;
+            await _settingsStore.UpsertAsync("Preview.MaxZoom", zoom.ToString(CultureInfo.InvariantCulture));
+            _messenger.Send(new SettingsChangedMessage("PreviewMaxZoom"));
+        }
+
+        public async Task SetPreviewFixedDisplaySizeAsync(double size)
+        {
+            _previewFixedDisplaySize = size;
+            await _settingsStore.UpsertAsync("Preview.FixedDisplaySize", size.ToString(CultureInfo.InvariantCulture));
+            _messenger.Send(new SettingsChangedMessage("PreviewFixedDisplaySize"));
         }
     }
 }
