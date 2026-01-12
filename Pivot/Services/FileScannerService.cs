@@ -164,7 +164,7 @@ namespace Pivot.Services
 			}
 		}
 
-		public async Task ScanAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
+		public async Task ScanAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken cancellationToken = default, HashSet<AssetKind>? allowedKinds = null)
 		{
 
 			// 既存のWatcherを完全停止（複数対応）
@@ -213,7 +213,7 @@ namespace Pivot.Services
 					try
 					{
 						// Use cached lookup instead of DB query per file
-						await ProcessFileWithCacheAsync(path, existingAssetsCache, ct);
+						await ProcessFileWithCacheAsync(path, existingAssetsCache, ct, allowedKinds);
 					}
 					catch (Exception ex)
 					{
@@ -571,7 +571,7 @@ namespace Pivot.Services
 	/// <summary>
 	/// Optimized file processing for initial scan using pre-loaded cache (eliminates N+1 queries).
 	/// </summary>
-	private async Task ProcessFileWithCacheAsync(string path, Dictionary<string, AssetEntity> existingAssetsCache, CancellationToken ct)
+	private async Task ProcessFileWithCacheAsync(string path, Dictionary<string, AssetEntity> existingAssetsCache, CancellationToken ct, HashSet<AssetKind>? allowedKinds = null)
 	{
 		try
 		{
@@ -591,6 +591,13 @@ namespace Pivot.Services
 			var kind = FileScannerExtensions.DetermineAssetKind(ext);
 			if (kind == AssetKind.General)
 				return; // Skip non-asset files
+			
+			// Filter by allowed kinds if specified
+			if (allowedKinds != null && !allowedKinds.Contains(kind))
+			{
+				System.Diagnostics.Debug.WriteLine($"[Scan] SKIPPED {path} - Kind {kind} not allowed");
+				return; // Skip files not in allowed kinds
+			}
 
 			// Quick check: O(1) lookup from pre-loaded cache instead of DB query
 			existingAssetsCache.TryGetValue(path, out var existing);

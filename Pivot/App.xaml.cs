@@ -120,23 +120,49 @@ namespace Pivot
 					var directorySettings = Services.GetRequiredService<DirectorySettingsService>();
 					var scanner = Services.GetRequiredService<FileScannerService>();
 					
-					// Get all directories from settings (Image + Asset)
+					// Get directories from settings
 					var imageDirectories = directorySettings.ImageDirectories?.ToList() ?? new List<string>();
 					var assetDirectories = directorySettings.AssetDirectories?.ToList() ?? new List<string>();
 					
-					// Combine all directories for scanning (deduped)
+					// Combine all directories for reconcile only
 					var allDirectories = imageDirectories.Concat(assetDirectories).Distinct().ToList();
 					
 					// Phase 0: Reconcile - delete orphaned assets from removed directories
 					System.Diagnostics.Debug.WriteLine($"[Startup] Reconciling database with {allDirectories.Count} configured directories");
 					await scanner.ReconcileAsync(allDirectories);
 					
-					if (allDirectories.Count > 0)
+					// Phase 1a: Scan Image directories (all asset types)
+					if (imageDirectories.Count > 0)
 					{
-						System.Diagnostics.Debug.WriteLine($"[Startup] Starting scan for {allDirectories.Count} directories (Images: {imageDirectories.Count}, Assets: {assetDirectories.Count})");
-						await scanner.ScanAsync(allDirectories);
-						System.Diagnostics.Debug.WriteLine("[Startup] Directory scan completed");
+						System.Diagnostics.Debug.WriteLine($"[Startup] Scanning {imageDirectories.Count} Image directories (all types)");
+						await scanner.ScanAsync(imageDirectories);
 					}
+					
+					// Phase 1b: Scan Asset directories (Model3D only to avoid duplicate images)
+					// Only scan Asset dirs that are NOT also Image dirs
+					System.Diagnostics.Debug.WriteLine($"[Startup] Image directories: {string.Join(", ", imageDirectories)}");
+					System.Diagnostics.Debug.WriteLine($"[Startup] Asset directories: {string.Join(", ", assetDirectories)}");
+					
+					var assetOnlyDirs = assetDirectories
+						.Where(d => !imageDirectories.Any(img => 
+							d.Equals(img, StringComparison.OrdinalIgnoreCase) ||
+							d.StartsWith(img + "\\", StringComparison.OrdinalIgnoreCase)))
+						.ToList();
+					
+					System.Diagnostics.Debug.WriteLine($"[Startup] Asset-only directories (after filter): {string.Join(", ", assetOnlyDirs)}");
+					
+					if (assetOnlyDirs.Count > 0)
+					{
+						System.Diagnostics.Debug.WriteLine($"[Startup] Scanning {assetOnlyDirs.Count} Asset directories (Model3D only)");
+						var model3DOnly = new HashSet<Pivot.Models.AssetKind> { Pivot.Models.AssetKind.Model3D };
+						await scanner.ScanAsync(assetOnlyDirs, progress: null, cancellationToken: default, allowedKinds: model3DOnly);
+					}
+					else
+					{
+						System.Diagnostics.Debug.WriteLine("[Startup] No Asset-only directories to scan (all overlap with Image directories)");
+					}
+					
+					System.Diagnostics.Debug.WriteLine("[Startup] Directory scan completed");
 					
 					// Phase 2: Index pending assets (extract metadata) - runs silently
 					var indexer = Services.GetRequiredService<MetadataIndexingService>();
