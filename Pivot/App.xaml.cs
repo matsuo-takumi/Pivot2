@@ -120,17 +120,21 @@ namespace Pivot
 					var directorySettings = Services.GetRequiredService<DirectorySettingsService>();
 					var scanner = Services.GetRequiredService<FileScannerService>();
 					
-					// Get Image directories from settings
+					// Get all directories from settings (Image + Asset)
 					var imageDirectories = directorySettings.ImageDirectories?.ToList() ?? new List<string>();
+					var assetDirectories = directorySettings.AssetDirectories?.ToList() ?? new List<string>();
+					
+					// Combine all directories for scanning (deduped)
+					var allDirectories = imageDirectories.Concat(assetDirectories).Distinct().ToList();
 					
 					// Phase 0: Reconcile - delete orphaned assets from removed directories
-					System.Diagnostics.Debug.WriteLine($"[Startup] Reconciling database with {imageDirectories.Count} configured directories");
-					await scanner.ReconcileAsync(imageDirectories);
+					System.Diagnostics.Debug.WriteLine($"[Startup] Reconciling database with {allDirectories.Count} configured directories");
+					await scanner.ReconcileAsync(allDirectories);
 					
-					if (imageDirectories.Count > 0)
+					if (allDirectories.Count > 0)
 					{
-						System.Diagnostics.Debug.WriteLine($"[Startup] Starting scan for {imageDirectories.Count} directories");
-						await scanner.ScanAsync(imageDirectories);
+						System.Diagnostics.Debug.WriteLine($"[Startup] Starting scan for {allDirectories.Count} directories (Images: {imageDirectories.Count}, Assets: {assetDirectories.Count})");
+						await scanner.ScanAsync(allDirectories);
 						System.Diagnostics.Debug.WriteLine("[Startup] Directory scan completed");
 					}
 					
