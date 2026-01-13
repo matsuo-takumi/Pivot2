@@ -38,6 +38,7 @@ namespace Pivot.Services
             ["Viewport.ShowCameraInfo"] = false,
             ["Viewport.ShowAxisGizmo"] = true,
             ["Viewport.BackfaceCulling"] = true,
+            ["Viewport.ShowGrid"] = true,
         };
 
         private string _assetLitShortcut = "Alt+1";
@@ -154,6 +155,9 @@ namespace Pivot.Services
 
         public bool GetBackfaceCulling() => GetBoolSetting("Viewport.BackfaceCulling", true);
         public Task SetBackfaceCullingAsync(bool value) => SetBoolSettingAsync("Viewport.BackfaceCulling", value);
+
+        public bool GetShowGrid() => GetBoolSetting("Viewport.ShowGrid", true);
+        public Task SetShowGridAsync(bool value) => SetBoolSettingAsync("Viewport.ShowGrid", value);
 
         // =============== Shortcuts ===============
 

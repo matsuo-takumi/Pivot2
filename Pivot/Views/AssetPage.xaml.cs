@@ -47,6 +47,8 @@ namespace Pivot.Views
             await LoadAssetsAsync();
         }
         
+        private const int PageSize = 500; // Load in smaller batches for faster initial display
+        
         private async Task LoadAssetsAsync()
         {
             try
@@ -58,7 +60,9 @@ namespace Pivot.Views
                     SortDirection = Pivot.Services.SortDirection.Ascending
                 };
                 
-                var assets = await _queryService.QueryAsync(criteria, 0, 10000);
+                // Run query on background thread to avoid blocking UI
+                var assets = await Task.Run(async () => 
+                    await _queryService.QueryAsync(criteria, 0, PageSize));
                 
                 DispatcherQueue.TryEnqueue(() =>
                 {

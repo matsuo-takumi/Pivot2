@@ -56,6 +56,9 @@ namespace Pivot.Views
                 // Background color
                 var bgColorHex = _settings?.GetBackgroundColor() ?? "#3399CC";
                 BgColorPicker.Color = HexToColor(bgColorHex);
+                
+                // Show Grid
+                ShowGridToggle.IsOn = _settings?.GetShowGrid() ?? true;
             }
             catch (Exception ex)
             {
@@ -183,6 +186,24 @@ namespace Pivot.Views
             }
             catch { }
             return Color.FromArgb(255, 51, 153, 204); // Default
+        }
+
+        private async void ShowGridToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing) return;
+            
+            try
+            {
+                if (_settings != null)
+                {
+                    await _settings.SetShowGridAsync(ShowGridToggle.IsOn);
+                    System.Diagnostics.Debug.WriteLine($"[ViewportSettingsPage] Saved ShowGrid: {ShowGridToggle.IsOn}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"ViewportSettingsPage.ShowGridToggle_Toggled error: {ex.Message}");
+            }
         }
     }
 }

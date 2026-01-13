@@ -12,6 +12,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Windows.Foundation;
+using CommunityToolkit.Mvvm.Messaging;
+using Pivot.Messages;
 
 namespace Pivot.Controls
 {
@@ -108,6 +110,7 @@ namespace Pivot.Controls
                 if (_viewportSettings != null && _renderer != null)
                 {
                     _renderer.SetBackfaceCulling(_viewportSettings.GetBackfaceCulling());
+                    _renderer.SetShowGrid(_viewportSettings.GetShowGrid());
                 }
                 
                 // Hide loading indicator after initialization
@@ -116,10 +119,21 @@ namespace Pivot.Controls
                 _fpsStopwatch.Start();
                 CompositionTarget.Rendering += OnRendering;
             });
+
+            // Register for settings changes
+            WeakReferenceMessenger.Default.Register<SettingsChangedMessage>(this, (r, m) =>
+            {
+                if (m.Value == "Viewport.ShowGrid" && _renderer != null && _viewportSettings != null)
+                {
+                    _renderer.SetShowGrid(_viewportSettings.GetShowGrid());
+                }
+            });
         }
 
         private async void OnUnloaded(object sender, RoutedEventArgs e)
         {
+            WeakReferenceMessenger.Default.UnregisterAll(this);
+            
             // Save lighting state before unloading
             await _viewModel.SaveLightingStateAsync();
             

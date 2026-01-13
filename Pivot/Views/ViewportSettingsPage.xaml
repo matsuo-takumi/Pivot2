@@ -92,6 +92,18 @@
                 </StackPanel>
             </Border>
             
+            <!-- Grid Floor -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Grid" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Display options for the viewport floor grid" 
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                           TextWrapping="Wrap"/>
+                
+                <ToggleSwitch x:Name="ShowGridToggle" 
+                              Header="Show Grid Floor"
+                              Toggled="ShowGridToggle_Toggled"/>
+            </StackPanel>
+            
             <!-- Background Color Settings -->
             <StackPanel Spacing="8">
                 <TextBlock Text="Background" FontSize="16" FontWeight="SemiBold"/>

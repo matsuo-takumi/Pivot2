@@ -11,6 +11,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace Pivot.Views
 {
@@ -18,6 +19,7 @@ namespace Pivot.Views
     {
         private ViewportSettingsService? _viewportSettings;
         private MaterialSettingsService? _materialSettings;
+        private IMessenger? _messenger;
         private bool _isInitializing = true;
         private List<MaterialPreset> _materialPresets = new();
         private List<LightingPreset> _lightingPresets = new();
@@ -31,8 +33,10 @@ namespace Pivot.Views
         private async void AssetSettingsPage_Loaded(object sender, RoutedEventArgs e)
         {
             // Initialize common filter settings view
+            // Initialize common filter settings view
             _viewportSettings = App.Current.Services.GetService<ViewportSettingsService>();
             _materialSettings = App.Current.Services.GetService<MaterialSettingsService>();
+            _messenger = App.Current.Services.GetService<IMessenger>();
             var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
             var logger = App.Current.Services.GetService(typeof(ILogger<FilterSettingsViewModel>)) as ILogger<FilterSettingsViewModel>;
             
@@ -90,6 +94,8 @@ namespace Pivot.Views
             ShowResolutionToggle.IsOn = _viewportSettings.GetShowResolution();
             ShowViewportSizeToggle.IsOn = _viewportSettings.GetShowViewportSize();
             ShowCameraInfoToggle.IsOn = _viewportSettings.GetShowCameraInfo();
+            // Grid
+            ShowGridToggle.IsOn = _viewportSettings.GetShowGrid();
         }
 
         private async System.Threading.Tasks.Task LoadPresetsAsync()
@@ -330,6 +336,14 @@ namespace Pivot.Views
         {
             if (_isInitializing || _viewportSettings == null) return;
             await _viewportSettings.SetShowCameraInfoAsync(ShowCameraInfoToggle.IsOn);
+        }
+
+        private async void ShowGridToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing || _viewportSettings == null) return;
+            await _viewportSettings.SetShowGridAsync(ShowGridToggle.IsOn);
+            // Send message to notify viewport
+            _messenger?.Send(new Pivot.Messages.SettingsChangedMessage("Viewport.ShowGrid"));
         }
 
         // Material Preset handlers

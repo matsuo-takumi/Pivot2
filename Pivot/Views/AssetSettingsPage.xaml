@@ -226,6 +226,20 @@
                                                  Toggled="ShowCameraInfoToggle_Toggled"/>
                                 </Grid>
                             </StackPanel>
+                            
+                            <!-- Grid Floor Section -->
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Grid" FontSize="14" FontWeight="SemiBold"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Show Grid" VerticalAlignment="Center" FontSize="12"/>
+                                    <ToggleSwitch x:Name="ShowGridToggle" Grid.Column="1" 
+                                                 Toggled="ShowGridToggle_Toggled"/>
+                                </Grid>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                     
