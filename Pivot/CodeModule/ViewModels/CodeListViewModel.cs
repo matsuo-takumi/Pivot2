@@ -226,5 +226,52 @@ namespace Pivot.CodeModule.ViewModels
                 await _codeService.SaveSnippetAsync(nextItem);
             }
         }
+
+        /// <summary>
+        /// Move an item to a specific index via drag-and-drop
+        /// </summary>
+        public async Task MoveItemToIndexAsync(int itemId, int targetIndex)
+        {
+            // Find the item by ID
+            var item = Snippets.FirstOrDefault(s => s.Id == itemId);
+            if (item == null) return;
+
+            int currentIndex = Snippets.IndexOf(item);
+            if (currentIndex == targetIndex || currentIndex < 0) return;
+
+            // Adjust target index if moving down (since removal shifts indices)
+            if (currentIndex < targetIndex)
+            {
+                targetIndex--;
+            }
+
+            // Clamp target index
+            targetIndex = Math.Max(0, Math.Min(targetIndex, Snippets.Count - 1));
+            if (currentIndex == targetIndex) return;
+
+            // Move in the observable collection
+            Snippets.Move(currentIndex, targetIndex);
+
+            // Recalculate SortOrder for all items based on their new positions
+            for (int i = 0; i < Snippets.Count; i++)
+            {
+                Snippets[i].SortOrder = i;
+            }
+
+            // Update _allSnippets to reflect the new order
+            var movedItem = _allSnippets.FirstOrDefault(s => s.Id == itemId);
+            if (movedItem != null)
+            {
+                _allSnippets.Remove(movedItem);
+                int allSnippetsTargetIndex = Math.Min(targetIndex, _allSnippets.Count);
+                _allSnippets.Insert(allSnippetsTargetIndex, movedItem);
+            }
+
+            // Save all items with updated SortOrder
+            foreach (var snippet in Snippets)
+            {
+                await _codeService.SaveSnippetAsync(snippet);
+            }
+        }
     }
 }

@@ -117,8 +117,12 @@
                                    SnippetCreated="QuickAddBar_SnippetCreated"/>
 
             <!-- Snippet Grid -->
-            <ScrollViewer Grid.Row="1">
-                <ItemsRepeater ItemsSource="{x:Bind ViewModel.ListVM.Snippets, Mode=OneWay}"
+            <ScrollViewer Grid.Row="1" 
+                          AllowDrop="True"
+                          DragOver="ScrollViewer_DragOver"
+                          Drop="ScrollViewer_Drop">
+                <ItemsRepeater x:Name="SnippetsRepeater"
+                               ItemsSource="{x:Bind ViewModel.ListVM.Snippets, Mode=OneWay}"
                                Layout="{x:Bind ViewModel.ListVM.IsGridLayout, Mode=OneWay, Converter={StaticResource LayoutConverter}}">
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="models:AssetEntity">

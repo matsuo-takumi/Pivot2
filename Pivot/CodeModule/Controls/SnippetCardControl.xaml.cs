@@ -19,5 +19,14 @@ namespace Pivot.CodeModule.Controls
         {
             this.InitializeComponent();
         }
+
+        private void Grid_DragStarting(UIElement sender, Microsoft.UI.Xaml.DragStartingEventArgs e)
+        {
+            if (Asset == null) return;
+
+            // Set custom data to identify the dragged snippet
+            e.Data.SetData("SnippetAssetId", Asset.Id.ToString());
+            e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        }
     }
 }
