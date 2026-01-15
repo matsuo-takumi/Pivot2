@@ -96,6 +96,10 @@ namespace Pivot.Views
             ShowCameraInfoToggle.IsOn = _viewportSettings.GetShowCameraInfo();
             // Grid
             ShowGridToggle.IsOn = _viewportSettings.GetShowGrid();
+
+            // Wireframe Color
+            var wfColor = _viewportSettings.GetWireframeColor();
+            WireframeColorPicker.Color = HexToColor(wfColor);
         }
 
         private async System.Threading.Tasks.Task LoadPresetsAsync()
@@ -250,6 +254,23 @@ namespace Pivot.Views
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"BgColorPicker_ColorChanged error: {ex.Message}");
+            }
+
+        }
+
+        private async void WireframeColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        {
+            if (_isInitializing || _viewportSettings == null) return;
+
+            try
+            {
+                var color = args.NewColor;
+                var hexColor = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+                await _viewportSettings.SetWireframeColorAsync(hexColor);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"WireframeColorPicker_ColorChanged error: {ex.Message}");
             }
         }
 

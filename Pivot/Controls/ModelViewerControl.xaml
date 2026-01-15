@@ -68,6 +68,13 @@
                           Padding="8">
                 <FontIcon Glyph="&#xED63;" FontSize="14"/>
             </ToggleButton>
+            <ToggleButton x:Name="WireframeToggleButton" 
+                          IsChecked="{x:Bind _viewModel.UseWireframe, Mode=TwoWay}"
+                          ToolTipService.ToolTip="Wireframe"
+                          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
+                          Padding="8">
+                <FontIcon Glyph="&#xE81E;" FontSize="14"/>
+            </ToggleButton>
             
             <!-- Shading Mode Dropdown -->
             <DropDownButton x:Name="ShadingModeButton" ToolTipService.ToolTip="Shading Mode"

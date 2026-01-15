@@ -22,6 +22,7 @@ namespace Pivot.Services
         private CameraGesturePreset _cameraGesture = CameraGesturePreset.Maya;
         private ViewportBackgroundMode _backgroundMode = ViewportBackgroundMode.Custom;
         private string _backgroundColor = "#3399CC";
+        private string _wireframeColor = "#FFFFFF";
 
         // Bool settings cache (loaded once at startup to avoid sync-over-async)
         private readonly Dictionary<string, bool> _boolCache = new();
@@ -74,6 +75,11 @@ namespace Pivot.Services
                 var bgColor = await _settingsStore.GetAsync("Viewport.BackgroundColor");
                 if (!string.IsNullOrEmpty(bgColor))
                     _backgroundColor = bgColor;
+
+                // Wireframe color
+                var wfColor = await _settingsStore.GetAsync("Viewport.WireframeColor");
+                if (!string.IsNullOrEmpty(wfColor))
+                    _wireframeColor = wfColor;
 
                 // Shortcuts
                 var lit = await _settingsStore.GetAsync("KeyConfig.AssetLit");
@@ -237,6 +243,22 @@ namespace Pivot.Services
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "ViewportSettingsService: Failed to persist BackgroundColor.");
+            }
+        }
+
+        public string GetWireframeColor() => _wireframeColor;
+
+        public async Task SetWireframeColorAsync(string hexColor)
+        {
+            _wireframeColor = hexColor ?? "#FFFFFF";
+            try
+            {
+                await _settingsStore.UpsertAsync("Viewport.WireframeColor", _wireframeColor);
+                _messenger?.Send(new SettingsChangedMessage("Viewport.WireframeColor"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ViewportSettingsService: Failed to persist WireframeColor.");
             }
         }
 

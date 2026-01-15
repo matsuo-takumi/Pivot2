@@ -128,13 +128,19 @@ namespace Pivot.Utilities
                 PQueuePriorities = &queuePriority
             };
 
+            var features = new PhysicalDeviceFeatures
+            {
+                FillModeNonSolid = true
+            };
+
             var deviceCreateInfo = new DeviceCreateInfo
             {
                 SType = StructureType.DeviceCreateInfo,
                 QueueCreateInfoCount = 1,
                 PQueueCreateInfos = &queueCreateInfo,
                 EnabledExtensionCount = (uint)deviceExtensions.Count,
-                PpEnabledExtensionNames = ppDeviceExtensions
+                PpEnabledExtensionNames = ppDeviceExtensions,
+                PEnabledFeatures = &features
             };
 
             CheckVkResult(_vk.CreateDevice(_physicalDevice, in deviceCreateInfo, null, out _device));

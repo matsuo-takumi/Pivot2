@@ -79,6 +79,8 @@ namespace Pivot.Utilities
         private bool _useVertexColor = false;
         private bool _useUVChecker = false;
         private bool _useMaterial = true;
+        private bool _useWireframe = false;
+        private System.Numerics.Vector3 _wireframeColor = new System.Numerics.Vector3(1f, 1f, 1f);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct ShadingParams
@@ -424,12 +426,23 @@ namespace Pivot.Utilities
         /// <summary>
         /// Set shader toggle states for Material-based rendering
         /// </summary>
-        public void SetShaderToggles(bool useTexture, bool useVertexColor, bool useUVChecker, bool useMaterial)
+        /// <summary>
+        /// Set shader toggle states for Material-based rendering
+        /// </summary>
+        public void SetShaderToggles(bool useTexture, bool useVertexColor, bool useUVChecker, bool useMaterial, bool useWireframe)
         {
             _useTexture = useTexture;
             _useVertexColor = useVertexColor;
             _useUVChecker = useUVChecker;
             _useMaterial = useMaterial;
+            _useWireframe = useWireframe;
+            
+            _pipelineManager.SetWireframe(useWireframe);
+        }
+
+        public void SetWireframeColor(float r, float g, float b)
+        {
+            _wireframeColor = new System.Numerics.Vector3(r, g, b);
         }
 
         #endregion
@@ -626,6 +639,30 @@ namespace Pivot.Utilities
                 UseUVChecker = _useUVChecker ? 1 : 0,
                 UseMaterial = _useMaterial ? 1 : 0
             };
+
+            // Override for Wireframe mode to show solid color
+            if (_useWireframe)
+            {
+                // Force Material mode (4)
+                shadingParams.Mode = 4;
+                
+                // Use wireframe color as albedo
+                shadingParams.MaterialAlbedo = _wireframeColor;
+                
+                // Disable lighting effects to make it look unlit (flat)
+                // Set Ambient to 1.0 (so Ambient * Albedo = Albedo)
+                shadingParams.AmbientIntensity = 1.0f;
+                shadingParams.AmbientColor = new System.Numerics.Vector3(1f, 1f, 1f);
+                
+                // Zero out other lights
+                shadingParams.KeyLightIntensity = 0.0f;
+                shadingParams.RimLightIntensity = 0.0f;
+                shadingParams.BackLightIntensity = 0.0f;
+                
+                // Zero metallic/roughness to avoid specular
+                shadingParams.MaterialMetallic = 0.0f;
+                shadingParams.MaterialRoughness = 1.0f;
+            }
 
             System.Buffer.MemoryCopy(&shadingParams, _vkShadingBufferMapped, (ulong)Marshal.SizeOf<ShadingParams>(), (ulong)Marshal.SizeOf<ShadingParams>());
         }

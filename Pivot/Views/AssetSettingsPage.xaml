@@ -136,6 +136,27 @@
                                 </StackPanel>
                             </StackPanel>
                             
+                            <!-- Wireframe Section -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Wireframe" FontSize="14" FontWeight="SemiBold"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Color" VerticalAlignment="Center" FontSize="12"/>
+                                    <ColorPicker x:Name="WireframeColorPicker" Grid.Column="1"
+                                                 ColorSpectrumShape="Box" 
+                                                 IsAlphaEnabled="False"
+                                                 IsMoreButtonVisible="False"
+                                                 IsColorSliderVisible="False"
+                                                 IsColorChannelTextInputVisible="False"
+                                                 IsHexInputVisible="True"
+                                                 MinWidth="180" MaxWidth="200"
+                                                 ColorChanged="WireframeColorPicker_ColorChanged"/>
+                                </Grid>
+                            </StackPanel>
+                            
                             <!-- Model Info Section -->
                             <StackPanel Spacing="6">
                                 <TextBlock Text="Model Info" FontSize="14" FontWeight="SemiBold"/>

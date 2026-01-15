@@ -34,6 +34,7 @@ namespace Pivot.Utilities
 
         // Rendering settings
         private bool _backfaceCulling = true;
+        private bool _isWireframe = false;
 
         // Public accessors
         public RenderPass RenderPass => _vkRenderPass;
@@ -72,6 +73,26 @@ namespace Pivot.Utilities
             _backfaceCulling = enabled;
 
             // Recreate pipeline with new culling mode
+            if (_vkPipeline.Handle != 0)
+            {
+                var vk = _core.Vk;
+                var device = _core.Device;
+                vk.DeviceWaitIdle(device);
+                vk.DestroyPipeline(device, _vkPipeline, null);
+                vk.DestroyPipelineLayout(device, _vkPipelineLayout, null);
+                CreatePipeline();
+            }
+        }
+
+        /// <summary>
+        /// Set wireframe mode (requires pipeline recreation)
+        /// </summary>
+        public void SetWireframe(bool enabled)
+        {
+            if (_isWireframe == enabled) return;
+            _isWireframe = enabled;
+
+            // Recreate pipeline with new polygon mode
             if (_vkPipeline.Handle != 0)
             {
                 var vk = _core.Vk;
@@ -265,7 +286,7 @@ namespace Pivot.Utilities
                     SType = StructureType.PipelineRasterizationStateCreateInfo,
                     DepthClampEnable = false,
                     RasterizerDiscardEnable = false,
-                    PolygonMode = PolygonMode.Fill,
+                    PolygonMode = _isWireframe ? PolygonMode.Line : PolygonMode.Fill,
                     LineWidth = 1.0f,
                     CullMode = _backfaceCulling ? CullModeFlags.BackBit : CullModeFlags.None,
                     FrontFace = FrontFace.CounterClockwise,

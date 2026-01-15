@@ -45,6 +45,10 @@ namespace Pivot.ViewModels
             {
                 ApplyMaterialParams();
             }
+            else if (message.Value == "Viewport.WireframeColor")
+            {
+                InitializeWireframeColorFromSettings();
+            }
         }
 
         private void OnThemeChanged(Pivot.Messages.ThemeChangedMessage message)
@@ -89,6 +93,7 @@ namespace Pivot.ViewModels
             
             // Initialize background from settings
             InitializeBackgroundFromSettings();
+            InitializeWireframeColorFromSettings();
             
             // If we have a pending model path, load it now
             if (_renderer != null && !string.IsNullOrWhiteSpace(ModelPath) && File.Exists(ModelPath))
@@ -122,6 +127,25 @@ namespace Pivot.ViewModels
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] InitializeBackgroundFromSettings error: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Initialize wireframe color from settings
+        /// </summary>
+        private void InitializeWireframeColorFromSettings()
+        {
+            try
+            {
+                _viewportSettings ??= App.Current?.Services?.GetService<ViewportSettingsService>();
+                if (_viewportSettings == null) return;
+                
+                var hexColor = _viewportSettings.GetWireframeColor();
+                WireframeColor = HexToColor(hexColor);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ModelViewerViewModel] InitializeWireframeColorFromSettings error: {ex.Message}");
             }
         }
         
@@ -237,6 +261,9 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private bool _useMaterial = true;
 
+        [ObservableProperty]
+        private bool _useWireframe = false;
+
         partial void OnCurrentShadingModeChanged(Pivot.Models.ShadingMode value)
         {
             _renderer?.SetShadingMode(value);
@@ -263,12 +290,17 @@ namespace Pivot.ViewModels
             ApplyShaderToggles();
         }
 
+        partial void OnUseWireframeChanged(bool value)
+        {
+            ApplyShaderToggles();
+        }
+
         /// <summary>
         /// Apply current shader toggle states to the renderer
         /// </summary>
         private void ApplyShaderToggles()
         {
-            _renderer?.SetShaderToggles(UseTexture, UseVertexColor, UseUVChecker, UseMaterial);
+            _renderer?.SetShaderToggles(UseTexture, UseVertexColor, UseUVChecker, UseMaterial, UseWireframe);
         }
 
         [RelayCommand]
@@ -290,6 +322,12 @@ namespace Pivot.ViewModels
         }
 
         [RelayCommand]
+        public void ToggleWireframe()
+        {
+            UseWireframe = !UseWireframe;
+        }
+
+        [RelayCommand]
         public void SetShadingMode(Pivot.Models.ShadingMode mode)
         {
             CurrentShadingMode = mode;
@@ -298,6 +336,14 @@ namespace Pivot.ViewModels
         // Lighting and Background
         [ObservableProperty]
         private Windows.UI.Color _backgroundColor = Windows.UI.Color.FromArgb(255, 51, 153, 204);
+
+        [ObservableProperty]
+        private Windows.UI.Color _wireframeColor = Windows.UI.Color.FromArgb(255, 255, 255, 255);
+
+        partial void OnWireframeColorChanged(Windows.UI.Color value)
+        {
+            _renderer?.SetWireframeColor(value.R / 255f, value.G / 255f, value.B / 255f);
+        }
 
         // Key Light (Main directional light) - Z inverted for front-facing
         [ObservableProperty]
