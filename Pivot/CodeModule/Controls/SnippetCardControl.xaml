@@ -25,7 +25,9 @@
           BorderThickness="1"
           Padding="12"
           CanDrag="True"
+          PointerPressed="Grid_PointerPressed"
           DragStarting="Grid_DragStarting"
+          DropCompleted="Grid_DropCompleted"
           ContextFlyout="{StaticResource CardContextMenu}">
 
         <Grid.RowDefinitions>

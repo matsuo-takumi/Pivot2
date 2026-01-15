@@ -126,7 +126,7 @@
                                Layout="{x:Bind ViewModel.ListVM.IsGridLayout, Mode=OneWay, Converter={StaticResource LayoutConverter}}">
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="models:AssetEntity">
-                            <local:SnippetCardControl Asset="{x:Bind}" PointerPressed="SnippetCard_PointerPressed"/>
+                            <local:SnippetCardControl Asset="{x:Bind}" Tapped="SnippetCard_Tapped"/>
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>

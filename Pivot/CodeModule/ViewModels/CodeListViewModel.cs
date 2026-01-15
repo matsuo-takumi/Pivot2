@@ -60,40 +60,51 @@ namespace Pivot.CodeModule.ViewModels
             }
         }
 
+        public bool IsReorderingAllowed => string.IsNullOrEmpty(_activeTagFilter) && string.IsNullOrEmpty(_searchQuery);
+
         [RelayCommand]
         private async Task DeleteSelectedAsync(AssetEntity? singleItem = null)
         {
-            // If a single item is passed (from context menu), delete just that item
+            List<AssetEntity> itemsToDelete;
+
             if (singleItem != null)
             {
-                await DeleteItemInternalAsync(singleItem);
-                return;
+                itemsToDelete = new List<AssetEntity> { singleItem };
+            }
+            else
+            {
+                // Create a copy of the list to avoid collection modification exceptions
+                itemsToDelete = Snippets.Where(s => s.IsSelected).ToList();
+            }
+
+            if (!itemsToDelete.Any()) return;
+
+            foreach (var item in itemsToDelete)
+            {
+                // Remove from UI first for responsiveness
+                Snippets.Remove(item);
+                _allSnippets.Remove(item);
+                
+                // Then remove from DB
+                await _codeService.DeleteSnippetAsync(item);
             }
             
-            // Otherwise delete all selected items
-            var selected = Snippets.Where(s => s.IsSelected).ToList();
-            if (!selected.Any()) return;
-
-            foreach (var item in selected)
+            // Clear selection mode if empty
+            if (Snippets.Count == 0)
             {
-                await DeleteItemInternalAsync(item);
+                IsSelectionMode = false;
             }
-            IsSelectionMode = false;
         }
 
         [RelayCommand]
         private async Task DeleteItemAsync(AssetEntity item)
         {
             if (item == null) return;
-            await DeleteItemInternalAsync(item);
+            await DeleteSelectedAsync(item);
         }
         
-        private async Task DeleteItemInternalAsync(AssetEntity item)
-        {
-            await _codeService.DeleteSnippetAsync(item);
-            Snippets.Remove(item);
-            _allSnippets.Remove(item);
-        }
+        // Removed internal helper to keep logic centralized in DeleteSelectedAsync
+        // private async Task DeleteItemInternalAsync...
 
         public async Task LoadSnippetsAsync()
         {
@@ -112,17 +123,17 @@ namespace Pivot.CodeModule.ViewModels
             ApplyFilters();
         }
 
-
-
         partial void OnSearchQueryChanged(string value)
         {
             ApplyFilters();
+            OnPropertyChanged(nameof(IsReorderingAllowed));
         }
 
         public void FilterByTag(string? tag)
         {
             _activeTagFilter = tag ?? string.Empty;
             ApplyFilters();
+            OnPropertyChanged(nameof(IsReorderingAllowed));
         }
 
         private void ApplyFilters()
@@ -136,7 +147,7 @@ namespace Pivot.CodeModule.ViewModels
                     s.GetTags().Contains(_activeTagFilter, StringComparer.OrdinalIgnoreCase));
             }
 
-            // 2. Search Query (Title or ContentIndex)
+            // 2. Search Query
             if (!string.IsNullOrWhiteSpace(_searchQuery))
             {
                 var q = _searchQuery.Trim();
@@ -146,98 +157,48 @@ namespace Pivot.CodeModule.ViewModels
                 );
             }
 
+            // Always creating a new collection is safer for ItemsRepeater reset
             Snippets = new ObservableCollection<AssetEntity>(query);
         }
         
         [RelayCommand]
         private async Task MoveItemUpAsync(AssetEntity item)
         {
-            if (item == null || !_allSnippets.Contains(item)) return;
-
+            // Only allow when not filtered
+            if (!IsReorderingAllowed) return;
+            
             var index = Snippets.IndexOf(item);
             if (index > 0)
             {
-                var prevItem = Snippets[index - 1];
-                
-                // Swap SortOrder
-                // If SortOrder is 0, we might need to initialize them
-                // Simple logic: Swap SortOrder. BUT if they are equal, we need to distinguish.
-                // Better approach: Assign new SortOrders based on current view index.
-                
-                // For simple "Swap":
-                // If SortOrders are same, decrement target item's SortOrder.
-                
-                int itemOrder = item.SortOrder;
-                int prevOrder = prevItem.SortOrder;
-                
-                if (itemOrder == prevOrder)
-                {
-                    // If equal, force prevItem to be higher (larger value? Sort is Ascending or Descending?)
-                    // CodeListViewModel sorts by SortOrder (Ascending presumed from OrderBy(s => s.SortOrder))
-                    // So to move UP (visual up, index 0), SortOrder must be SMALLER.
-                    item.SortOrder = prevOrder - 1;
-                }
-                else
-                {
-                    item.SortOrder = prevOrder;
-                    prevItem.SortOrder = itemOrder;
-                }
-
-                // Update UI Collection (Swap)
-                Snippets.Move(index, index - 1);
-
-                // Save both
-                await _codeService.SaveSnippetAsync(item);
-                await _codeService.SaveSnippetAsync(prevItem);
+                await MoveItemToIndexAsync(item.Id, index - 1);
             }
         }
 
         [RelayCommand]
         private async Task MoveItemDownAsync(AssetEntity item)
         {
-            if (item == null || !_allSnippets.Contains(item)) return;
+            if (!IsReorderingAllowed) return;
 
             var index = Snippets.IndexOf(item);
             if (index < Snippets.Count - 1)
             {
-                var nextItem = Snippets[index + 1];
-
-                // Swap SortOrder
-                // To move DOWN (visual down, index increase), SortOrder must be LARGER.
-                
-                int itemOrder = item.SortOrder;
-                int nextOrder = nextItem.SortOrder;
-
-                if (itemOrder == nextOrder)
-                {
-                    item.SortOrder = nextOrder + 1;
-                }
-                else
-                {
-                    item.SortOrder = nextOrder;
-                    nextItem.SortOrder = itemOrder;
-                }
-
-                // Update UI Collection
-                Snippets.Move(index, index + 1);
-
-                // Save both
-                await _codeService.SaveSnippetAsync(item);
-                await _codeService.SaveSnippetAsync(nextItem);
+                await MoveItemToIndexAsync(item.Id, index + 1);
             }
         }
 
         /// <summary>
-        /// Move an item to a specific index via drag-and-drop
+        /// Moves the item visually in the collection without saving.
+        /// Used for real-time drag-and-drop feedback.
         /// </summary>
-        public async Task MoveItemToIndexAsync(int itemId, int targetIndex)
+        public void MoveItemVisual(int itemId, int targetIndex)
         {
-            // Find the item by ID
+            if (!IsReorderingAllowed) return;
+
             var item = Snippets.FirstOrDefault(s => s.Id == itemId);
             if (item == null) return;
 
             int currentIndex = Snippets.IndexOf(item);
-            if (currentIndex == targetIndex || currentIndex < 0) return;
+            if (currentIndex == -1 || currentIndex == targetIndex) return;
 
             // Adjust target index if moving down (since removal shifts indices)
             if (currentIndex < targetIndex)
@@ -245,33 +206,48 @@ namespace Pivot.CodeModule.ViewModels
                 targetIndex--;
             }
 
-            // Clamp target index
-            targetIndex = Math.Max(0, Math.Min(targetIndex, Snippets.Count - 1));
-            if (currentIndex == targetIndex) return;
+            // Clamp
+            targetIndex = Math.Clamp(targetIndex, 0, Snippets.Count - 1);
 
-            // Move in the observable collection
+            // Move in observable collection (Visual update)
             Snippets.Move(currentIndex, targetIndex);
+        }
 
-            // Recalculate SortOrder for all items based on their new positions
+        /// <summary>
+        /// Commits the current order to the database.
+        /// Call this on Drop.
+        /// </summary>
+        public async Task CommitReorderAsync()
+        {
+            // Sync _allSnippets to match the new UI order
+            // Since we only reorder when not filtered, Snippets contains all items.
+            // We can just rebuild _allSnippets from Snippets.
+            // (Or sort _allSnippets matching Snippets IDs)
+            
+            // Reconstruct _allSnippets
+            _allSnippets = Snippets.ToList();
+
+            // Batch Update SortOrders
+            var tasks = new List<Task>();
             for (int i = 0; i < Snippets.Count; i++)
             {
-                Snippets[i].SortOrder = i;
+                var s = Snippets[i];
+                if (s.SortOrder != i)
+                {
+                    s.SortOrder = i;
+                    tasks.Add(_codeService.SaveSnippetAsync(s, saveToDisk: false));
+                }
             }
+            await Task.WhenAll(tasks);
+        }
 
-            // Update _allSnippets to reflect the new order
-            var movedItem = _allSnippets.FirstOrDefault(s => s.Id == itemId);
-            if (movedItem != null)
-            {
-                _allSnippets.Remove(movedItem);
-                int allSnippetsTargetIndex = Math.Min(targetIndex, _allSnippets.Count);
-                _allSnippets.Insert(allSnippetsTargetIndex, movedItem);
-            }
-
-            // Save all items with updated SortOrder
-            foreach (var snippet in Snippets)
-            {
-                await _codeService.SaveSnippetAsync(snippet);
-            }
+        /// <summary>
+        /// Old single-shot move method (kept for backward compatibility if needed, using new components)
+        /// </summary>
+        public async Task MoveItemToIndexAsync(int itemId, int targetIndex)
+        {
+            MoveItemVisual(itemId, targetIndex);
+            await CommitReorderAsync();
         }
     }
 }

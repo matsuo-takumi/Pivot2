@@ -99,7 +99,7 @@ namespace Pivot.CodeModule.Views
             }
         }
 
-        private async void SnippetCard_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        private async void SnippetCard_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
         {
             // SnippetCardControl uses Asset dependency property, not DataContext
             if (sender is SnippetCardControl card && card.Asset != null)
@@ -110,13 +110,29 @@ namespace Pivot.CodeModule.Views
 
         private void ScrollViewer_DragOver(object sender, DragEventArgs e)
         {
-            // Check if the data contains our custom format
-            if (e.DataView.Contains("SnippetAssetId"))
+            // Check if the data contains our custom format and if reordering is allowed
+            if (e.DataView.Contains("SnippetAssetId") && 
+                ViewModel?.ListVM?.IsReorderingAllowed == true)
             {
                 e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
                 e.DragUIOverride.Caption = "Move";
                 e.DragUIOverride.IsCaptionVisible = true;
                 e.DragUIOverride.IsGlyphVisible = false;
+
+                // Live Reordering Logic
+                if (int.TryParse(Pivot.CodeModule.Controls.SnippetCardControl.CurrentDragId, out int draggedId))
+                {
+                     var dropPosition = e.GetPosition(SnippetsRepeater);
+                     
+                     // Adjust position by the grab offset to get the top-left of the floating card
+                     var offset = Pivot.CodeModule.Controls.SnippetCardControl.CurrentDragOffset;
+                     var actualPos = new Point(dropPosition.X - offset.X, dropPosition.Y - offset.Y);
+                     
+                     int targetIndex = GetTargetIndexFromPosition(actualPos);
+                     
+                     // Perform the visual move
+                     ViewModel.ListVM.MoveItemVisual(draggedId, targetIndex);
+                }
             }
             else
             {
@@ -126,21 +142,15 @@ namespace Pivot.CodeModule.Views
 
         private async void ScrollViewer_Drop(object sender, DragEventArgs e)
         {
-            if (!e.DataView.Contains("SnippetAssetId")) return;
+            if (!e.DataView.Contains("SnippetAssetId") || ViewModel?.ListVM?.IsReorderingAllowed != true) return;
 
             try
             {
-                // Get the dragged item's ID
-                var idString = await e.DataView.GetDataAsync("SnippetAssetId") as string;
-                if (string.IsNullOrEmpty(idString) || !int.TryParse(idString, out int draggedId))
-                    return;
+                // Clear drag state
+                Pivot.CodeModule.Controls.SnippetCardControl.CurrentDragId = null;
 
-                // Find the drop position based on mouse location
-                var dropPosition = e.GetPosition(SnippetsRepeater);
-                int targetIndex = GetTargetIndexFromPosition(dropPosition);
-
-                // Call ViewModel to move the item
-                await ViewModel.ListVM.MoveItemToIndexAsync(draggedId, targetIndex);
+                // Commit the changes (Save to DB)
+                await ViewModel.ListVM.CommitReorderAsync();
             }
             catch (Exception ex)
             {
