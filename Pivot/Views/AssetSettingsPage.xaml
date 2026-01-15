@@ -20,10 +20,6 @@
         </Grid.RowDefinitions>
 
         <Pivot>
-            <PivotItem Header="Filters">
-                <local:FilterSettingsView x:Name="FilterSettingsView" />
-            </PivotItem>
-
             <PivotItem Header="Viewport">
                 <Grid ColumnSpacing="24" Padding="12,16">
                     <Grid.ColumnDefinitions>
@@ -329,16 +325,6 @@
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
-                </Grid>
-            </PivotItem>
-
-            <PivotItem Header="Material">
-                <local:MaterialSettingsView x:Name="MaterialSettingsView" />
-            </PivotItem>
-
-            <PivotItem Header="General">
-                <Grid Padding="12">
-                    <TextBlock Text="General Asset settings (placeholder)" Foreground="{ThemeResource AppTextCaptionBrush}" />
                 </Grid>
             </PivotItem>
         </Pivot>

@@ -37,22 +37,6 @@ namespace Pivot.Views
             _viewportSettings = App.Current.Services.GetService<ViewportSettingsService>();
             _materialSettings = App.Current.Services.GetService<MaterialSettingsService>();
             _messenger = App.Current.Services.GetService<IMessenger>();
-            var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
-            var logger = App.Current.Services.GetService(typeof(ILogger<FilterSettingsViewModel>)) as ILogger<FilterSettingsViewModel>;
-            
-            if (filterSettings != null)
-            {
-                var filterView = this.FindName("FilterSettingsView") as FilterSettingsView;
-                if (filterView != null)
-                {
-                    filterView.ViewModel = new FilterSettingsViewModel(
-                        filterSettings,
-                        FilterType.Asset,
-                        "Asset",
-                        GetDefaultAssetFilters,
-                        logger);
-                }
-            }
             
             if (_viewportSettings != null)
             {
@@ -474,11 +458,7 @@ namespace Pivot.Views
             }
         }
 
-        private static List<CustomFilter> GetDefaultAssetFilters()
-        {
-            // デフォルトタグなし - ユーザーが自分で作成
-            return new List<CustomFilter>();
-        }
+
     }
 }
 
