@@ -109,13 +109,11 @@ namespace Pivot.CodeModule.ViewModels
             }
         }
 
-        public async Task CloseEditorAsync() 
+        public Task CloseEditorAsync() 
         {
-            if (CurrentSnippet != null && IsEditing)
-            {
-                await SaveContentAsync();
-            }
-            CloseEditor(); 
+            // Close without saving - user must explicitly save
+            CloseEditor();
+            return Task.CompletedTask;
         }
 
         public void CloseEditor()
@@ -175,16 +173,10 @@ namespace Pivot.CodeModule.ViewModels
 
             try
             {
-                // Delete file
-                if (File.Exists(CurrentSnippet.FilePath))
-                {
-                    File.Delete(CurrentSnippet.FilePath);
-                }
-
-                // Delete from DB
+                // Delete from DB and file (CodeService handles both)
                 await _codeService.DeleteSnippetAsync(CurrentSnippet);
 
-                // Notify list
+                // Notify list to remove item
                 _messenger.Send(new AssetEntityChangedMessage(CurrentSnippet, CurrentSnippet.FilePath, AssetEntityChangedMessage.ChangeType.Deleted));
 
                 CloseEditor();

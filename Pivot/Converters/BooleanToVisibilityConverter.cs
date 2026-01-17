@@ -13,6 +13,12 @@ namespace Pivot.Converters
 			{
 				isVisible = b;
 			}
+            
+            if (parameter is string s && string.Equals(s, "Inverse", StringComparison.OrdinalIgnoreCase))
+            {
+                isVisible = !isVisible;
+            }
+
 			return isVisible ? Visibility.Visible : Visibility.Collapsed;
 		}
 

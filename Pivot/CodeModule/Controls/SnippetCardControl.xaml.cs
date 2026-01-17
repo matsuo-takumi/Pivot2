@@ -1,6 +1,10 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Pivot.Models;
+using Pivot.CodeModule.ViewModels;
+using Windows.ApplicationModel.DataTransfer;
+using System.IO;
 
 namespace Pivot.CodeModule.Controls
 {
@@ -18,57 +22,117 @@ namespace Pivot.CodeModule.Controls
         public SnippetCardControl()
         {
             this.InitializeComponent();
-            this.Loaded += SnippetCardControl_Loaded;
         }
 
-        private void SnippetCardControl_Loaded(object sender, RoutedEventArgs e)
+        private CodeListViewModel? GetListViewModel()
         {
-            // Apply implicit animation to the control itself so it slides when ItemsRepeater moves it
-            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(this);
-            var compositor = visual.Compositor;
-
-            var offsetAnimation = compositor.CreateVector3KeyFrameAnimation();
-            offsetAnimation.Target = "Offset";
-            offsetAnimation.InsertExpressionKeyFrame(1.0f, "this.FinalValue");
-            offsetAnimation.Duration = System.TimeSpan.FromMilliseconds(400);
-
-            var implicitAnimations = compositor.CreateImplicitAnimationCollection();
-            implicitAnimations["Offset"] = offsetAnimation;
-
-            visual.ImplicitAnimations = implicitAnimations;
+            DependencyObject? current = this;
+            while (current != null)
+            {
+                if (current is Pivot.CodeModule.Views.CodePage page)
+                {
+                    return page.ViewModel?.ListVM;
+                }
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return null;
         }
 
-        public static string? CurrentDragId { get; set; }
-        public static Windows.Foundation.Point CurrentDragOffset { get; set; }
-
-        private Windows.Foundation.Point _lastPointerPt;
-
-        private void Grid_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+        private async void CopyButton_Click(object sender, RoutedEventArgs e)
         {
-            _lastPointerPt = e.GetCurrentPoint(this).Position;
+            await CopyContentAsync();
         }
 
-        private void Grid_DragStarting(UIElement sender, Microsoft.UI.Xaml.DragStartingEventArgs e)
+        private async void CopyMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            await CopyContentAsync();
+        }
+
+        private async System.Threading.Tasks.Task CopyContentAsync()
         {
             if (Asset == null) return;
 
-            // Set custom data to identify the dragged snippet
-            CurrentDragId = Asset.Id.ToString();
-            CurrentDragOffset = _lastPointerPt;
+            try
+            {
+                string content;
+                if (!string.IsNullOrEmpty(Asset.FilePath) && File.Exists(Asset.FilePath))
+                {
+                    content = await File.ReadAllTextAsync(Asset.FilePath);
+                }
+                else
+                {
+                    content = Asset.ContentIndex ?? string.Empty;
+                }
 
-            e.Data.SetData("SnippetAssetId", CurrentDragId);
-            e.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
-            
-            // Hide the card in the list to create a "gap" effect
-            // We use 0.01 to keep it hit-testable/layout-affecting but invisible
-            this.Opacity = 0.01;
+                var dataPackage = new DataPackage();
+                dataPackage.SetText(content);
+                Clipboard.SetContent(dataPackage);
+            }
+            catch { }
         }
 
-        private void Grid_DropCompleted(UIElement sender, Microsoft.UI.Xaml.DropCompletedEventArgs e)
+        private async void DuplicateMenuItem_Click(object sender, RoutedEventArgs e)
         {
-             // Restore visibility when drag ends (whether dropped or cancelled)
-             this.Opacity = 1.0;
-             CurrentDragId = null;
+            if (Asset == null) return;
+
+            var listVM = GetListViewModel();
+            if (listVM == null) return;
+
+            // Find CodePage to access EditorVM for creation
+            DependencyObject? current = this;
+            Pivot.CodeModule.Views.CodePage? page = null;
+            while (current != null)
+            {
+                if (current is Pivot.CodeModule.Views.CodePage p)
+                {
+                    page = p;
+                    break;
+                }
+                current = VisualTreeHelper.GetParent(current);
+            }
+
+            if (page?.ViewModel?.EditorVM == null) return;
+
+            // Read content
+            string content = Asset.ContentIndex ?? string.Empty;
+            if (!string.IsNullOrEmpty(Asset.FilePath) && File.Exists(Asset.FilePath))
+            {
+                content = await File.ReadAllTextAsync(Asset.FilePath);
+            }
+
+            // Create duplicate with modified name
+            var newSnippet = await page.ViewModel.EditorVM.CreateSnippetAsync(
+                Asset.FileName + "_copy",
+                Asset.Tool ?? "text",
+                content,
+                Asset.GetTags().ToArray()
+            );
+
+            if (newSnippet != null)
+            {
+                await listVM.LoadSnippetsAsync();
+            }
+        }
+
+        private void MoveUpMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (Asset == null) return;
+            var listVM = GetListViewModel();
+            listVM?.MoveItemUpCommand?.Execute(Asset);
+        }
+
+        private void MoveDownMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (Asset == null) return;
+            var listVM = GetListViewModel();
+            listVM?.MoveItemDownCommand?.Execute(Asset);
+        }
+
+        private void DeleteMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (Asset == null) return;
+            var listVM = GetListViewModel();
+            listVM?.DeleteItemCommand?.Execute(Asset);
         }
     }
 }

@@ -12,10 +12,18 @@
         <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <converters:JsonTagsToCollectionConverter x:Key="JsonTagsToCollectionConverter"/>
         <MenuFlyout x:Key="CardContextMenu">
-            <MenuFlyoutItem Text="Move Up" Command="{Binding DataContext.ViewModel.ListVM.MoveItemUpCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}"/>
-            <MenuFlyoutItem Text="Move Down" Command="{Binding DataContext.ViewModel.ListVM.MoveItemDownCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}"/>
+            <MenuFlyoutItem Text="Copy" Click="CopyMenuItem_Click">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xE8C8;"/>
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="Duplicate" Click="DuplicateMenuItem_Click">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xE8C1;"/>
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
             <MenuFlyoutSeparator />
-            <MenuFlyoutItem Text="Delete" Command="{Binding DataContext.ViewModel.ListVM.DeleteItemCommand, ElementName=RootPage}" CommandParameter="{x:Bind Asset}" Foreground="Red"/>
+            <MenuFlyoutItem Text="Delete" Click="DeleteMenuItem_Click" Foreground="Red"/>
         </MenuFlyout>
     </UserControl.Resources>
 
@@ -24,10 +32,6 @@
           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
           BorderThickness="1"
           Padding="12"
-          CanDrag="True"
-          PointerPressed="Grid_PointerPressed"
-          DragStarting="Grid_DragStarting"
-          DropCompleted="Grid_DropCompleted"
           ContextFlyout="{StaticResource CardContextMenu}">
 
         <Grid.RowDefinitions>
@@ -45,11 +49,28 @@
                   Margin="0,-8,-8,0"
                   Canvas.ZIndex="10"/>
 
-        <!-- Header -->
-        <TextBlock Text="{Binding Asset.FileName, ElementName=RootControl}" 
-                   Style="{StaticResource BodyStrongTextBlockStyle}" 
-                   TextTrimming="CharacterEllipsis" 
-                   Margin="0,0,24,0"/>
+        <!-- Header Row -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <TextBlock Text="{Binding Asset.FileName, ElementName=RootControl}" 
+                       Style="{StaticResource BodyStrongTextBlockStyle}" 
+                       TextTrimming="CharacterEllipsis" 
+                       VerticalAlignment="Center"/>
+            
+            <!-- Copy Button -->
+            <Button Grid.Column="1" 
+                    Background="Transparent" 
+                    BorderThickness="0" 
+                    Padding="4"
+                    Click="CopyButton_Click"
+                    ToolTipService.ToolTip="Copy content">
+                <FontIcon Glyph="&#xE8C8;" FontSize="14"/>
+            </Button>
+        </Grid>
 
         <!-- Preview Content -->
         <TextBlock Grid.Row="1" 

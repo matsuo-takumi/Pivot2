@@ -1,10 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Pivot.Models; // AssetEntity
+using Pivot.Models;
 using Pivot.Services;
 using Pivot.Messages;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
@@ -17,7 +18,7 @@ namespace Pivot.CodeModule.ViewModels
         private readonly CodeService _codeService;
         private readonly IMessenger _messenger;
 
-        // Full dataset
+        // Full dataset (source of truth for filtering)
         private List<AssetEntity> _allSnippets = new();
 
         [ObservableProperty]
@@ -28,13 +29,35 @@ namespace Pivot.CodeModule.ViewModels
 
         // Current filter state
         private string _activeTagFilter = string.Empty;
+        
         [ObservableProperty]
         private string _searchQuery = string.Empty;
+
+        // Debounce timer for saving reorder
+        private System.Threading.Timer? _saveDebounceTimer;
+        private const int SaveDebounceMs = 500;
 
         public CodeListViewModel(CodeService codeService, IMessenger messenger)
         {
             _codeService = codeService;
             _messenger = messenger;
+            
+            // Subscribe to deletion messages from Editor
+            _messenger.Register<AssetEntityChangedMessage>(this, OnAssetChanged);
+        }
+
+        private void OnAssetChanged(object recipient, AssetEntityChangedMessage message)
+        {
+            if (message.Type == AssetEntityChangedMessage.ChangeType.Deleted)
+            {
+                // Remove from collections when deleted from editor
+                var item = Snippets.FirstOrDefault(s => s.Id == message.Asset?.Id);
+                if (item != null)
+                {
+                    Snippets.Remove(item);
+                    _allSnippets.Remove(item);
+                }
+            }
         }
 
         [ObservableProperty]
@@ -55,12 +78,16 @@ namespace Pivot.CodeModule.ViewModels
             IsSelectionMode = !IsSelectionMode;
             if (!IsSelectionMode)
             {
-                // Clear selection when exiting mode
                 foreach (var s in Snippets) s.IsSelected = false;
             }
         }
 
-        public bool IsReorderingAllowed => string.IsNullOrEmpty(_activeTagFilter) && string.IsNullOrEmpty(_searchQuery);
+        /// <summary>
+        /// Reordering allowed only when no filter/search active
+        /// </summary>
+        public bool CanReorder => string.IsNullOrEmpty(_activeTagFilter) && string.IsNullOrEmpty(_searchQuery);
+
+        #region CRUD Operations
 
         [RelayCommand]
         private async Task DeleteSelectedAsync(AssetEntity? singleItem = null)
@@ -73,7 +100,6 @@ namespace Pivot.CodeModule.ViewModels
             }
             else
             {
-                // Create a copy of the list to avoid collection modification exceptions
                 itemsToDelete = Snippets.Where(s => s.IsSelected).ToList();
             }
 
@@ -81,15 +107,11 @@ namespace Pivot.CodeModule.ViewModels
 
             foreach (var item in itemsToDelete)
             {
-                // Remove from UI first for responsiveness
                 Snippets.Remove(item);
                 _allSnippets.Remove(item);
-                
-                // Then remove from DB
                 await _codeService.DeleteSnippetAsync(item);
             }
             
-            // Clear selection mode if empty
             if (Snippets.Count == 0)
             {
                 IsSelectionMode = false;
@@ -102,16 +124,16 @@ namespace Pivot.CodeModule.ViewModels
             if (item == null) return;
             await DeleteSelectedAsync(item);
         }
-        
-        // Removed internal helper to keep logic centralized in DeleteSelectedAsync
-        // private async Task DeleteItemInternalAsync...
+
+        #endregion
+
+        #region Loading & Filtering
 
         public async Task LoadSnippetsAsync()
         {
             var data = await _codeService.GetAllSnippetsAsync();
             if (data != null)
             {
-                // Sort by SortOrder, then UpdatedAt
                 _allSnippets = data.OrderBy(s => s.SortOrder)
                                    .ThenByDescending(s => s.UpdatedAt)
                                    .ToList();
@@ -126,28 +148,29 @@ namespace Pivot.CodeModule.ViewModels
         partial void OnSearchQueryChanged(string value)
         {
             ApplyFilters();
-            OnPropertyChanged(nameof(IsReorderingAllowed));
+            OnPropertyChanged(nameof(CanReorder));
         }
 
         public void FilterByTag(string? tag)
         {
             _activeTagFilter = tag ?? string.Empty;
             ApplyFilters();
-            OnPropertyChanged(nameof(IsReorderingAllowed));
+            OnPropertyChanged(nameof(CanReorder));
         }
 
         private void ApplyFilters()
         {
+            // Unsubscribe from old collection
+            Snippets.CollectionChanged -= OnSnippetsCollectionChanged;
+            
             IEnumerable<AssetEntity> query = _allSnippets;
 
-            // 1. Tag Filter
             if (!string.IsNullOrEmpty(_activeTagFilter))
             {
                 query = query.Where(s => 
                     s.GetTags().Contains(_activeTagFilter, StringComparer.OrdinalIgnoreCase));
             }
 
-            // 2. Search Query
             if (!string.IsNullOrWhiteSpace(_searchQuery))
             {
                 var q = _searchQuery.Trim();
@@ -157,77 +180,42 @@ namespace Pivot.CodeModule.ViewModels
                 );
             }
 
-            // Always creating a new collection is safer for ItemsRepeater reset
             Snippets = new ObservableCollection<AssetEntity>(query);
-        }
-        
-        [RelayCommand]
-        private async Task MoveItemUpAsync(AssetEntity item)
-        {
-            // Only allow when not filtered
-            if (!IsReorderingAllowed) return;
             
-            var index = Snippets.IndexOf(item);
-            if (index > 0)
-            {
-                await MoveItemToIndexAsync(item.Id, index - 1);
-            }
+            // Subscribe to new collection for reorder detection
+            Snippets.CollectionChanged += OnSnippetsCollectionChanged;
         }
 
-        [RelayCommand]
-        private async Task MoveItemDownAsync(AssetEntity item)
-        {
-            if (!IsReorderingAllowed) return;
+        #endregion
 
-            var index = Snippets.IndexOf(item);
-            if (index < Snippets.Count - 1)
-            {
-                await MoveItemToIndexAsync(item.Id, index + 1);
-            }
+        #region Reordering (GridView-driven)
+
+        /// <summary>
+        /// Called by GridView's internal reordering when user drags items.
+        /// We detect changes and debounce-save.
+        /// </summary>
+        private void OnSnippetsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            // Only save reorder if allowed and it's a move/reset action
+            if (!CanReorder) return;
+            
+            // Debounce the save to avoid spamming during rapid reorders
+            _saveDebounceTimer?.Dispose();
+            _saveDebounceTimer = new System.Threading.Timer(
+                async _ => await SaveSortOrderAsync(),
+                null,
+                SaveDebounceMs,
+                System.Threading.Timeout.Infinite);
         }
 
         /// <summary>
-        /// Moves the item visually in the collection without saving.
-        /// Used for real-time drag-and-drop feedback.
+        /// Saves current UI order to database.
         /// </summary>
-        public void MoveItemVisual(int itemId, int targetIndex)
+        private async Task SaveSortOrderAsync()
         {
-            if (!IsReorderingAllowed) return;
-
-            var item = Snippets.FirstOrDefault(s => s.Id == itemId);
-            if (item == null) return;
-
-            int currentIndex = Snippets.IndexOf(item);
-            if (currentIndex == -1 || currentIndex == targetIndex) return;
-
-            // Adjust target index if moving down (since removal shifts indices)
-            if (currentIndex < targetIndex)
-            {
-                targetIndex--;
-            }
-
-            // Clamp
-            targetIndex = Math.Clamp(targetIndex, 0, Snippets.Count - 1);
-
-            // Move in observable collection (Visual update)
-            Snippets.Move(currentIndex, targetIndex);
-        }
-
-        /// <summary>
-        /// Commits the current order to the database.
-        /// Call this on Drop.
-        /// </summary>
-        public async Task CommitReorderAsync()
-        {
-            // Sync _allSnippets to match the new UI order
-            // Since we only reorder when not filtered, Snippets contains all items.
-            // We can just rebuild _allSnippets from Snippets.
-            // (Or sort _allSnippets matching Snippets IDs)
-            
-            // Reconstruct _allSnippets
+            // Sync _allSnippets
             _allSnippets = Snippets.ToList();
 
-            // Batch Update SortOrders
             var tasks = new List<Task>();
             for (int i = 0; i < Snippets.Count; i++)
             {
@@ -238,16 +226,41 @@ namespace Pivot.CodeModule.ViewModels
                     tasks.Add(_codeService.SaveSnippetAsync(s, saveToDisk: false));
                 }
             }
-            await Task.WhenAll(tasks);
+            
+            if (tasks.Any())
+            {
+                await Task.WhenAll(tasks);
+            }
         }
 
         /// <summary>
-        /// Old single-shot move method (kept for backward compatibility if needed, using new components)
+        /// Context menu: Move Up
         /// </summary>
-        public async Task MoveItemToIndexAsync(int itemId, int targetIndex)
+        [RelayCommand]
+        private void MoveItemUp(AssetEntity item)
         {
-            MoveItemVisual(itemId, targetIndex);
-            await CommitReorderAsync();
+            if (!CanReorder) return;
+            var index = Snippets.IndexOf(item);
+            if (index > 0)
+            {
+                Snippets.Move(index, index - 1);
+            }
         }
+
+        /// <summary>
+        /// Context menu: Move Down
+        /// </summary>
+        [RelayCommand]
+        private void MoveItemDown(AssetEntity item)
+        {
+            if (!CanReorder) return;
+            var index = Snippets.IndexOf(item);
+            if (index < Snippets.Count - 1)
+            {
+                Snippets.Move(index, index + 1);
+            }
+        }
+
+        #endregion
     }
 }

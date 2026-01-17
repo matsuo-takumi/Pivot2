@@ -43,5 +43,10 @@ namespace Pivot.Repositories
         Task<Dictionary<string, AssetEntity>> GetExistingAssetsInDirectoryAsync(
             string directoryPath, 
             CancellationToken ct = default);
+
+        /// <summary>
+        /// Permanently delete an asset by file path (hard delete).
+        /// </summary>
+        Task HardDeleteByPathAsync(string filePath, CancellationToken ct = default);
     }
 }

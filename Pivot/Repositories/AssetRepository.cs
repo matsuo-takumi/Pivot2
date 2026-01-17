@@ -93,6 +93,8 @@ namespace Pivot.Repositories
                     .SetProperty(a => a.Language, asset.Language)
                     .SetProperty(a => a.Tool, asset.Tool)
                     .SetProperty(a => a.ContentIndex, asset.ContentIndex)
+                    .SetProperty(a => a.UserTagsJson, asset.UserTagsJson)
+                    .SetProperty(a => a.SortOrder, asset.SortOrder)
                     .SetProperty(a => a.UpdatedAt, DateTime.UtcNow),
                     ct);
 
@@ -173,6 +175,13 @@ namespace Pivot.Repositories
                 a => a.FilePath, 
                 a => a, 
                 StringComparer.OrdinalIgnoreCase);
+        }
+
+        public async Task HardDeleteByPathAsync(string filePath, CancellationToken ct = default)
+        {
+            await _context.Assets
+                .Where(a => a.FilePath == filePath)
+                .ExecuteDeleteAsync(ct);
         }
     }
 }

@@ -87,7 +87,22 @@ namespace Pivot.Services
         {
             if (snippet == null || string.IsNullOrEmpty(snippet.FilePath)) return;
             
-            await _repository.MarkDeletedAsync(snippet.FilePath);
+            try
+            {
+                // 1. Delete file from filesystem
+                if (System.IO.File.Exists(snippet.FilePath))
+                {
+                    System.IO.File.Delete(snippet.FilePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete snippet file: {Path}", snippet.FilePath);
+                // Continue with DB deletion even if file delete fails
+            }
+            
+            // 2. Hard delete from database
+            await _repository.HardDeleteByPathAsync(snippet.FilePath);
         }
 
         public async Task RestoreSnippetAsync(AssetEntity snippet)

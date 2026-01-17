@@ -110,30 +110,50 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Quick Add Bar (Google Keep style) -->
+            <!-- Quick Add Bar -->
             <local:QuickAddControl x:Name="QuickAddBar" 
                                    Grid.Row="0" 
                                    Margin="0,0,0,24"
                                    SnippetCreated="QuickAddBar_SnippetCreated"/>
 
-            <!-- Snippet Grid -->
-            <ScrollViewer Grid.Row="1" 
-                          AllowDrop="True"
-                          DragOver="ScrollViewer_DragOver"
-                          Drop="ScrollViewer_Drop">
-                <ItemsRepeater x:Name="SnippetsRepeater"
-                               ItemsSource="{x:Bind ViewModel.ListVM.Snippets, Mode=OneWay}"
-                               Layout="{x:Bind ViewModel.ListVM.IsGridLayout, Mode=OneWay, Converter={StaticResource LayoutConverter}}">
-                    <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="models:AssetEntity">
-                            <local:SnippetCardControl Asset="{x:Bind}" Tapped="SnippetCard_Tapped"/>
-                        </DataTemplate>
-                    </ItemsRepeater.ItemTemplate>
-                </ItemsRepeater>
-            </ScrollViewer>
+            <!-- Card View -->
+            <GridView x:Name="SnippetsGridView"
+                      Grid.Row="1"
+                      ItemsSource="{x:Bind ViewModel.ListVM.Snippets, Mode=OneWay}"
+                      CanReorderItems="{x:Bind ViewModel.ListVM.CanReorder, Mode=OneWay}"
+                      CanDragItems="{x:Bind ViewModel.ListVM.CanReorder, Mode=OneWay}"
+                      AllowDrop="True"
+                      SelectionMode="None"
+                      IsItemClickEnabled="True"
+                      ItemClick="SnippetsGridView_ItemClick"
+                      HorizontalContentAlignment="Stretch"
+                      VerticalContentAlignment="Stretch">
+                <GridView.ItemContainerStyle>
+                    <Style TargetType="GridViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Margin" Value="4"/>
+                    </Style>
+                </GridView.ItemContainerStyle>
+                <GridView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsWrapGrid Orientation="Horizontal" 
+                                       ItemWidth="300" 
+                                       ItemHeight="200"
+                                       MaximumRowsOrColumns="10"/>
+                    </ItemsPanelTemplate>
+                </GridView.ItemsPanel>
+                <GridView.ItemTemplate>
+                    <DataTemplate x:DataType="models:AssetEntity">
+                        <local:SnippetCardControl Asset="{x:Bind}" 
+                                                  HorizontalAlignment="Stretch" 
+                                                  VerticalAlignment="Stretch"/>
+                    </DataTemplate>
+                </GridView.ItemTemplate>
+            </GridView>
         </Grid>
 
-        <!-- Overlay Editor -->
+        <!-- Floating Overlay Editor -->
         <local:OverlayEditorControl Grid.ColumnSpan="2"
                                     Visibility="{x:Bind ViewModel.EditorVM.IsEditing, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                                     DataContext="{x:Bind ViewModel.EditorVM}"/>
