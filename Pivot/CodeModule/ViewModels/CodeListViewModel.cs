@@ -125,6 +125,18 @@ namespace Pivot.CodeModule.ViewModels
             await DeleteSelectedAsync(item);
         }
 
+        [RelayCommand]
+        private async Task TogglePinAsync(AssetEntity item)
+        {
+            if (item == null) return;
+            
+            item.IsFavorite = !item.IsFavorite;
+            await _codeService.SaveSnippetAsync(item, saveToDisk: false);
+            
+            // Reload to resort
+            await LoadSnippetsAsync();
+        }
+
         #endregion
 
         #region Loading & Filtering
@@ -134,7 +146,8 @@ namespace Pivot.CodeModule.ViewModels
             var data = await _codeService.GetAllSnippetsAsync();
             if (data != null)
             {
-                _allSnippets = data.OrderBy(s => s.SortOrder)
+                _allSnippets = data.OrderByDescending(s => s.IsFavorite)
+                                   .ThenBy(s => s.SortOrder)
                                    .ThenByDescending(s => s.UpdatedAt)
                                    .ToList();
             }
@@ -262,5 +275,134 @@ namespace Pivot.CodeModule.ViewModels
         }
 
         #endregion
+
+        #region Import / Export
+
+        /// <summary>
+        /// Export all snippets to JSON file
+        /// </summary>
+        [RelayCommand]
+        private async Task ExportAsync()
+        {
+            try
+            {
+                var picker = new Windows.Storage.Pickers.FileSavePicker();
+                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+                picker.FileTypeChoices.Add("JSON", new List<string> { ".json" });
+                picker.SuggestedFileName = $"pivot_snippets_{DateTime.Now:yyyyMMdd}";
+
+                // Get window handle for WinUI3
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+                var file = await picker.PickSaveFileAsync();
+                if (file == null) return;
+
+                var exportData = new List<SnippetExportData>();
+                foreach (var snippet in _allSnippets)
+                {
+                    string content = snippet.ContentIndex ?? string.Empty;
+                    if (!string.IsNullOrEmpty(snippet.FilePath) && System.IO.File.Exists(snippet.FilePath))
+                    {
+                        content = await System.IO.File.ReadAllTextAsync(snippet.FilePath);
+                    }
+
+                    exportData.Add(new SnippetExportData
+                    {
+                        FileName = snippet.FileName,
+                        Language = snippet.Tool ?? "text",
+                        Content = content,
+                        Tags = snippet.GetTags().ToArray(),
+                        CreatedAt = snippet.CreatedAt,
+                        UpdatedAt = snippet.UpdatedAt
+                    });
+                }
+
+                var json = System.Text.Json.JsonSerializer.Serialize(exportData, new System.Text.Json.JsonSerializerOptions 
+                { 
+                    WriteIndented = true 
+                });
+                await Windows.Storage.FileIO.WriteTextAsync(file, json);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Import snippets from JSON file
+        /// </summary>
+        [RelayCommand]
+        private async Task ImportAsync()
+        {
+            try
+            {
+                var picker = new Windows.Storage.Pickers.FileOpenPicker();
+                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+                picker.FileTypeFilter.Add(".json");
+
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+                var file = await picker.PickSingleFileAsync();
+                if (file == null) return;
+
+                var json = await Windows.Storage.FileIO.ReadTextAsync(file);
+                var importData = System.Text.Json.JsonSerializer.Deserialize<List<SnippetExportData>>(json);
+                if (importData == null) return;
+
+                foreach (var item in importData)
+                {
+                    // Check if already exists
+                    if (_allSnippets.Any(s => s.FileName == item.FileName))
+                        continue;
+
+                    var snippet = new AssetEntity
+                    {
+                        FileName = item.FileName,
+                        FilePath = System.IO.Path.Combine(GetCodeDirectory(), item.FileName),
+                        Kind = AssetKind.Code,
+                        Tool = item.Language,
+                        ContentIndex = item.Content?.Length > 500 ? item.Content.Substring(0, 500) : item.Content,
+                        UserTagsJson = System.Text.Json.JsonSerializer.Serialize(item.Tags ?? Array.Empty<string>()),
+                        CreatedAt = item.CreatedAt,
+                        UpdatedAt = item.UpdatedAt
+                    };
+
+                    // Write file
+                    var dir = System.IO.Path.GetDirectoryName(snippet.FilePath);
+                    if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
+                    {
+                        System.IO.Directory.CreateDirectory(dir);
+                    }
+                    await System.IO.File.WriteAllTextAsync(snippet.FilePath, item.Content ?? string.Empty);
+
+                    // Save to DB
+                    await _codeService.SaveSnippetAsync(snippet);
+                }
+
+                // Reload
+                await LoadSnippetsAsync();
+            }
+            catch { }
+        }
+
+        private string GetCodeDirectory()
+        {
+            return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Pivot", "Code");
+        }
+
+        #endregion
+    }
+
+    /// <summary>
+    /// Data structure for import/export
+    /// </summary>
+    public class SnippetExportData
+    {
+        public string FileName { get; set; } = string.Empty;
+        public string Language { get; set; } = "text";
+        public string Content { get; set; } = string.Empty;
+        public string[] Tags { get; set; } = Array.Empty<string>();
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
     }
 }

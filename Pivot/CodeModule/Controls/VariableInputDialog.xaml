@@ -1,0 +1,32 @@
+<ContentDialog
+    x:Class="Pivot.CodeModule.Controls.VariableInputDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sys="using:System"
+    mc:Ignorable="d"
+    Title="Enter Variable Values"
+    PrimaryButtonText="OK"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    Style="{StaticResource DefaultContentDialogStyle}">
+
+    <StackPanel Spacing="16" Width="350">
+        <TextBlock Text="This snippet contains variables. Please enter values for them:" 
+                   Style="{StaticResource BodyTextBlockStyle}" 
+                   TextWrapping="Wrap"/>
+
+        <ItemsControl x:Name="VariablesList">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Spacing="8" Margin="0,0,0,12">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                        <TextBox Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                 PlaceholderText="Enter value..."/>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</ContentDialog>

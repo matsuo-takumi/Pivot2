@@ -77,6 +77,7 @@ namespace Pivot.CodeModule.Controls
             TitleBox.Text = string.Empty;
             CodeEditor.Text = string.Empty;
             NewTagBox.Text = string.Empty;
+            LanguageSelector.SelectedIndex = 0; // Reset to Text
             _selectedTags.Clear();
             
             // Reset all toggle buttons
@@ -239,6 +240,10 @@ namespace Pivot.CodeModule.Controls
 
             var title = TitleBox.Text?.Trim() ?? string.Empty;
             
+            // Get selected language from ComboBox
+            var selectedItem = LanguageSelector.SelectedItem as ComboBoxItem;
+            var language = selectedItem?.Tag?.ToString() ?? "text";
+            
             // Collect selected tags from toggle buttons
             CollectSelectedTags();
 
@@ -246,7 +251,7 @@ namespace Pivot.CodeModule.Controls
             SnippetCreated?.Invoke(this, new QuickAddEventArgs
             {
                 Title = title,
-                Language = DetectLanguage(code), // Auto-detect from code
+                Language = language,
                 Code = code,
                 Tags = _selectedTags.ToArray()
             });

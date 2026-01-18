@@ -38,6 +38,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="Code Library" Style="{StaticResource TitleTextBlockStyle}" VerticalAlignment="Center"/>
                 
@@ -73,10 +75,36 @@
                         Command="{x:Bind ViewModel.ListVM.ToggleLayoutCommand}"
                         Background="Transparent" 
                         BorderThickness="0"
-                        Padding="8">
+                        Padding="8"
+                        Margin="0,0,4,0">
                     <FontIcon Glyph="{x:Bind ViewModel.ListVM.IsGridLayout, Mode=OneWay, Converter={StaticResource BoolToIconConverter}, ConverterParameter='Grid'}" FontSize="16"/>
                     <ToolTipService.ToolTip>
                         <ToolTip Content="Toggle Layout"/>
+                    </ToolTipService.ToolTip>
+                </Button>
+
+                <!-- Import Button -->
+                <Button Grid.Column="4" 
+                        Command="{x:Bind ViewModel.ListVM.ImportCommand}"
+                        Background="Transparent" 
+                        BorderThickness="0"
+                        Padding="8"
+                        Margin="0,0,4,0">
+                    <FontIcon Glyph="&#xE8B5;" FontSize="16"/>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Import from JSON"/>
+                    </ToolTipService.ToolTip>
+                </Button>
+
+                <!-- Export Button -->
+                <Button Grid.Column="5" 
+                        Command="{x:Bind ViewModel.ListVM.ExportCommand}"
+                        Background="Transparent" 
+                        BorderThickness="0"
+                        Padding="8">
+                    <FontIcon Glyph="&#xEDE1;" FontSize="16"/>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Export to JSON"/>
                     </ToolTipService.ToolTip>
                 </Button>
             </Grid>

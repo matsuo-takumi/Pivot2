@@ -22,12 +22,12 @@
         <!-- Editor Card -->
         <Grid HorizontalAlignment="Stretch" 
               VerticalAlignment="Stretch"
-              Margin="48"
-              CornerRadius="12"
+              Margin="280,24,280,24"
+              CornerRadius="8"
               Background="{ThemeResource SubtleFillColorSecondaryBrush}"
               BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
               BorderThickness="1"
-              Padding="24">
+              Padding="20">
             <Grid.Shadow>
                 <ThemeShadow />
             </Grid.Shadow>

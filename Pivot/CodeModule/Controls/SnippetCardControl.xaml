@@ -11,6 +11,8 @@
     <UserControl.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <converters:JsonTagsToCollectionConverter x:Key="JsonTagsToCollectionConverter"/>
+        <converters:BoolToPinIconConverter x:Key="BoolToPinIconConverter"/>
+        <converters:BoolToPinColorConverter x:Key="BoolToPinColorConverter"/>
         <MenuFlyout x:Key="CardContextMenu">
             <MenuFlyoutItem Text="Copy" Click="CopyMenuItem_Click">
                 <MenuFlyoutItem.Icon>
@@ -52,17 +54,35 @@
         <!-- Header Row -->
         <Grid>
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+
+            <!-- Pin Button (Left of title for quick access) -->
+            <Button Grid.Column="0"
+                    Click="PinButton_Click"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="4"
+                    Margin="-4,0,8,0"
+                    VerticalAlignment="Center">
+                <FontIcon Glyph="{x:Bind Asset.IsFavorite, Mode=OneWay, Converter={StaticResource BoolToPinIconConverter}}" 
+                          FontSize="14"
+                          Foreground="{x:Bind Asset.IsFavorite, Mode=OneWay, Converter={StaticResource BoolToPinColorConverter}}"/>
+                <ToolTipService.ToolTip>
+                    <ToolTip Content="Pin to top"/>
+                </ToolTipService.ToolTip>
+            </Button>
             
-            <TextBlock Text="{Binding Asset.FileName, ElementName=RootControl}" 
+            <TextBlock Grid.Column="1"
+                       Text="{Binding Asset.FileName, ElementName=RootControl}" 
                        Style="{StaticResource BodyStrongTextBlockStyle}" 
                        TextTrimming="CharacterEllipsis" 
                        VerticalAlignment="Center"/>
             
             <!-- Copy Button -->
-            <Button Grid.Column="1" 
+            <Button Grid.Column="2" 
                     Background="Transparent" 
                     BorderThickness="0" 
                     Padding="4"
