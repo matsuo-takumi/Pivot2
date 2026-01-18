@@ -82,7 +82,7 @@ namespace Pivot.Services
                     var tags = ParseTagList(snippet.UserTagsJson);
                     foreach (var tag in tags)
                     {
-                        if (preferenceTags.Contains(tag)) names.Add(tag);
+                        names.Add(tag);
                     }
                 }
             }

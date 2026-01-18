@@ -18,15 +18,18 @@ namespace Pivot.Services
         private readonly IAssetRepository _repository;
         private readonly ILogger<CodeService> _logger;
         private readonly DirectorySettingsService _directorySettings;
+        private readonly CodeTagService _tagService;
 
         public CodeService(
             IAssetRepository repository,
             ILogger<CodeService> logger,
-            DirectorySettingsService directorySettings)
+            DirectorySettingsService directorySettings,
+            CodeTagService tagService)
         {
             _repository = repository;
             _logger = logger;
             _directorySettings = directorySettings;
+            _tagService = tagService;
         }
 
         public async Task<List<AssetEntity>> GetAllSnippetsAsync()
@@ -117,5 +120,29 @@ namespace Pivot.Services
         
         // HardDelete removed as it requires direct DB access not exposed by IAssetRepository
         // Logic should rely on Soft Delete + external cleanup or implementing a proper Delete method in Repository later.
+
+        public async Task RemoveTagGloballyAsync(string tagName)
+        {
+            if (string.IsNullOrWhiteSpace(tagName)) return;
+
+            var normalizedTag = _tagService.NormalizeTagName(tagName);
+            if (string.IsNullOrEmpty(normalizedTag)) return;
+
+            // Fetch all snippets (using a large page size to cover most use cases)
+            var snippets = await GetAllSnippetsAsync();
+
+            int changedCount = 0;
+            foreach (var snippet in snippets)
+            {
+                if (_tagService.RemoveTagFromSnippet(snippet, normalizedTag))
+                {
+                    // If tag was removed, save the changes (DB + File logic via SaveSnippetAsync)
+                    await SaveSnippetAsync(snippet, saveToDisk: true);
+                    changedCount++;
+                }
+            }
+            
+            _logger.LogInformation("Removed tag '{TagName}' from {Count} snippets.", normalizedTag, changedCount);
+        }
     }
 }

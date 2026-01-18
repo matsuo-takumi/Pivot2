@@ -220,6 +220,8 @@ namespace Pivot
             sc.AddScoped<CodeService>();
             sc.AddSingleton<CodeTagService>();
             sc.AddSingleton<CodeNavigationService>();
+            
+            sc.AddSingleton<HotkeyService>();
 
             
             // Phase 2: Query and Indexing Services

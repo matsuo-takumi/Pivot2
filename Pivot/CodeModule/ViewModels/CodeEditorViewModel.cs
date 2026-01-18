@@ -159,6 +159,12 @@ namespace Pivot.CodeModule.ViewModels
                 CurrentSnippet.UpdatedAt = DateTime.UtcNow;
                 
                 await _codeService.SaveSnippetAsync(CurrentSnippet);
+                
+                // Notify changes (Updated)
+                _messenger.Send(new Messages.AssetEntityChangedMessage(
+                    CurrentSnippet, 
+                    CurrentSnippet.FilePath, 
+                    Messages.AssetEntityChangedMessage.ChangeType.Updated));
             }
             catch (Exception ex)
             {

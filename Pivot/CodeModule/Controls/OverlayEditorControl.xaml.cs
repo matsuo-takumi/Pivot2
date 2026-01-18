@@ -1,4 +1,6 @@
 using Microsoft.UI.Xaml;
+using System.Linq;
+using System.Collections.Specialized;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -135,12 +137,21 @@ namespace Pivot.CodeModule.Controls
             };
         }
 
+        private CodeEditorViewModel? _oldViewModel;
+
         private void OnDataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
         {
+            if (_oldViewModel != null)
+            {
+                _oldViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            }
+
             if (ViewModel != null)
             {
+                _oldViewModel = ViewModel;
                 ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
                 ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+                
                 RefreshBindings();
             }
         }
@@ -173,84 +184,16 @@ namespace Pivot.CodeModule.Controls
             // Set Monaco content
             var language = GetLanguageFromExtension(ViewModel.CurrentSnippet?.FilePath);
             SetMonacoContent(ViewModel.TextContent ?? string.Empty, language);
-            
-            ExistingTagsRepeater.ItemsSource = ViewModel.AvailableTags;
-            UpdateTagToggles();
         }
 
-        private void ExistingTagsRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
+        private async void Background_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            if (args.Element is ToggleButton toggle && ViewModel?.Tags != null)
-            {
-                var tag = toggle.DataContext as string;
-                if (!string.IsNullOrEmpty(tag))
-                {
-                    toggle.IsChecked = ViewModel.Tags.Contains(tag);
-                }
-            }
+            await CloseAndSaveAsync();
         }
 
-        private void UpdateTagToggles()
+        private async Task CloseAndSaveAsync()
         {
-            if (ExistingTagsRepeater == null || ViewModel?.AvailableTags == null || ViewModel.Tags == null) return;
-
-            for (int i = 0; i < ViewModel.AvailableTags.Count; i++)
-            {
-                var element = ExistingTagsRepeater.TryGetElement(i);
-                if (element is ToggleButton toggle)
-                {
-                    var tag = ViewModel.AvailableTags[i];
-                    toggle.IsChecked = ViewModel.Tags.Contains(tag);
-                }
-            }
-        }
-
-        private void Background_PointerPressed(object sender, PointerRoutedEventArgs e)
-        {
-            ViewModel?.CloseEditorAsync();
-        }
-
-        private void Tag_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is ToggleButton toggle && toggle.Content is string tag && ViewModel != null)
-            {
-                if (toggle.IsChecked == true)
-                {
-                    if (!ViewModel.Tags.Contains(tag)) ViewModel.Tags.Add(tag);
-                }
-                else
-                {
-                    if (ViewModel.Tags.Contains(tag)) ViewModel.Tags.Remove(tag);
-                }
-            }
-        }
-
-        private void NewTagBox_KeyDown(object sender, KeyRoutedEventArgs e)
-        {
-            if (e.Key == Windows.System.VirtualKey.Enter && ViewModel != null)
-            {
-                e.Handled = true;
-                var newTagBox = sender as TextBox;
-                var tag = newTagBox?.Text?.Trim()?.TrimStart('#');
-                if (!string.IsNullOrEmpty(tag))
-                {
-                    if (!ViewModel.AvailableTags.Contains(tag))
-                    {
-                        ViewModel.AvailableTags.Add(tag);
-                    }
-                    if (!ViewModel.Tags.Contains(tag))
-                    {
-                        ViewModel.Tags.Add(tag);
-                    }
-                    if (newTagBox != null) newTagBox.Text = string.Empty;
-                    UpdateTagToggles();
-                }
-            }
-        }
-
-        private async void SaveButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (ViewModel != null)
+             if (ViewModel != null)
             {
                 var titleBox = this.FindName("TitleBox") as TextBox;
                 
@@ -261,8 +204,75 @@ namespace Pivot.CodeModule.Controls
                 
                 // TextContent is already synced via WebMessageReceived
                 await ViewModel.SaveContentAsync();
+                await ViewModel.CloseEditorAsync();
             }
         }
+
+        internal void RemoveTag_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.DataContext is string tag && ViewModel != null)
+            {
+                ViewModel.Tags.Remove(tag);
+            }
+        }
+
+        internal void TagInput_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+        {
+            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput && ViewModel != null)
+            {
+                if (string.IsNullOrWhiteSpace(sender.Text))
+                {
+                    sender.ItemsSource = null;
+                }
+                else
+                {
+                    var query = sender.Text.Trim();
+                    sender.ItemsSource = ViewModel.AvailableTags
+                        .Where(t => t.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        .Where(t => !ViewModel.Tags.Contains(t))
+                        .Take(10)
+                        .ToList();
+                }
+            }
+        }
+
+        internal void TagInput_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+        {
+            if (args.ChosenSuggestion != null)
+            {
+                AddTag(args.ChosenSuggestion as string);
+            }
+            else if (!string.IsNullOrWhiteSpace(args.QueryText))
+            {
+                AddTag(args.QueryText);
+            }
+            sender.Text = string.Empty;
+            sender.ItemsSource = null;
+        }
+
+        internal void TagInput_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+        {
+            // Optional: Update text to match suggestion before submission
+        }
+
+        private void AddTag(string? tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag) || ViewModel == null) return;
+            tag = tag.Trim().TrimStart('#');
+            
+            if (!string.IsNullOrEmpty(tag) && !ViewModel.Tags.Contains(tag))
+            {
+                ViewModel.Tags.Add(tag);
+                
+                // Add to available tags if new
+                if (!ViewModel.AvailableTags.Contains(tag))
+                {
+                    ViewModel.AvailableTags.Add(tag);
+                }
+            }
+        }
+
+
 
         private async void DeleteButton_Click(object sender, RoutedEventArgs e)
         {
@@ -272,10 +282,7 @@ namespace Pivot.CodeModule.Controls
             }
         }
 
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            ViewModel?.CloseEditorAsync();
-        }
+
 
         private async void CopyButton_Click(object sender, RoutedEventArgs e)
         {

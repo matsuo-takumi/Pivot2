@@ -1,7 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.ComponentModel;
+using Pivot.Messages;
 
 namespace Pivot.CodeModule.ViewModels
 {
@@ -21,7 +23,8 @@ namespace Pivot.CodeModule.ViewModels
             CodeFilterViewModel filterVM,
             CodeListViewModel listVM,
             CodeEditorViewModel editorVM,
-            ILogger<CodeViewModel> logger)
+            ILogger<CodeViewModel> logger,
+            IMessenger messenger)
         {
             FilterVM = filterVM;
             ListVM = listVM;
@@ -32,13 +35,22 @@ namespace Pivot.CodeModule.ViewModels
 
             // Subscribe to filter changes
             FilterVM.PropertyChanged += FilterVM_PropertyChanged;
+
+            // Subscribe to asset changes
+            messenger.Register<AssetEntityChangedMessage>(this, OnAssetChanged);
         }
 
         private void FilterVM_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(CodeFilterViewModel.SelectedTag))
             {
-                ListVM.FilterByTag(FilterVM.SelectedTag);
+                var tag = FilterVM.SelectedTag;
+                // "All" means no filter
+                if (string.Equals(tag, "All", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    tag = null;
+                }
+                ListVM.FilterByTag(tag);
             }
         }
 
@@ -56,7 +68,17 @@ namespace Pivot.CodeModule.ViewModels
             // In CodeListViewModel (from memory), it has proper logic.
             // We will pass ListVM.Snippets (potentially filtered, but initially all) or modify ListVM to expose Source.
             
-            // Assuming ListVM.Snippets contains everything initially.
+            // 2. Populate Tags based on loaded snippets
+            FilterVM.LoadTags(ListVM.Snippets);
+            
+            // Default to "All"
+            FilterVM.SelectedTag = "All";
+        }
+
+        private async void OnAssetChanged(object recipient, AssetEntityChangedMessage message)
+        {
+            // Reload snippets and tags when asset is updated/created/deleted
+            await ListVM.LoadSnippetsAsync();
             FilterVM.LoadTags(ListVM.Snippets);
         }
     }

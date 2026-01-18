@@ -34,5 +34,13 @@ namespace Pivot.Services
         /// ユーザーがキャンセルするまで連続して選択可能。
         /// </summary>
         Task<IReadOnlyList<string>> PickMultipleFoldersAsync();
+
+        /// <summary>
+        /// 確認ダイアログを表示し、ユーザーの選択（Yes/No）を返す。
+        /// </summary>
+        /// <param name="title">ダイアログのタイトル</param>
+        /// <param name="message">ダイアログのメッセージ</param>
+        /// <returns>Yesが選択された場合はtrue</returns>
+        Task<bool> ShowConfirmationAsync(string title, string message);
     }
 }

@@ -37,11 +37,26 @@ namespace Pivot.CodeModule.ViewModels
         private System.Threading.Timer? _saveDebounceTimer;
         private const int SaveDebounceMs = 500;
 
+        [ObservableProperty]
+        private ObservableCollection<SortOption> _sortOptions = new()
+        {
+            new SortOption { Label = "Manual", Value = "manual" },
+            new SortOption { Label = "Date (Newest)", Value = "date_desc" },
+            new SortOption { Label = "Date (Oldest)", Value = "date_asc" },
+            new SortOption { Label = "Name (A-Z)", Value = "name_asc" },
+            new SortOption { Label = "Name (Z-A)", Value = "name_desc" },
+        };
+
+        [ObservableProperty]
+        private SortOption _selectedSortOption;
+
         public CodeListViewModel(CodeService codeService, IMessenger messenger)
         {
             _codeService = codeService;
             _messenger = messenger;
             
+            _selectedSortOption = SortOptions.First(); // Default to Manual
+
             // Subscribe to deletion messages from Editor
             _messenger.Register<AssetEntityChangedMessage>(this, OnAssetChanged);
         }
@@ -83,9 +98,11 @@ namespace Pivot.CodeModule.ViewModels
         }
 
         /// <summary>
-        /// Reordering allowed only when no filter/search active
+        /// Reordering allowed only when no filter/search active AND Manual sort is selected
         /// </summary>
-        public bool CanReorder => string.IsNullOrEmpty(_activeTagFilter) && string.IsNullOrEmpty(_searchQuery);
+        public bool CanReorder => string.IsNullOrEmpty(_activeTagFilter) && 
+                                  string.IsNullOrEmpty(_searchQuery) &&
+                                  SelectedSortOption?.Value == "manual";
 
         #region CRUD Operations
 
@@ -146,16 +163,38 @@ namespace Pivot.CodeModule.ViewModels
             var data = await _codeService.GetAllSnippetsAsync();
             if (data != null)
             {
-                _allSnippets = data.OrderByDescending(s => s.IsFavorite)
-                                   .ThenBy(s => s.SortOrder)
-                                   .ThenByDescending(s => s.UpdatedAt)
-                                   .ToList();
+                _allSnippets = data.ToList();
+                SortSnippets();
             }
             else
             {
                 _allSnippets = new List<AssetEntity>();
             }
             ApplyFilters();
+        }
+
+        partial void OnSelectedSortOptionChanged(SortOption value)
+        {
+            if (_allSnippets.Count > 0)
+            {
+                SortSnippets();
+                ApplyFilters();
+            }
+            OnPropertyChanged(nameof(CanReorder));
+        }
+
+        private void SortSnippets()
+        {
+            if (SelectedSortOption?.Value == "date_desc")
+                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenByDescending(s => s.UpdatedAt).ToList();
+            else if (SelectedSortOption?.Value == "date_asc")
+                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenBy(s => s.UpdatedAt).ToList();
+            else if (SelectedSortOption?.Value == "name_asc")
+                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenBy(s => s.FileName).ToList();
+            else if (SelectedSortOption?.Value == "name_desc")
+                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenByDescending(s => s.FileName).ToList();
+            else // Manual
+                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenBy(s => s.SortOrder).ToList();
         }
 
         partial void OnSearchQueryChanged(string value)
@@ -404,5 +443,11 @@ namespace Pivot.CodeModule.ViewModels
         public string[] Tags { get; set; } = Array.Empty<string>();
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+    }
+
+    public class SortOption
+    {
+        public string Label { get; set; } = "";
+        public string Value { get; set; } = "";
     }
 }

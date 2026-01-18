@@ -93,7 +93,19 @@ namespace Pivot.Models
         public string DisplayImageSource => !string.IsNullOrEmpty(ThumbnailPath) ? ThumbnailPath : FilePath;
 
         // ユーザーメタデータ
-        public string? UserTagsJson { get; set; }
+        private string? _userTagsJson;
+        public string? UserTagsJson 
+        { 
+            get => _userTagsJson;
+            set
+            {
+                if (_userTagsJson != value)
+                {
+                    _userTagsJson = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         public bool IsFavorite { get; set; }
         
         /// <summary>

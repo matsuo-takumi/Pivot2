@@ -48,6 +48,7 @@ namespace Pivot
         private readonly ThemeSettingsService _themeSettings;
         private readonly INavigationService _navigationService;
         private readonly IBackdropService _backdropService;
+        private readonly HotkeyService _hotkeyService;
 
         public MainWindow()
         {
@@ -59,6 +60,10 @@ namespace Pivot
             _navigationService = App.Current.Services.GetRequiredService<INavigationService>();
             _backdropService = App.Current.Services.GetRequiredService<IBackdropService>();
             _navigationService.RegisterNavigationHandler(NavigateTo);
+            
+            _hotkeyService = App.Current.Services.GetRequiredService<HotkeyService>();
+            _hotkeyService.HotkeyPressed += OnHotkeyPressed;
+            _hotkeyService.Register(this);
 
             var rootElement = this.Content as FrameworkElement;
             if (rootElement != null)
@@ -340,6 +345,7 @@ namespace Pivot
             {
                 rootElement.ActualThemeChanged -= Window_ThemeChanged;
             }
+            _hotkeyService.Unregister();
         }
 
         private void Window_ThemeChanged(FrameworkElement sender, object args)
@@ -480,6 +486,27 @@ namespace Pivot
             }
 
             return null;
+        }
+
+        private void OnHotkeyPressed(object? sender, EventArgs e)
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var foreground = HotkeyService.GetForegroundWindow();
+
+            if (hwnd == foreground)
+            {
+                // Minimize if currently focused
+                HotkeyService.ShowWindow(hwnd, HotkeyService.SW_MINIMIZE);
+            }
+            else
+            {
+                // Bring to front
+                if (HotkeyService.IsIconic(hwnd))
+                {
+                    HotkeyService.ShowWindow(hwnd, HotkeyService.SW_RESTORE);
+                }
+                HotkeyService.SetForegroundWindow(hwnd);
+            }
         }
     }
 }

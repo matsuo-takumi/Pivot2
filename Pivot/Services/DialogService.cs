@@ -188,6 +188,25 @@ namespace Pivot.Services
                 return selectedFolders;
             });
         }
+        public async Task<bool> ShowConfirmationAsync(string title, string message)
+        {
+            var window = App.Current.MainWindow;
+            if (window?.Content is Microsoft.UI.Xaml.FrameworkElement element && element.XamlRoot != null)
+            {
+                var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
+                {
+                    Title = title,
+                    Content = message,
+                    PrimaryButtonText = "Yes",
+                    CloseButtonText = "No",
+                    DefaultButton = Microsoft.UI.Xaml.Controls.ContentDialogButton.Primary,
+                    XamlRoot = element.XamlRoot
+                };
+                var result = await dialog.ShowAsync();
+                return result == Microsoft.UI.Xaml.Controls.ContentDialogResult.Primary;
+            }
+            return false;
+        }
     }
 
     /// <summary>
