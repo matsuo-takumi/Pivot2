@@ -16,6 +16,7 @@
         <converters:CodeLayoutConverter x:Key="LayoutConverter"/>
         <converters:BoolToIconConverter x:Key="BoolToIconConverter"/>
         <converters:SelectionToBackgroundConverter x:Key="SelectionToBackgroundConverter"/>
+        <converters:TagDeleteVisibilityConverter x:Key="TagDeleteVis"/>
     </Page.Resources>
 
     <Grid Background="Transparent">
@@ -136,7 +137,8 @@
                                     Width="24" 
                                     Height="24" 
                                     CornerRadius="12"
-                                    Margin="4,0,0,0">
+                                    Margin="4,0,0,0"
+                                    Visibility="{Binding Converter={StaticResource TagDeleteVis}}">
                                 <FontIcon Glyph="&#xE711;" FontSize="10" Opacity="0.4"/>
                                 <ToolTipService.ToolTip>
                                     <ToolTip Content="Delete Tag (Global)"/>

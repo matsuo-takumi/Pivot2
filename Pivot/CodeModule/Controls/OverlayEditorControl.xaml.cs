@@ -274,6 +274,15 @@ namespace Pivot.CodeModule.Controls
 
 
 
+        private void AvailableTag_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            if (e.ClickedItem is string tag)
+            {
+                AddTag(tag);
+                AvailableTagsFlyout?.Hide();
+            }
+        }
+
         private async void DeleteButton_Click(object sender, RoutedEventArgs e)
         {
             if (ViewModel?.DeleteCommand?.CanExecute(null) == true)

@@ -50,8 +50,7 @@ namespace Pivot.CodeModule.ViewModels
         [CommunityToolkit.Mvvm.Input.RelayCommand]
         private async Task DeleteTagAsync(string tagName)
         {
-            if (string.IsNullOrWhiteSpace(tagName) || 
-                string.Equals(tagName, "All", StringComparison.OrdinalIgnoreCase))
+            if (!IsTagDeletable(tagName))
             {
                 return;
             }
@@ -72,6 +71,12 @@ namespace Pivot.CodeModule.ViewModels
                 null, 
                 string.Empty, 
                 Pivot.Messages.AssetEntityChangedMessage.ChangeType.Updated));
+        }
+
+        public bool IsTagDeletable(string? tagName)
+        {
+            return !string.IsNullOrWhiteSpace(tagName) && 
+                   !string.Equals(tagName, "All", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

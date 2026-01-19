@@ -99,6 +99,31 @@
                                         QuerySubmitted="TagInput_QuerySubmitted"
                                         SuggestionChosen="TagInput_SuggestionChosen"
                                         VerticalAlignment="Center"/>
+                        
+                        <Button Background="Transparent" BorderThickness="0" Padding="8,4" Height="32" VerticalAlignment="Center" ToolTipService.ToolTip="Select from existing tags">
+                            <FontIcon Glyph="&#xE70D;" FontSize="12"/>
+                            <Button.Flyout>
+                                <Flyout x:Name="AvailableTagsFlyout" Placement="Bottom">
+                                    <Grid Width="200" MaxHeight="300">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Available Tags" FontSize="12" Opacity="0.6" Margin="0,0,0,8"/>
+                                        <ListView ItemsSource="{x:Bind ViewModel.AvailableTags, Mode=OneWay}"
+                                                  SelectionMode="None"
+                                                  IsItemClickEnabled="True"
+                                                  ItemClick="AvailableTag_ItemClick">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <TextBlock Text="{x:Bind}" Padding="0,4"/>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                    </Grid>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
