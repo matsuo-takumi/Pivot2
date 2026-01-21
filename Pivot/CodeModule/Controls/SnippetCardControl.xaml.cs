@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Pivot.Models;
+using Pivot.Services;
 using Pivot.CodeModule.ViewModels;
 
 namespace Pivot.CodeModule.Controls
@@ -68,15 +69,11 @@ namespace Pivot.CodeModule.Controls
 
             try
             {
-                string content;
-                if (!string.IsNullOrEmpty(Asset.FilePath) && File.Exists(Asset.FilePath))
-                {
-                    content = await File.ReadAllTextAsync(Asset.FilePath);
-                }
-                else
-                {
-                    content = Asset.ContentIndex ?? string.Empty;
-                }
+                // Get CodeService from page
+                var codeService = GetCodeService();
+                if (codeService == null) return;
+
+                string content = await codeService.ReadContentAsync(Asset);
 
                 // Process variables
                 var processedContent = await ProcessTemplateVariablesAsync(content);
@@ -191,12 +188,12 @@ namespace Pivot.CodeModule.Controls
 
             if (page?.ViewModel?.EditorVM == null) return;
 
+            // Get CodeService
+            var codeService = GetCodeService();
+            if (codeService == null) return;
+
             // Read content
-            string content = Asset.ContentIndex ?? string.Empty;
-            if (!string.IsNullOrEmpty(Asset.FilePath) && File.Exists(Asset.FilePath))
-            {
-                content = await File.ReadAllTextAsync(Asset.FilePath);
-            }
+            string content = await codeService.ReadContentAsync(Asset);
 
             // Create duplicate with modified name
             var newSnippet = await page.ViewModel.EditorVM.CreateSnippetAsync(
@@ -231,6 +228,21 @@ namespace Pivot.CodeModule.Controls
             if (Asset == null) return;
             var listVM = GetListViewModel();
             listVM?.DeleteItemCommand?.Execute(Asset);
+        }
+
+        private CodeService? GetCodeService()
+        {
+            DependencyObject? current = this;
+            while (current != null)
+            {
+                if (current is Pivot.CodeModule.Views.CodePage page)
+                {
+                    // Access CodeService through DI or ViewModel
+                    return App.Current.Services.GetService(typeof(CodeService)) as CodeService;
+                }
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return null;
         }
     }
 }

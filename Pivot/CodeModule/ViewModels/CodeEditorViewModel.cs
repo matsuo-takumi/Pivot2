@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Models; 
 using Pivot.Services;
 using Pivot.Messages;
+using Pivot.CodeModule.Helpers;
 using System;
 using System.IO;
 using System.Text.Json;
@@ -34,6 +35,9 @@ namespace Pivot.CodeModule.ViewModels
         [ObservableProperty]
         private ObservableCollection<string> _availableTags = new();
 
+        [ObservableProperty]
+        private string _currentLanguage = "plaintext";
+
         public CodeEditorViewModel(CodeService codeService, IMessenger messenger)
         {
             _codeService = codeService;
@@ -62,6 +66,9 @@ namespace Pivot.CodeModule.ViewModels
             {
                 await LoadContentAsync(snippet);
                 
+                // Set language for syntax highlighting
+                CurrentLanguage = CodeFileHelper.GetLanguageFromExtension(snippet.FilePath);
+                
                 // Load tags
                 if (!string.IsNullOrEmpty(snippet.UserTagsJson))
                 {
@@ -72,6 +79,7 @@ namespace Pivot.CodeModule.ViewModels
                         {
                             foreach(var tag in tags) Tags.Add(tag);
                         }
+                        System.Diagnostics.Debug.WriteLine($"[CodeEditor] Loaded {Tags.Count} tags from DB: {string.Join(", ", Tags)}");
                     }
                     catch 
                     {
@@ -82,6 +90,7 @@ namespace Pivot.CodeModule.ViewModels
             else
             {
                 TextContent = string.Empty;
+                CurrentLanguage = "plaintext";
             }
         }
 
@@ -89,18 +98,7 @@ namespace Pivot.CodeModule.ViewModels
         {
             try
             {
-                if (File.Exists(snippet.FilePath))
-                {
-                    TextContent = await File.ReadAllTextAsync(snippet.FilePath);
-                }
-                else if (!string.IsNullOrEmpty(snippet.ContentIndex))
-                {
-                    TextContent = snippet.ContentIndex;
-                }
-                else
-                {
-                    TextContent = string.Empty;
-                }
+                TextContent = await _codeService.ReadContentAsync(snippet);
             }
             catch (Exception ex)
             {
@@ -149,16 +147,14 @@ namespace Pivot.CodeModule.ViewModels
 
                 // Sync Tags
                 CurrentSnippet.UserTagsJson = JsonSerializer.Serialize(Tags);
+                System.Diagnostics.Debug.WriteLine($"[CodeEditor] Saving {Tags.Count} tags to DB: {string.Join(", ", Tags)}");
+                System.Diagnostics.Debug.WriteLine($"[CodeEditor] UserTagsJson: {CurrentSnippet.UserTagsJson}");
 
-                // Write to file
-                await File.WriteAllTextAsync(CurrentSnippet.FilePath, TextContent);
+                // Write to file using CodeService
+                await _codeService.WriteContentAsync(CurrentSnippet, TextContent);
                 
-                // Update Asset metadata
-                CurrentSnippet.ContentIndex = TextContent.Length > 500 ? TextContent.Substring(0, 500) : TextContent;
-                CurrentSnippet.FileSize = new FileInfo(CurrentSnippet.FilePath).Length;
-                CurrentSnippet.UpdatedAt = DateTime.UtcNow;
-                
-                await _codeService.SaveSnippetAsync(CurrentSnippet);
+                // Save metadata to database
+                await _codeService.SaveSnippetAsync(CurrentSnippet, saveToDisk: false);
                 
                 // Notify changes (Updated)
                 _messenger.Send(new Messages.AssetEntityChangedMessage(
@@ -168,7 +164,7 @@ namespace Pivot.CodeModule.ViewModels
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error saving content: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[CodeEditor] Error saving content: {ex.Message}");
             }
         }
 
@@ -198,15 +194,15 @@ namespace Pivot.CodeModule.ViewModels
             if (string.IsNullOrWhiteSpace(code)) return null;
 
             var fileName = !string.IsNullOrWhiteSpace(title) 
-                ? SanitizeFileName(title) 
+                ? CodeFileHelper.SanitizeFileName(title) 
                 : $"snippet_{DateTime.Now:yyyyMMdd_HHmmss}";
             
-            var extension = GetExtensionForLanguage(language);
+            var extension = CodeFileHelper.GetExtensionForLanguage(language);
             fileName = $"{fileName}{extension}";
 
             var snippet = new AssetEntity
             {
-                FilePath = Path.Combine(GetCodeDirectory(), fileName),
+                FilePath = Path.Combine(CodeFileHelper.GetCodeDirectory(), fileName),
                 FileName = fileName,
                 Kind = AssetKind.Code,
                 Tool = language,
@@ -218,66 +214,15 @@ namespace Pivot.CodeModule.ViewModels
 
             try
             {
-                var dir = Path.GetDirectoryName(snippet.FilePath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-                await File.WriteAllTextAsync(snippet.FilePath, code);
+                await _codeService.WriteContentAsync(snippet, code);
             }
             catch {}
 
-            await _codeService.SaveSnippetAsync(snippet);
+            await _codeService.SaveSnippetAsync(snippet, saveToDisk: false);
 
             return snippet;
         }
 
-        private string SanitizeFileName(string name)
-        {
-            var invalid = Path.GetInvalidFileNameChars();
-            foreach (var c in invalid)
-            {
-                name = name.Replace(c, '_');
-            }
-            return name.Length > 50 ? name.Substring(0, 50) : name;
-        }
 
-        private string GetExtensionForLanguage(string language)
-        {
-            return language?.ToLowerInvariant() switch
-            {
-                "python" => ".py",
-                "javascript" or "js" => ".js",
-                "typescript" or "ts" => ".ts",
-                "c#" or "csharp" => ".cs",
-                "c++" or "cpp" => ".cpp",
-                "c" => ".c",
-                "go" => ".go",
-                "rust" => ".rs",
-                "sql" => ".sql",
-                "shell" or "bash" => ".sh",
-                "powershell" or "ps1" => ".ps1",
-                "vex" => ".vex",
-                "hlsl" => ".hlsl",
-                "glsl" => ".glsl",
-                "html" => ".html",
-                "css" => ".css",
-                "json" => ".json",
-                "xml" => ".xml",
-                "yaml" => ".yaml",
-                "markdown" or "md" => ".md",
-                "java" => ".java",
-                "kotlin" => ".kt",
-                "swift" => ".swift",
-                "ruby" => ".rb",
-                "php" => ".php",
-                _ => ".txt"
-            };
-        }
-
-        private string GetCodeDirectory()
-        {
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Pivot", "Code");
-        }
     }
 }

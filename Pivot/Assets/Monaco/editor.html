@@ -85,6 +85,11 @@
                 if (editor) {
                     monaco.editor.setTheme(theme);
                 }
+            },
+            setReadOnly: function (isReadOnly) {
+                if (editor) {
+                    editor.updateOptions({ readOnly: isReadOnly });
+                }
             }
         };
     </script>

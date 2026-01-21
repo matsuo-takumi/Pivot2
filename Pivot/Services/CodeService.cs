@@ -144,5 +144,63 @@ namespace Pivot.Services
             
             _logger.LogInformation("Removed tag '{TagName}' from {Count} snippets.", normalizedTag, changedCount);
         }
+
+        /// <summary>
+        /// Reads the content of a code snippet from disk.
+        /// </summary>
+        public async Task<string> ReadContentAsync(AssetEntity snippet)
+        {
+            if (snippet == null || string.IsNullOrEmpty(snippet.FilePath))
+                return string.Empty;
+
+            try
+            {
+                if (File.Exists(snippet.FilePath))
+                {
+                    return await File.ReadAllTextAsync(snippet.FilePath);
+                }
+                else if (!string.IsNullOrEmpty(snippet.ContentIndex))
+                {
+                    return snippet.ContentIndex;
+                }
+                
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to read content from {Path}", snippet.FilePath);
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Writes content to a code snippet file on disk.
+        /// </summary>
+        public async Task WriteContentAsync(AssetEntity snippet, string content)
+        {
+            if (snippet == null || string.IsNullOrEmpty(snippet.FilePath))
+                return;
+
+            try
+            {
+                var dir = Path.GetDirectoryName(snippet.FilePath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+
+                await File.WriteAllTextAsync(snippet.FilePath, content);
+                
+                // Update metadata
+                snippet.ContentIndex = content.Length > 500 ? content.Substring(0, 500) : content;
+                snippet.FileSize = new FileInfo(snippet.FilePath).Length;
+                snippet.UpdatedAt = DateTime.UtcNow;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to write content to {Path}", snippet.FilePath);
+                throw;
+            }
+        }
     }
 }

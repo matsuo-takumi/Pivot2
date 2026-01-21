@@ -60,7 +60,7 @@ namespace Pivot.Services
 
         private IntPtr _hwnd;
         private IntPtr _oldWndProc;
-        private WndProcDelegate _newWndProcDelegate; // Prevent GC
+        private WndProcDelegate? _newWndProcDelegate; // Prevent GC
         private bool _isRegistered;
 
         public event EventHandler? HotkeyPressed;

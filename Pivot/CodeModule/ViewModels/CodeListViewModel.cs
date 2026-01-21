@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Models;
 using Pivot.Services;
 using Pivot.Messages;
+using Pivot.CodeModule.Helpers;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Threading.Tasks;
@@ -340,11 +341,7 @@ namespace Pivot.CodeModule.ViewModels
                 var exportData = new List<SnippetExportData>();
                 foreach (var snippet in _allSnippets)
                 {
-                    string content = snippet.ContentIndex ?? string.Empty;
-                    if (!string.IsNullOrEmpty(snippet.FilePath) && System.IO.File.Exists(snippet.FilePath))
-                    {
-                        content = await System.IO.File.ReadAllTextAsync(snippet.FilePath);
-                    }
+                    string content = await _codeService.ReadContentAsync(snippet);
 
                     exportData.Add(new SnippetExportData
                     {
@@ -397,7 +394,7 @@ namespace Pivot.CodeModule.ViewModels
                     var snippet = new AssetEntity
                     {
                         FileName = item.FileName,
-                        FilePath = System.IO.Path.Combine(GetCodeDirectory(), item.FileName),
+                        FilePath = System.IO.Path.Combine(CodeFileHelper.GetCodeDirectory(), item.FileName),
                         Kind = AssetKind.Code,
                         Tool = item.Language,
                         ContentIndex = item.Content?.Length > 500 ? item.Content.Substring(0, 500) : item.Content,
@@ -406,16 +403,11 @@ namespace Pivot.CodeModule.ViewModels
                         UpdatedAt = item.UpdatedAt
                     };
 
-                    // Write file
-                    var dir = System.IO.Path.GetDirectoryName(snippet.FilePath);
-                    if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
-                    {
-                        System.IO.Directory.CreateDirectory(dir);
-                    }
-                    await System.IO.File.WriteAllTextAsync(snippet.FilePath, item.Content ?? string.Empty);
+                    // Write file using CodeService
+                    await _codeService.WriteContentAsync(snippet, item.Content ?? string.Empty);
 
                     // Save to DB
-                    await _codeService.SaveSnippetAsync(snippet);
+                    await _codeService.SaveSnippetAsync(snippet, saveToDisk: false);
                 }
 
                 // Reload
@@ -424,10 +416,7 @@ namespace Pivot.CodeModule.ViewModels
             catch { }
         }
 
-        private string GetCodeDirectory()
-        {
-            return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Pivot", "Code");
-        }
+
 
         #endregion
     }
