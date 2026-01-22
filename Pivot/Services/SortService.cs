@@ -15,7 +15,8 @@ namespace Pivot.Services
         Size,
         Type,
         Rating,
-        AspectRatio
+        AspectRatio,
+        SortOrder
     }
 
     /// <summary>

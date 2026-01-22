@@ -103,6 +103,13 @@ namespace Pivot.CodeModule.Controls
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            // Lazy loading: Do not initialize automatically
+            // await InitializeMonacoAsync();
+        }
+
+        public async Task EnsureInitializedAsync()
+        {
+            if (_isMonacoReady || MonacoWebView.CoreWebView2 != null) return;
             await InitializeMonacoAsync();
         }
 

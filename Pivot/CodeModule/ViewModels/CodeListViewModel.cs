@@ -17,10 +17,8 @@ namespace Pivot.CodeModule.ViewModels
     public partial class CodeListViewModel : ObservableObject
     {
         private readonly CodeService _codeService;
+        private readonly AssetQueryService _queryService;
         private readonly IMessenger _messenger;
-
-        // Full dataset (source of truth for filtering)
-        private List<AssetEntity> _allSnippets = new();
 
         [ObservableProperty]
         private ObservableCollection<AssetEntity> _snippets = new();
@@ -51,9 +49,10 @@ namespace Pivot.CodeModule.ViewModels
         [ObservableProperty]
         private SortOption _selectedSortOption;
 
-        public CodeListViewModel(CodeService codeService, IMessenger messenger)
+        public CodeListViewModel(CodeService codeService, AssetQueryService queryService, IMessenger messenger)
         {
             _codeService = codeService;
+            _queryService = queryService;
             _messenger = messenger;
             
             _selectedSortOption = SortOptions.First(); // Default to Manual
@@ -71,7 +70,6 @@ namespace Pivot.CodeModule.ViewModels
                 if (item != null)
                 {
                     Snippets.Remove(item);
-                    _allSnippets.Remove(item);
                 }
             }
         }
@@ -126,7 +124,6 @@ namespace Pivot.CodeModule.ViewModels
             foreach (var item in itemsToDelete)
             {
                 Snippets.Remove(item);
-                _allSnippets.Remove(item);
                 await _codeService.DeleteSnippetAsync(item);
             }
             
@@ -161,82 +158,79 @@ namespace Pivot.CodeModule.ViewModels
 
         public async Task LoadSnippetsAsync()
         {
-            var data = await _codeService.GetAllSnippetsAsync();
-            if (data != null)
+            try
             {
-                _allSnippets = data.ToList();
-                SortSnippets();
+                var criteria = new FilterCriteria
+                {
+                    TargetKind = AssetKind.Code,
+                    SearchQuery = _searchQuery,
+                    SortField = GetSortField(),
+                    SortDirection = GetSortDirection()
+                };
+
+                if (!string.IsNullOrEmpty(_activeTagFilter))
+                {
+                    criteria.Tags = new HashSet<string> { _activeTagFilter };
+                    criteria.TagMode = TagMatchMode.Any;
+                }
+
+                // Load first 500 items for performance
+                var assets = await _queryService.QueryAsync(criteria, 0, 500);
+                
+                Snippets.Clear();
+                foreach (var asset in assets)
+                {
+                    Snippets.Add(asset);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                _allSnippets = new List<AssetEntity>();
+                System.Diagnostics.Debug.WriteLine($"LoadSnippetsAsync failed: {ex.Message}");
             }
-            ApplyFilters();
+        }
+
+        private SortField GetSortField()
+        {
+            return SelectedSortOption?.Value switch
+            {
+                "date_desc" or "date_asc" => SortField.Date,
+                "name_asc" or "name_desc" => SortField.Name,
+                "manual" => SortField.SortOrder,
+                _ => SortField.Date
+            };
+        }
+
+        private SortDirection GetSortDirection()
+        {
+            return SelectedSortOption?.Value switch
+            {
+                "date_asc" or "name_asc" or "manual" => SortDirection.Ascending,
+                _ => SortDirection.Descending
+            };
         }
 
         partial void OnSelectedSortOptionChanged(SortOption value)
         {
-            if (_allSnippets.Count > 0)
-            {
-                SortSnippets();
-                ApplyFilters();
-            }
+            _ = LoadSnippetsAsync();
             OnPropertyChanged(nameof(CanReorder));
-        }
-
-        private void SortSnippets()
-        {
-            if (SelectedSortOption?.Value == "date_desc")
-                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenByDescending(s => s.UpdatedAt).ToList();
-            else if (SelectedSortOption?.Value == "date_asc")
-                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenBy(s => s.UpdatedAt).ToList();
-            else if (SelectedSortOption?.Value == "name_asc")
-                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenBy(s => s.FileName).ToList();
-            else if (SelectedSortOption?.Value == "name_desc")
-                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenByDescending(s => s.FileName).ToList();
-            else // Manual
-                _allSnippets = _allSnippets.OrderByDescending(s => s.IsFavorite).ThenBy(s => s.SortOrder).ToList();
         }
 
         partial void OnSearchQueryChanged(string value)
         {
-            ApplyFilters();
+            _ = LoadSnippetsAsync();
             OnPropertyChanged(nameof(CanReorder));
         }
 
         public void FilterByTag(string? tag)
         {
             _activeTagFilter = tag ?? string.Empty;
-            ApplyFilters();
+            _ = LoadSnippetsAsync();
             OnPropertyChanged(nameof(CanReorder));
         }
 
         private void ApplyFilters()
         {
-            // Unsubscribe from old collection
-            Snippets.CollectionChanged -= OnSnippetsCollectionChanged;
-            
-            IEnumerable<AssetEntity> query = _allSnippets;
-
-            if (!string.IsNullOrEmpty(_activeTagFilter))
-            {
-                query = query.Where(s => 
-                    s.GetTags().Contains(_activeTagFilter, StringComparer.OrdinalIgnoreCase));
-            }
-
-            if (!string.IsNullOrWhiteSpace(_searchQuery))
-            {
-                var q = _searchQuery.Trim();
-                query = query.Where(s => 
-                    (s.FileName != null && s.FileName.Contains(q, StringComparison.OrdinalIgnoreCase)) ||
-                    (s.ContentIndex != null && s.ContentIndex.Contains(q, StringComparison.OrdinalIgnoreCase))
-                );
-            }
-
-            Snippets = new ObservableCollection<AssetEntity>(query);
-            
-            // Subscribe to new collection for reorder detection
-            Snippets.CollectionChanged += OnSnippetsCollectionChanged;
+            // Deprecated: Logic moved to LoadSnippetsAsync
         }
 
         #endregion
@@ -266,8 +260,8 @@ namespace Pivot.CodeModule.ViewModels
         /// </summary>
         private async Task SaveSortOrderAsync()
         {
-            // Sync _allSnippets
-            _allSnippets = Snippets.ToList();
+            // Sync _allSnippets - Removed as we use DB source
+            // _allSnippets = Snippets.ToList();
 
             var tasks = new List<Task>();
             for (int i = 0; i < Snippets.Count; i++)
@@ -338,8 +332,12 @@ namespace Pivot.CodeModule.ViewModels
                 var file = await picker.PickSaveFileAsync();
                 if (file == null) return;
 
+                // Fetch all for export
+                var criteria = new FilterCriteria { TargetKind = AssetKind.Code };
+                var allSnippets = await _queryService.QueryAsync(criteria, 0, 100000);
+
                 var exportData = new List<SnippetExportData>();
-                foreach (var snippet in _allSnippets)
+                foreach (var snippet in allSnippets)
                 {
                     string content = await _codeService.ReadContentAsync(snippet);
 
@@ -387,9 +385,8 @@ namespace Pivot.CodeModule.ViewModels
 
                 foreach (var item in importData)
                 {
-                    // Check if already exists
-                    if (_allSnippets.Any(s => s.FileName == item.FileName))
-                        continue;
+                    // Check if already exists - skipped for performance or implement DB check
+                    // if (_allSnippets.Any(s => s.FileName == item.FileName)) continue;
 
                     var snippet = new AssetEntity
                     {

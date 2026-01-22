@@ -84,7 +84,7 @@ namespace Pivot.CodeModule.Views
             {
                 await Task.Delay(100);
                 await ViewModel.ListVM.LoadSnippetsAsync();
-                ViewModel.FilterVM.LoadTags(ViewModel.ListVM.Snippets);
+                await ViewModel.FilterVM.LoadTagsAsync();
                 UpdateQuickAddTags();
             }
         }

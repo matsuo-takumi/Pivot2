@@ -14,6 +14,7 @@ namespace Pivot.CodeModule.ViewModels
     {
         private readonly CodeTagService _tagService;
         private readonly CodeService _codeService;
+        private readonly AssetQueryService _queryService;
         private readonly IDialogService _dialogService;
         private readonly IMessenger _messenger;
 
@@ -26,22 +27,31 @@ namespace Pivot.CodeModule.ViewModels
         public CodeFilterViewModel(
             CodeTagService tagService, 
             CodeService codeService,
+            AssetQueryService queryService,
             IDialogService dialogService,
             IMessenger messenger)
         {
             _tagService = tagService;
             _codeService = codeService;
+            _queryService = queryService;
             _dialogService = dialogService;
             _messenger = messenger;
         }
 
-        public void LoadTags(IEnumerable<AssetEntity> snippets)
+        public async Task LoadTagsAsync()
         {
-            var availableTags = _tagService.CollectAvailableTags(snippets);
+            var tags = await _queryService.GetUniqueTagsAsync(AssetKind.Code);
+            var preferenceTags = _tagService.GetAllowedPreferenceTags();
             
+            var allTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var t in preferenceTags) allTags.Add(t);
+            foreach (var t in tags) allTags.Add(t);
+
+            var sorted = allTags.OrderBy(t => t).ToList();
+
             Tags.Clear();
             Tags.Add("All");
-            foreach (var tag in availableTags)
+            foreach (var tag in sorted)
             {
                 Tags.Add(tag);
             }

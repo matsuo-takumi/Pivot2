@@ -56,30 +56,24 @@ namespace Pivot.CodeModule.ViewModels
 
         public async Task InitializeAsync()
         {
-            // 1. Load Snippets
+            // 1. Load Snippets (Fast, paginated)
             await ListVM.LoadSnippetsAsync();
 
-            // 2. Populate Tags based on loaded snippets
-            // Note: In real scenarios, loading might be separate, but here snippets drive tags.
-            // We pass the source (AllSnippets from ListVM logic) to FilterVM
-            // ListVM needs to expose AllSnippets or we just use 'Snippets' if it's currently showing all.
-            // Better: ListVM should expose 'AllSnippets' (the cache) for tag generation.
-            // For now, assume ListVM has a way to get all. 
-            // In CodeListViewModel (from memory), it has proper logic.
-            // We will pass ListVM.Snippets (potentially filtered, but initially all) or modify ListVM to expose Source.
+            // 2. Populate Tags (Async, optimized)
+            await FilterVM.LoadTagsAsync();
             
-            // 2. Populate Tags based on loaded snippets
-            FilterVM.LoadTags(ListVM.Snippets);
-            
-            // Default to "All"
-            FilterVM.SelectedTag = "All";
+            // Default to "All" if not set
+            if (string.IsNullOrEmpty(FilterVM.SelectedTag))
+            {
+                FilterVM.SelectedTag = "All";
+            }
         }
 
         private async void OnAssetChanged(object recipient, AssetEntityChangedMessage message)
         {
             // Reload snippets and tags when asset is updated/created/deleted
             await ListVM.LoadSnippetsAsync();
-            FilterVM.LoadTags(ListVM.Snippets);
+            await FilterVM.LoadTagsAsync();
         }
     }
 }

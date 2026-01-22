@@ -193,9 +193,47 @@ namespace Pivot.Services
                 SortField.AspectRatio => ascending 
                     ? query.OrderBy(a => a.AspectRatio) 
                     : query.OrderByDescending(a => a.AspectRatio),
+
+                SortField.SortOrder => ascending
+                    ? query.OrderBy(a => a.SortOrder)
+                    : query.OrderByDescending(a => a.SortOrder),
                     
                 _ => query.OrderByDescending(a => a.LastModifiedUtc) // Default
             };
+        }
+        public async Task<List<string>> GetUniqueTagsAsync(AssetKind kind)
+        {
+            using var scope = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+                .CreateScope(_serviceProvider);
+            var db = scope.ServiceProvider.GetRequiredService<PivotDbContext>();
+
+            var rawTags = await db.Assets
+                .Where(a => a.Kind == kind && !a.IsDeleted && a.UserTagsJson != null)
+                .Select(a => a.UserTagsJson)
+                .ToListAsync();
+
+            var uniqueTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var json in rawTags)
+            {
+                if (string.IsNullOrWhiteSpace(json)) continue;
+                try
+                {
+                    // Simple parsing or use CodeTagService logic if available (but this is a service)
+                    // We can duplicate simple parsing here or inject a helper. 
+                    // For now, simple JSON parse.
+                    if (json.TrimStart().StartsWith("["))
+                    {
+                        var list = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json);
+                        if (list != null)
+                        {
+                            foreach (var tag in list) uniqueTags.Add(tag);
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            return uniqueTags.OrderBy(t => t).ToList();
         }
     }
 }
