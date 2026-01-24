@@ -11,6 +11,11 @@
             BorderThickness="{x:Bind BorderThickness, Mode=OneWay}"
             Background="{x:Bind Background, Mode=OneWay}">
         <WebView2 x:Name="MonacoWebView"
-                  DefaultBackgroundColor="Transparent"/>
+                  DefaultBackgroundColor="Transparent"
+                  Opacity="0">
+            <WebView2.OpacityTransition>
+                <ScalarTransition Duration="0:0:0.3"/>
+            </WebView2.OpacityTransition>
+        </WebView2>
     </Border>
 </UserControl>

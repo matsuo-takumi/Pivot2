@@ -146,6 +146,12 @@ namespace Pivot.CodeModule.Controls
                 {
                     _isMonacoReady = true;
                     
+                    // Fade in the WebView now that Monaco is ready
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        MonacoWebView.Opacity = 1.0;
+                    });
+                    
                     // Set pending content if any
                     if (!string.IsNullOrEmpty(_pendingContent) || !string.IsNullOrEmpty(Text))
                     {

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.WinUI.Controls;
@@ -457,7 +458,31 @@ namespace Pivot.Controls
         
         private void AssetRepeater_ElementClearing(ItemsRepeater sender, ItemsRepeaterElementClearingEventArgs args)
         {
-             // No manual cleanup needed
+            // Fix for ghost images: Clear the UriSource when the element is recycled.
+            // ItemsRepeater reuses the visual element but updates the DataContext.
+            // If the new image takes time to load, the Image control keeps showing the OLD image
+            // from the previous DataContext. Explicitly clearing it here ensures a blank state
+            // until the new image is ready.
+            var image = TreeHelper.FindDescendantOfType<Image>(args.Element);
+            if (image != null)
+            {
+                // Reset opacity for next fade-in
+                image.Opacity = 0;
+                
+                if (image.Source is BitmapImage bitmapImage)
+                {
+                    bitmapImage.UriSource = null;
+                }
+            }
+        }
+
+        private void Image_ImageOpened(object sender, RoutedEventArgs e)
+        {
+            // Fade within animation 
+            if (sender is Image img)
+            {
+                img.Opacity = 1;
+            }
         }
 
         #endregion

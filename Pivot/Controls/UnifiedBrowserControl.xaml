@@ -39,7 +39,12 @@
                             <!-- Thumbnail image -->
                             <Image Stretch="UniformToFill"
                                    HorizontalAlignment="Center"
-                                   VerticalAlignment="Center">
+                                   VerticalAlignment="Center"
+                                   Opacity="0"
+                                   ImageOpened="Image_ImageOpened">
+                                <Image.OpacityTransition>
+                                    <ScalarTransition Duration="0:0:0.3"/>
+                                </Image.OpacityTransition>
                                 <Image.Source>
                                     <BitmapImage UriSource="{x:Bind DisplayImageSource}"
                                                  DecodePixelWidth="300"
@@ -92,7 +97,12 @@
                         <Border.Background>
                             <SolidColorBrush Color="{x:Bind utils:ColorHelper.ParseColor(DominantColor), FallbackValue='#404040'}"/>
                         </Border.Background>
-                        <Image Stretch="UniformToFill">
+                        <Image Stretch="UniformToFill"
+                               Opacity="0"
+                               ImageOpened="Image_ImageOpened">
+                            <Image.OpacityTransition>
+                                <ScalarTransition Duration="0:0:0.3"/>
+                            </Image.OpacityTransition>
                             <Image.Source>
                                 <BitmapImage UriSource="{x:Bind DisplayImageSource}"
                                              DecodePixelWidth="48"

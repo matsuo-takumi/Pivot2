@@ -128,22 +128,8 @@ namespace Pivot.CodeModule.ViewModels
 
             try
             {
-                // Parse Hashtags from content
-                if (!string.IsNullOrEmpty(TextContent))
-                {
-                    // Regex for hashtags: #tag (alphanumeric+underscore)
-                    // Simplified regex. 
-                    var regex = new Regex(@"(?<!\w)#[a-zA-Z0-9_]+");
-                    var matches = regex.Matches(TextContent);
-                    foreach(Match match in matches)
-                    {
-                        var tag = match.Value.TrimStart('#');
-                        if (!string.IsNullOrEmpty(tag) && !Tags.Contains(tag))
-                        {
-                            Tags.Add(tag);
-                        }
-                    }
-                }
+                // Tags are managed manually by the user through the UI
+                // No automatic hashtag extraction to avoid overriding user's tag deletions
 
                 // Sync Tags
                 CurrentSnippet.UserTagsJson = JsonSerializer.Serialize(Tags);
