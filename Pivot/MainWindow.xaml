@@ -28,6 +28,10 @@
         
         <Grid x:Name="Root" Grid.Row="1" Background="Transparent">
             <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
+                <Pivot.LeftHeader>
+                    <!-- Spacer to match top spacing (approx 44px) -->
+                    <Grid Width="44" Height="48" Background="Transparent"/>
+                </Pivot.LeftHeader>
                 <PivotItem Header="Home">
                     <Frame x:Name="HomeFrame" Background="Transparent"/>
                 </PivotItem>
