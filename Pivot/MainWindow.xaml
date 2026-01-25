@@ -14,63 +14,73 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="32"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid x:Name="AppTitleBar" Background="Transparent" Grid.Row="0">
+        <!-- Title Bar -->
+        <Grid x:Name="AppTitleBar" Background="Transparent" Grid.Row="0" Height="32">
             <TextBlock x:Name="AppTitleBarText"
                        Text="Pivot"
                        VerticalAlignment="Center"
                        Margin="12,0,0,0"
-                       Style="{StaticResource CaptionTextBlockStyle}" />
+                       Style="{StaticResource CaptionTextBlockStyle}"/>
         </Grid>
         
-        <Grid x:Name="Root" Grid.Row="1" Background="Transparent">
-            <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
-                <Pivot.LeftHeader>
-                    <!-- Spacer to match top spacing (approx 44px) -->
-                    <Grid Width="44" Height="48" Background="Transparent"/>
-                </Pivot.LeftHeader>
-                <PivotItem Header="Home">
-                    <Frame x:Name="HomeFrame" Background="Transparent"/>
-                </PivotItem>
-                <PivotItem Header="Asset">
-                    <Frame x:Name="AssetFrame" Background="Transparent"/>
-                </PivotItem>
-                <PivotItem Header="Image">
-                    <Frame x:Name="ImageFrame" Background="Transparent"/>
-                </PivotItem>
-                <PivotItem Header="Project">
-                    <Frame x:Name="ProjectFrame" Background="Transparent"/>
-                </PivotItem>
-                <PivotItem Header="Code">
-                    <Frame x:Name="CodeFrame" Background="Transparent"/>
-                </PivotItem>
-                <PivotItem Header="Preference">
-                    <Frame x:Name="PreferenceFrame" Background="Transparent"/>
-                </PivotItem>
-            </Pivot>
-            
-            <!-- Loading Indicator (bottom-right) -->
-            <Border x:Name="LoadingIndicator"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Bottom"
-                    Margin="0,0,16,16"
-                    Padding="12,8"
-                    CornerRadius="8"
-                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    Visibility="Collapsed">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ProgressRing IsActive="True" Width="16" Height="16"/>
-                    <TextBlock x:Name="LoadingText" 
-                               Text="Loading..." 
-                               VerticalAlignment="Center"
-                               Style="{StaticResource CaptionTextBlockStyle}"/>
-                </StackPanel>
-            </Border>
-        </Grid>
+        <!-- Main Pivot Control -->
+        <Pivot x:Name="MainPivot" 
+               Grid.Row="1"
+               SelectionChanged="MainPivot_SelectionChanged"
+               IsHeaderItemsCarouselEnabled="False">
+            <Pivot.Resources>
+                <Style TargetType="PivotHeaderItem">
+                    <Setter Property="Padding" Value="12,0,12,0"/>
+                    <Setter Property="Margin" Value="0,0,8,0"/>
+                    <Setter Property="MinHeight" Value="0"/>
+                </Style>
+            </Pivot.Resources>
+            <PivotItem>
+                <PivotItem.Header>
+                    <TextBlock Text="Home" Margin="18,0,0,0"/>
+                </PivotItem.Header>
+                <Frame x:Name="HomeFrame" Background="Transparent"/>
+            </PivotItem>
+            <PivotItem Header="Asset">
+                <Frame x:Name="AssetFrame" Background="Transparent"/>
+            </PivotItem>
+            <PivotItem Header="Image">
+                <Frame x:Name="ImageFrame" Background="Transparent"/>
+            </PivotItem>
+            <PivotItem Header="Project">
+                <Frame x:Name="ProjectFrame" Background="Transparent"/>
+            </PivotItem>
+            <PivotItem Header="Code">
+                <Frame x:Name="CodeFrame" Background="Transparent"/>
+            </PivotItem>
+            <PivotItem Header="Preference">
+                <Frame x:Name="PreferenceFrame" Background="Transparent"/>
+            </PivotItem>
+        </Pivot>
+        
+        <!-- Loading Indicator (bottom-right) -->
+        <Border x:Name="LoadingIndicator"
+                Grid.Row="1"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="0,0,16,16"
+                Padding="12,8"
+                CornerRadius="8"
+                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <ProgressRing IsActive="True" Width="16" Height="16"/>
+                <TextBlock x:Name="LoadingText" 
+                           Text="Loading..." 
+                           VerticalAlignment="Center"
+                           Style="{StaticResource CaptionTextBlockStyle}"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

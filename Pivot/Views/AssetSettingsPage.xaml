@@ -3,12 +3,14 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Pivot.Views"
+    xmlns:viewmodels="using:Pivot.ViewModels"
     xmlns:converters="using:Pivot.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     Background="Transparent"
-    x:Name="AssetSettingsRoot">
+    x:Name="AssetSettingsRoot"
+    x:DataType="viewmodels:AssetSettingsViewModel">
 
     <Page.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
@@ -45,7 +47,7 @@
                                     <TextBlock Text="Navigation" VerticalAlignment="Center" FontSize="12"/>
                                     <ComboBox x:Name="GesturePresetComboBox" Grid.Column="1"
                                               MinWidth="120" 
-                                              SelectionChanged="GesturePresetComboBox_SelectionChanged">
+                                              SelectedIndex="{x:Bind ViewModel.SelectedGestureIndex, Mode=TwoWay}">
                                         <ComboBoxItem Tag="Maya" Content="Maya"/>
                                         <ComboBoxItem Tag="Houdini" Content="Houdini"/>
                                         <ComboBoxItem Tag="Blender" Content="Blender"/>
@@ -65,11 +67,11 @@
                                         </Grid.RowDefinitions>
                                         
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Rotate" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="RotateGestureText" Text="Alt + LMB" FontSize="11"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.RotateGesture, Mode=OneWay}" FontSize="11"/>
                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Pan" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="PanGestureText" Text="Alt + MMB" FontSize="11"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.PanGesture, Mode=OneWay}" FontSize="11"/>
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Zoom" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ZoomGestureText" Text="Alt + RMB" FontSize="11"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.ZoomGesture, Mode=OneWay}" FontSize="11"/>
                                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Scroll" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         <TextBlock Grid.Row="3" Grid.Column="1" Text="Zoom" FontSize="11"/>
                                     </Grid>
@@ -87,7 +89,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Axis Gizmo" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowAxisGizmoToggle" Grid.Column="1" 
-                                                 Toggled="ShowAxisGizmoToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowAxisGizmo, Mode=TwoWay}"/>
                                 </Grid>
                                 
                                 <Grid>
@@ -97,7 +99,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Backface Cull" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="BackfaceCullingToggle" Grid.Column="1" 
-                                                 Toggled="BackfaceCullingToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.BackfaceCulling, Mode=TwoWay}"/>
                                 </Grid>
                             </StackPanel>
                             
@@ -111,16 +113,16 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Color Mode" VerticalAlignment="Center" FontSize="12"/>
-                                    <ComboBox x:Name="BackgroundModeCombo" Grid.Column="1"
+                                    <ComboBox Grid.Column="1"
                                               MinWidth="120"
-                                              SelectionChanged="BackgroundModeCombo_SelectionChanged">
+                                              SelectedIndex="{x:Bind ViewModel.SelectedBackgroundModeIndex, Mode=TwoWay}">
                                         <ComboBoxItem Tag="Custom" Content="Custom"/>
                                         <ComboBoxItem Tag="MatchTheme" Content="Match Theme"/>
                                     </ComboBox>
                                 </Grid>
                                 
-                                <StackPanel x:Name="BackgroundColorPanel" Spacing="4" Visibility="Visible">
-                                    <ColorPicker x:Name="BgColorPicker" 
+                                <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.BackgroundColorPanelVisibility, Mode=OneWay}">
+                                    <ColorPicker 
                                                  ColorSpectrumShape="Box" 
                                                  IsAlphaEnabled="False"
                                                  IsMoreButtonVisible="False"
@@ -128,7 +130,7 @@
                                                  IsColorChannelTextInputVisible="False"
                                                  IsHexInputVisible="True"
                                                  MinWidth="180" MaxWidth="200"
-                                                 ColorChanged="BgColorPicker_ColorChanged"/>
+                                                 Color="{x:Bind ViewModel.BackgroundColor, Mode=TwoWay}"/>
                                 </StackPanel>
                             </StackPanel>
                             
@@ -141,7 +143,7 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Color" VerticalAlignment="Center" FontSize="12"/>
-                                    <ColorPicker x:Name="WireframeColorPicker" Grid.Column="1"
+                                    <ColorPicker Grid.Column="1"
                                                  ColorSpectrumShape="Box" 
                                                  IsAlphaEnabled="False"
                                                  IsMoreButtonVisible="False"
@@ -149,7 +151,7 @@
                                                  IsColorChannelTextInputVisible="False"
                                                  IsHexInputVisible="True"
                                                  MinWidth="180" MaxWidth="200"
-                                                 ColorChanged="WireframeColorPicker_ColorChanged"/>
+                                                 Color="{x:Bind ViewModel.WireframeColor, Mode=TwoWay}"/>
                                 </Grid>
                             </StackPanel>
                             
@@ -163,7 +165,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Polygons" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowPolygonCountToggle" Grid.Column="1" 
-                                                 Toggled="ShowPolygonCountToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowPolygonCount, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -172,7 +174,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Vertices" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowVertexCountToggle" Grid.Column="1" 
-                                                 Toggled="ShowVertexCountToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowVertexCount, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -181,7 +183,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="UV Sets" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowUVSetCountToggle" Grid.Column="1" 
-                                                 Toggled="ShowUVSetCountToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowUVSetCount, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -190,7 +192,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Materials" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowMaterialCountToggle" Grid.Column="1" 
-                                                 Toggled="ShowMaterialCountToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowMaterialCount, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -199,7 +201,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Bounds" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowBoundingBoxToggle" Grid.Column="1" 
-                                                 Toggled="ShowBoundingBoxToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowBoundingBox, Mode=TwoWay}"/>
                                 </Grid>
                             </StackPanel>
                             
@@ -213,7 +215,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="FPS" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowFPSToggle" Grid.Column="1" 
-                                                 Toggled="ShowFPSToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowFPS, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -222,7 +224,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Resolution" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowResolutionToggle" Grid.Column="1" 
-                                                 Toggled="ShowResolutionToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowResolution, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -231,7 +233,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Viewport Size" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowViewportSizeToggle" Grid.Column="1" 
-                                                 Toggled="ShowViewportSizeToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowViewportSize, Mode=TwoWay}"/>
                                 </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -240,7 +242,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Camera Info" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowCameraInfoToggle" Grid.Column="1" 
-                                                 Toggled="ShowCameraInfoToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowCameraInfo, Mode=TwoWay}"/>
                                 </Grid>
                             </StackPanel>
                             
@@ -254,7 +256,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Show Grid" VerticalAlignment="Center" FontSize="12"/>
                                     <ToggleSwitch x:Name="ShowGridToggle" Grid.Column="1" 
-                                                 Toggled="ShowGridToggle_Toggled"/>
+                                                 IsOn="{x:Bind ViewModel.ShowGrid, Mode=TwoWay}"/>
                                 </Grid>
                             </StackPanel>
                         </StackPanel>

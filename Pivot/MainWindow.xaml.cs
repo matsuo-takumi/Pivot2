@@ -87,13 +87,16 @@ namespace Pivot
             // Register all IRecipient<T> implementations for message handling
             _messenger.RegisterAll(this);
 
-            // 初期ナビゲーション（ViewModelからの要求でも遷移可能）
+            // 初期ナビゲーション(ViewModelからの要求でも遷移可能)
             NavigateTo(NavigationRegion.Home);
             NavigateTo(NavigationRegion.Asset);
             NavigateTo(NavigationRegion.Image);
             NavigateTo(NavigationRegion.Project);
             NavigateTo(NavigationRegion.Code);
             NavigateTo(NavigationRegion.Preference);
+            
+            // Set initial Pivot selection
+            MainPivot.SelectedIndex = 0;
 
             // ナビゲーション要求はNavigationServiceが処理 - 直接購読不要
         }
@@ -380,24 +383,26 @@ namespace Pivot
         {
             if (MainPivot.SelectedItem is PivotItem selectedPivotItem)
             {
-                switch (selectedPivotItem.Header as string)
+                
+                // Navigate based on selected index
+                switch (MainPivot.SelectedIndex)
                 {
-                    case "Home":
+                    case 0: // Home
                         NavigateTo(NavigationRegion.Home);
                         break;
-                    case "Asset":
+                    case 1: // Asset
                         NavigateTo(NavigationRegion.Asset);
                         break;
-                    case "Image":
+                    case 2: // Image
                         NavigateTo(NavigationRegion.Image);
                         break;
-                    case "Project":
+                    case 3: // Project
                         NavigateTo(NavigationRegion.Project);
                         break;
-                    case "Code":
+                    case 4: // Code
                         NavigateTo(NavigationRegion.Code);
                         break;
-                case "Preference":
+                    case 5: // Preference
                         NavigateTo(NavigationRegion.Preference);
                         break;
                 }
@@ -439,14 +444,10 @@ namespace Pivot
                     }
                     break;
                     case NavigationRegion.Code:
-                        var pivotItem = MainPivot.Items.OfType<PivotItem>().FirstOrDefault(pi => (pi.Header as string) == "Code");
-                        if (pivotItem?.Content is Frame codeFrameObj)
+                        // 既にCodePageが表示されている場合は再ナビゲートしない
+                        if (CodeFrame.Content?.GetType() != typeof(Pivot.CodeModule.Views.CodePage))
                         {
-                            // 既にCodePageが表示されている場合は再ナビゲートしない
-                            if (codeFrameObj.Content?.GetType() != typeof(Pivot.CodeModule.Views.CodePage))
-                            {
-                                codeFrameObj.Navigate(typeof(Pivot.CodeModule.Views.CodePage), null, transition);
-                            }
+                            CodeFrame.Navigate(typeof(Pivot.CodeModule.Views.CodePage), null, transition);
                         }
                         break;
                 case NavigationRegion.Preference:

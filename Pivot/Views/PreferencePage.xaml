@@ -50,11 +50,6 @@
                         <FontIcon Glyph="&#xE793;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="Key Config" Tag="KeyConfig">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE765;"/>
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
                 <!-- Export removed; code save moved to Preferences > Code > Save -->
             </NavigationView.MenuItems>
             <ContentControl Content="{Binding CurrentContent}" 
