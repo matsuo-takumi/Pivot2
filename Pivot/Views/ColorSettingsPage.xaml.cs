@@ -206,10 +206,70 @@ namespace Pivot.Views
             }
         }
 
+        private void CodeBackgroundColorButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button)
+            {
+                var flyout = new Flyout
+                {
+                    Placement = FlyoutPlacementMode.Bottom
+                };
 
+                var colorPicker = new Microsoft.UI.Xaml.Controls.ColorPicker
+                {
+                    Color = ViewModel.CodeColorSettings.BackgroundPreviewBrush.Color,
+                    ColorSpectrumShape = Microsoft.UI.Xaml.Controls.ColorSpectrumShape.Ring,
+                    IsMoreButtonVisible = false,
+                    IsColorSliderVisible = true,
+                    IsColorChannelTextInputVisible = false,
+                    IsHexInputVisible = true,
+                    IsAlphaEnabled = false,
+                    IsAlphaSliderVisible = false,
+                    IsAlphaTextInputVisible = false
+                };
 
+                colorPicker.ColorChanged += (s, args) =>
+                {
+                    var hex = $"#{args.NewColor.R:X2}{args.NewColor.G:X2}{args.NewColor.B:X2}";
+                    ViewModel.CodeColorSettings.BackgroundColor = hex;
+                };
 
+                flyout.Content = colorPicker;
+                flyout.ShowAt(button);
+            }
+        }
+
+        private void CodeTextColorButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button)
+            {
+                var flyout = new Flyout
+                {
+                    Placement = FlyoutPlacementMode.Bottom
+                };
+
+                var colorPicker = new Microsoft.UI.Xaml.Controls.ColorPicker
+                {
+                    Color = ViewModel.CodeColorSettings.TextPreviewBrush.Color,
+                    ColorSpectrumShape = Microsoft.UI.Xaml.Controls.ColorSpectrumShape.Ring,
+                    IsMoreButtonVisible = false,
+                    IsColorSliderVisible = true,
+                    IsColorChannelTextInputVisible = false,
+                    IsHexInputVisible = true,
+                    IsAlphaEnabled = false,
+                    IsAlphaSliderVisible = false,
+                    IsAlphaTextInputVisible = false
+                };
+
+                colorPicker.ColorChanged += (s, args) =>
+                {
+                    var hex = $"#{args.NewColor.R:X2}{args.NewColor.G:X2}{args.NewColor.B:X2}";
+                    ViewModel.CodeColorSettings.TextColor = hex;
+                };
+
+                flyout.Content = colorPicker;
+                flyout.ShowAt(button);
+            }
+        }
     }
 }
-
-

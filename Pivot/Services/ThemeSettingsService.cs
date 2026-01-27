@@ -69,6 +69,12 @@ namespace Pivot.Services
         private double _previewMaxZoom = 50.0;
         private double _previewFixedDisplaySize = 800.0;
 
+        // Code Editor Settings
+        private string _codeEditorTheme = "vs-dark";
+        private string _codeBackgroundColor = "#1E1E1E";
+        private string _codeTextColor = "#D4D4D4";
+        private bool _useCustomCodeColors = false;
+
         // Public Properties
         public ElementTheme AppTheme => _appTheme;
         public int LightStartHour => _lightStartHour;
@@ -177,6 +183,12 @@ namespace Pivot.Services
         public double PreviewMaxZoom => _previewMaxZoom;
         public double PreviewFixedDisplaySize => _previewFixedDisplaySize;
 
+        // Code Editor Settings
+        public string CodeEditorTheme => _codeEditorTheme;
+        public string CodeBackgroundColor => _codeBackgroundColor;
+        public string CodeTextColor => _codeTextColor;
+        public bool UseCustomCodeColors => _useCustomCodeColors;
+
         public ThemeSettingsService(
             ILogger<ThemeSettingsService> logger,
             ISettingsStore settingsStore,
@@ -259,6 +271,12 @@ namespace Pivot.Services
             // Preview Settings
             _previewMaxZoom = await LoadDouble("Preview.MaxZoom", 50.0);
             _previewFixedDisplaySize = await LoadDouble("Preview.FixedDisplaySize", 800.0);
+
+            // Code Editor Settings
+            _codeEditorTheme = await LoadString("Code.EditorTheme", "vs-dark");
+            _codeBackgroundColor = await LoadString("Code.BackgroundColor", "#1E1E1E");
+            _codeTextColor = await LoadString("Code.TextColor", "#D4D4D4");
+            _useCustomCodeColors = await LoadBool("Code.UseCustomColors", false);
         }
 
         // Helpers
@@ -513,6 +531,35 @@ namespace Pivot.Services
             _previewFixedDisplaySize = size;
             await _settingsStore.UpsertAsync("Preview.FixedDisplaySize", size.ToString(CultureInfo.InvariantCulture));
             _messenger.Send(new SettingsChangedMessage("PreviewFixedDisplaySize"));
+        }
+
+        // Code Editor Settings
+        public async Task SetCodeEditorThemeAsync(string theme)
+        {
+            _codeEditorTheme = theme;
+            await _settingsStore.UpsertAsync("Code.EditorTheme", theme);
+            _messenger.Send(new SettingsChangedMessage("CodeEditorTheme"));
+        }
+
+        public async Task SetCodeBackgroundColorAsync(string color)
+        {
+            _codeBackgroundColor = color;
+            await _settingsStore.UpsertAsync("Code.BackgroundColor", color);
+            _messenger.Send(new SettingsChangedMessage("CodeBackgroundColor"));
+        }
+
+        public async Task SetCodeTextColorAsync(string color)
+        {
+            _codeTextColor = color;
+            await _settingsStore.UpsertAsync("Code.TextColor", color);
+            _messenger.Send(new SettingsChangedMessage("CodeTextColor"));
+        }
+
+        public async Task SetUseCustomCodeColorsAsync(bool useCustom)
+        {
+            _useCustomCodeColors = useCustom;
+            await _settingsStore.UpsertAsync("Code.UseCustomColors", useCustom.ToString());
+            _messenger.Send(new SettingsChangedMessage("UseCustomCodeColors"));
         }
     }
 }

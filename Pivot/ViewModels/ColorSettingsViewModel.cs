@@ -21,6 +21,7 @@ namespace Pivot.ViewModels
 
         public TextColorSettingsViewModel TextColorSettings { get; }
         public TextColorPresetViewModel PresetViewModel { get; }
+        public CodeColorSettingsViewModel CodeColorSettings { get; }
 
         public ColorSettingsViewModel(
             ThemeSettingsService themeSettings,
@@ -36,6 +37,9 @@ namespace Pivot.ViewModels
             
             // Initialize TextColorSettings (entries will be loaded asynchronously after page loads)
             TextColorSettings = new TextColorSettingsViewModel(themeSettings, resourceManager);
+            
+            // Initialize CodeColorSettings
+            CodeColorSettings = new CodeColorSettingsViewModel(themeSettings);
             
             // Initialize PresetViewModel last (lightweight, just holds references)
             PresetViewModel = new TextColorPresetViewModel(presetService, TextColorSettings, presetLogger);

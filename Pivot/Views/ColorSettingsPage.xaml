@@ -194,6 +194,98 @@
                 </ScrollViewer>
             </muxc:PivotItem>
 
+            <muxc:PivotItem Header="Code">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Code Editor Colors" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Customize the appearance of code snippets in the Monaco editor." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
+
+                        <!-- Monaco Theme Selection -->
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Monaco Editor Theme" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock Text="Select a built-in Monaco editor theme." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" FontSize="12"/>
+                                
+                                <ComboBox 
+                                    ItemsSource="{x:Bind ViewModel.CodeColorSettings.AvailableThemes}"
+                                    SelectedValue="{x:Bind ViewModel.CodeColorSettings.SelectedTheme, Mode=TwoWay}"
+                                    SelectedValuePath="Value"
+                                    DisplayMemberPath="Name"
+                                    MinWidth="250"
+                                    HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Custom Colors Toggle -->
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12">
+                            <StackPanel Spacing="8">
+                                <ToggleSwitch
+                                    Header="Use Custom Colors"
+                                    IsOn="{x:Bind ViewModel.CodeColorSettings.UseCustomColors, Mode=TwoWay}"
+                                    OffContent="Use Monaco theme colors"
+                                    OnContent="Override with custom colors" />
+                                <TextBlock 
+                                    Text="When enabled, you can override the background and text colors. Note: This only affects basic colors, not full syntax highlighting."
+                                    TextWrapping="Wrap"
+                                    Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                    FontSize="12"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Custom Background Color -->
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12"
+                                Opacity="{x:Bind ViewModel.CodeColorSettings.UseCustomColors, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Background Color" FontWeight="SemiBold" FontSize="16" />
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" VerticalAlignment="Center">
+                                    <Button x:Name="CodeBackgroundColorButton" Width="40" Height="40" Background="Transparent" BorderThickness="0" Padding="0" Click="CodeBackgroundColorButton_Click">
+                                        <Border Width="40" Height="40" CornerRadius="6" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind ViewModel.CodeColorSettings.BackgroundPreviewBrush, Mode=OneWay}" />
+                                    </Button>
+                                    <TextBox Grid.Column="1" Width="120" Height="32" MinHeight="32" TextAlignment="Left" VerticalContentAlignment="Center" 
+                                             Text="{x:Bind ViewModel.CodeColorSettings.BackgroundColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             PlaceholderText="#1E1E1E"
+                                             IsEnabled="{x:Bind ViewModel.CodeColorSettings.UseCustomColors, Mode=OneWay}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Custom Text Color -->
+                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12"
+                                Opacity="{x:Bind ViewModel.CodeColorSettings.UseCustomColors, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Text Color" FontWeight="SemiBold" FontSize="16" />
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" VerticalAlignment="Center">
+                                    <Button x:Name="CodeTextColorButton" Width="40" Height="40" Background="Transparent" BorderThickness="0" Padding="0" Click="CodeTextColorButton_Click">
+                                        <Border Width="40" Height="40" CornerRadius="6" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind ViewModel.CodeColorSettings.TextPreviewBrush, Mode=OneWay}" />
+                                    </Button>
+                                    <TextBox Grid.Column="1" Width="120" Height="32" MinHeight="32" TextAlignment="Left" VerticalContentAlignment="Center" 
+                                             Text="{x:Bind ViewModel.CodeColorSettings.TextColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             PlaceholderText="#D4D4D4"
+                                             IsEnabled="{x:Bind ViewModel.CodeColorSettings.UseCustomColors, Mode=OneWay}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </muxc:PivotItem>
+
         </muxc:Pivot>
     </Grid>
 </Page>
