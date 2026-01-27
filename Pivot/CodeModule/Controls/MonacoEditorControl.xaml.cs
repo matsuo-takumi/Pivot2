@@ -2,6 +2,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
 using Pivot.CodeModule.Helpers;
+using Pivot.Services;
+using CommunityToolkit.Mvvm.Messaging;
+using Pivot.ViewModels;
 using System;
 using System.IO;
 using System.Text.Json;
@@ -23,6 +26,18 @@ namespace Pivot.CodeModule.Controls
         {
             this.InitializeComponent();
             this.Loaded += OnLoaded;
+            this.Unloaded += OnUnloaded;
+            
+            // Listen for theme changes
+            WeakReferenceMessenger.Default.Register<CodeThemeChangedMessage>(this, (r, m) =>
+            {
+                DispatcherQueue.TryEnqueue(async () => await UpdateThemeAsync());
+            });
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            WeakReferenceMessenger.Default.Unregister<CodeThemeChangedMessage>(this);
         }
 
         #region Dependency Properties
@@ -137,7 +152,7 @@ namespace Pivot.CodeModule.Controls
             }
         }
 
-        private void MonacoWebView_WebMessageReceived(WebView2 sender, CoreWebView2WebMessageReceivedEventArgs args)
+        private async void MonacoWebView_WebMessageReceived(WebView2 sender, CoreWebView2WebMessageReceivedEventArgs args)
         {
             try
             {
@@ -160,6 +175,9 @@ namespace Pivot.CodeModule.Controls
                     
                     // Set read-only state
                     SetMonacoReadOnly(IsReadOnly);
+                    
+                    // Apply custom theme
+                    await UpdateThemeAsync();
                 }
                 else if (message?.type == "contentChanged")
                 {
@@ -245,6 +263,24 @@ namespace Pivot.CodeModule.Controls
         }
 
         #endregion
+
+        public async Task UpdateThemeAsync()
+        {
+            if (!_isMonacoReady || MonacoWebView.CoreWebView2 == null) return;
+            
+            try
+            {
+                var themeSettings = App.Current.Services.GetService(typeof(ThemeSettingsService)) as ThemeSettingsService;
+                if (themeSettings != null)
+                {
+                    var themeData = CodeThemeHelper.GenerateThemeData(themeSettings);
+                    var json = JsonSerializer.Serialize(themeData);
+                    await MonacoWebView.ExecuteScriptAsync($"window.monacoApi.defineTheme('custom-theme', {json})");
+                    await MonacoWebView.ExecuteScriptAsync("window.monacoApi.setTheme('custom-theme')");
+                }
+            }
+            catch { }
+        }
 
         private class MonacoMessage
         {

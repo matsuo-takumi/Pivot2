@@ -20,6 +20,7 @@ namespace Pivot.ViewModels
         private bool _isTextColorCustomizationEnabled;
 
         public TextColorSettingsViewModel TextColorSettings { get; }
+        public CodeColorSettingsViewModel CodeColorSettings { get; }
         public TextColorPresetViewModel PresetViewModel { get; }
 
         public ColorSettingsViewModel(
@@ -36,6 +37,7 @@ namespace Pivot.ViewModels
             
             // Initialize TextColorSettings (entries will be loaded asynchronously after page loads)
             TextColorSettings = new TextColorSettingsViewModel(themeSettings, resourceManager);
+            CodeColorSettings = new CodeColorSettingsViewModel(themeSettings, resourceManager);
             
             // Initialize PresetViewModel last (lightweight, just holds references)
             PresetViewModel = new TextColorPresetViewModel(presetService, TextColorSettings, presetLogger);
@@ -44,6 +46,7 @@ namespace Pivot.ViewModels
         public async Task LoadEntriesAsync()
         {
             await TextColorSettings.LoadEntriesAsync();
+            await CodeColorSettings.LoadEntriesAsync();
         }
 
         partial void OnIsTextColorCustomizationEnabledChanged(bool value)
@@ -76,6 +79,16 @@ namespace Pivot.ViewModels
                     entry.SelectedColor = definition.DefaultColor;
                     // Apply the default color to the resource manager
                     _resourceManager.ApplyColor(entry.SettingKey, definition.DefaultColor);
+                }
+            }
+
+            foreach (var entry in CodeColorSettings.Entries)
+            {
+                var definition = CodeColorRoleDefinitions.Roles.FirstOrDefault(r => r.SettingKey == entry.SettingKey);
+                if (definition != null)
+                {
+                    entry.SelectedColor = definition.DefaultColor;
+                    // No resource manager application for code colors yet (handled by Monaco)
                 }
             }
 

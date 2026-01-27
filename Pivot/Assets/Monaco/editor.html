@@ -32,7 +32,7 @@
 
         require.config({ paths: { vs: 'vs' } });
 
-        require(['vs/editor/editor.main'], function () {
+        require(['vs/editor/editor.main', 'vs/basic-languages/monaco.contribution'], function () {
             const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
             editor = monaco.editor.create(document.getElementById('editor'), {
@@ -86,6 +86,9 @@
                 if (editor) {
                     monaco.editor.setTheme(theme);
                 }
+            },
+            defineTheme: function (themeName, themeData) {
+                monaco.editor.defineTheme(themeName, themeData);
             },
             setReadOnly: function (isReadOnly) {
                 if (editor) {

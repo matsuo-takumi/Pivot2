@@ -6,10 +6,7 @@
 
     <Grid Padding="20">
         <Pivot>
-            <!-- Tags (Filters) Tab -->
-            <PivotItem Header="Tags">
-                <local:FilterSettingsView x:Name="FilterSettingsView" />
-            </PivotItem>
+
 
             <!-- Categories tab removed: categories are deprecated. -->
 

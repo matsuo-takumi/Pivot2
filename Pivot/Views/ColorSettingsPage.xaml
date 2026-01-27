@@ -194,6 +194,66 @@
                 </ScrollViewer>
             </muxc:PivotItem>
 
+            <muxc:PivotItem Header="Code">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16">
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <TextBlock Text="Code Editor Colors" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="Customize the syntax highlighting colors for the code editor." TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}"/>
+                        
+                        <!-- Individual Code Color Role Settings -->
+                        <StackPanel Spacing="10">
+                            <ListView
+                                ItemsSource="{x:Bind ViewModel.CodeColorSettings.Entries}"
+                                SelectionMode="None"
+                                IsItemClickEnabled="False"
+                                BorderThickness="0"
+                                Background="Transparent"
+                                ScrollViewer.VerticalScrollMode="Auto"
+                                ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="Margin" Value="0" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsStackPanel Orientation="Vertical" />
+                                    </ItemsPanelTemplate>
+                                </ListView.ItemsPanel>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="viewmodels:TextColorSettingViewModel">
+                                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="10"
+                                                Padding="12"
+                                                Margin="0,0,0,8">
+                                            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center" ColumnSpacing="16">
+                                                <StackPanel>
+                                                    <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{x:Bind Description}" Foreground="{ThemeResource AppTextCaptionBrush}" FontSize="12" TextWrapping="Wrap" />
+                                                    <TextBlock Text="Hex value (examples: #000000, #FFFFFF)" Foreground="{ThemeResource AppTextDimBrush}" FontSize="10" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8">
+                                                    <Button x:Name="ColorSwatchButton" Width="32" Height="32" Background="Transparent" BorderThickness="0" Padding="0" Click="ColorSwatchButton_Click" Tag="{x:Bind}">
+                                                        <Border Width="32" Height="32" CornerRadius="4" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}" BorderThickness="1" Background="{x:Bind PreviewBrush}" />
+                                                    </Button>
+                                                    <TextBox Width="100" Height="30" MinHeight="30" TextAlignment="Left" VerticalContentAlignment="Center" Text="{x:Bind HexValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </muxc:PivotItem>
+
         </muxc:Pivot>
     </Grid>
 </Page>

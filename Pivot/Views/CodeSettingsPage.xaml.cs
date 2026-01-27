@@ -1,11 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Pivot.Services;
-using System.Linq;
-using Pivot.Models;
 using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -30,38 +26,6 @@ namespace Pivot.Views
 
         private void CodeSettingsPage_Loaded(object sender, RoutedEventArgs e)
         {
-            // Initialize common filter settings view
-            var filterSettings = App.Current.Services.GetService(typeof(FilterSettingsService)) as FilterSettingsService;
-            var logger = App.Current.Services.GetService(typeof(Microsoft.Extensions.Logging.ILogger<ViewModels.FilterSettingsViewModel>)) as Microsoft.Extensions.Logging.ILogger<ViewModels.FilterSettingsViewModel>;
-            
-            if (filterSettings != null)
-            {
-                var filterView = this.FindName("FilterSettingsView") as FilterSettingsView;
-                if (filterView != null)
-                {
-                    filterView.ViewModel = new ViewModels.FilterSettingsViewModel(
-                        filterSettings,
-                        Models.FilterType.Code,
-                        "Code",
-                        GetDefaultCodeFilters,
-                        logger);
-                }
-            }
-        }
-
-        private static List<CustomFilter> GetDefaultCodeFilters()
-        {
-            return new List<CustomFilter>
-            {
-                new CustomFilter { Name = "C#", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                new CustomFilter { Name = "Python", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                new CustomFilter { Name = "JavaScript", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                new CustomFilter { Name = "HTML", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                new CustomFilter { Name = "CSS", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                new CustomFilter { Name = "SQL", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                new CustomFilter { Name = "Markdown", IsBuiltIn=true, AllowedExtensions = new List<string>() },
-                new CustomFilter { Name = "Other", IsBuiltIn=true, AllowedExtensions = new List<string>() }
-            };
         }
         
         private void LoadSaveOutputDirectory()

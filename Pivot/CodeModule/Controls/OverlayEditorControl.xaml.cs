@@ -17,21 +17,6 @@ namespace Pivot.CodeModule.Controls
         {
             this.InitializeComponent();
             this.DataContextChanged += OnDataContextChanged;
-            
-            // Lazy load Monaco when editor becomes visible
-            this.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, OnVisibilityChanged);
-        }
-
-        private async void OnVisibilityChanged(DependencyObject sender, DependencyProperty dp)
-        {
-            if (this.Visibility == Visibility.Visible)
-            {
-                var monaco = this.FindName("MonacoEditor") as MonacoEditorControl;
-                if (monaco != null)
-                {
-                    await monaco.EnsureInitializedAsync();
-                }
-            }
         }
 
 
@@ -164,9 +149,9 @@ namespace Pivot.CodeModule.Controls
 
 
 
-        private async void CopyButton_Click(object sender, RoutedEventArgs e)
+        private void CopyButton_Click(object sender, RoutedEventArgs e)
         {
-            string content = await MonacoEditor.GetContentAsync();
+            string content = CodeEditor.Text;
 
             if (!string.IsNullOrEmpty(content))
             {

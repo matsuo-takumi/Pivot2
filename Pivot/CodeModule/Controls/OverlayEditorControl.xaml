@@ -49,16 +49,18 @@
                      Background="Transparent"
                      Margin="0,0,0,16"/>
 
-            <!-- Monaco Editor -->
-            <controls:MonacoEditorControl x:Name="MonacoEditor"
-                                          Grid.Row="1"
-                                          Text="{x:Bind ViewModel.TextContent, Mode=TwoWay}"
-                                          EditorLanguage="{x:Bind ViewModel.CurrentLanguage, Mode=OneWay}"
-                                          CornerRadius="8"
-                                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                          BorderThickness="1"
-                                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                          Margin="0,0,0,16"/>
+
+            <!-- Rich Code Editor -->
+            <controls:RichCodeEditorControl x:Name="CodeEditor"
+                                           Grid.Row="1"
+                                           Text="{x:Bind ViewModel.TextContent, Mode=TwoWay}"
+                                           Language="{x:Bind ViewModel.CurrentLanguage, Mode=OneWay}"
+                                           CornerRadius="8"
+                                           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                           BorderThickness="1"
+                                           Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                           Margin="0,0,0,16"/>
+
 
             <!-- Tags Section -->
             <Grid Grid.Row="2" Margin="0,0,0,16">
