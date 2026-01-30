@@ -2,46 +2,50 @@
     x:Class="Pivot.Views.CodeSettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:Pivot.Views">
+    xmlns:local="using:Pivot.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewmodels="using:Pivot.CodeModule.ViewModels"
+    xmlns:converters="using:Pivot.Converters"
+    mc:Ignorable="d">
 
-    <Grid Padding="20">
-        <Pivot>
-            <!-- Tags (Filters) Tab -->
-            <PivotItem Header="Tags">
-                <local:FilterSettingsView x:Name="FilterSettingsView" />
-            </PivotItem>
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:BooleanNegationConverter x:Key="BoolInverter"/>
+    </Page.Resources>
 
-            <!-- Categories tab removed: categories are deprecated. -->
+    <Grid Padding="24">
+        <StackPanel Spacing="24" MaxWidth="800" HorizontalAlignment="Left">
+            <TextBlock Text="Code Library Settings" Style="{StaticResource TitleTextBlockStyle}"/>
 
-            <!-- Save/Export Tab -->
-            <PivotItem Header="Save">
-                <Grid Padding="12">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="Snippet Save Format" FontSize="18" FontWeight="SemiBold" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="Format:" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="SaveFormatCombo" Width="220" SelectionChanged="SaveFormatCombo_SelectionChanged">
-                                <ComboBoxItem Content="JSON (.json)" Tag="Json" />
-                                <ComboBoxItem Content="Markdown (.md)" Tag="Markdown" />
-                            </ComboBox>
-                        </StackPanel>
-                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="Output directory for saved snippets" FontWeight="SemiBold" />
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBox x:Name="OutputDirBox" Width="420" TextWrapping="NoWrap" />
-                                    <Button Content="Browse..." Click="BrowseButton_Click" />
-                                    <Button Content="Save" Click="SaveButton_Click" />
-                                </StackPanel>
-                                <TextBlock x:Name="StatusText" Foreground="{ThemeResource AppTextCaptionBrush}" />
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Grid>
-            </PivotItem>
-        </Pivot>
+            <!-- Snippet Card Appearance -->
+            <StackPanel Spacing="12">
+                <TextBlock Text="Snippet Card Appearance" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <TextBlock Text="Customize how code snippets appear in the library grid." Style="{StaticResource BodyTextBlockStyle}" Opacity="0.7"/>
+
+                <RadioButtons Header="Background Style">
+                    <RadioButton Content="Match Theme (Default)" 
+                                 IsChecked="{x:Bind ViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolInverter}}"
+                                 Command="{x:Bind ViewModel.SetThemeModeCommand}"/>
+                    <RadioButton Content="Custom Color" 
+                                 IsChecked="{x:Bind ViewModel.IsCustomColor, Mode=OneWay}"
+                                 Command="{x:Bind ViewModel.SetCustomColorModeCommand}"/>
+                </RadioButtons>
+
+                <StackPanel Visibility="{x:Bind ViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolToVis}}" 
+                            Spacing="8" 
+                            Margin="0,8,0,0">
+                    <TextBlock Text="Custom Background Color"/>
+                    <ColorPicker x:Name="ColorPickerControl"
+                                 ColorSpectrumShape="Box"
+                                 IsMoreButtonVisible="False"
+                                 IsColorSliderVisible="True"
+                                 IsColorChannelTextInputVisible="True"
+                                 IsHexInputVisible="True"
+                                 IsAlphaEnabled="False"
+                                 ColorChanged="ColorPicker_ColorChanged"/>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
     </Grid>
-
 </Page>
-
-

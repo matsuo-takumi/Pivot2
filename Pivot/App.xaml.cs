@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using System.IO;
 
 using Pivot.CodeModule.ViewModels;
+using Pivot.CodeModule.Services;
 
 namespace Pivot
 {
@@ -91,6 +92,7 @@ namespace Pivot
 			try { await Services.GetRequiredService<ViewportSettingsService>().LoadAsync(); } catch { }
 			try { await Services.GetRequiredService<MaterialSettingsService>().LoadAsync(); } catch { }
 			try { await Services.GetRequiredService<BrowserSettingsService>().LoadAsync(); } catch { }
+            try { await Services.GetRequiredService<CodeSettingsService>().LoadAsync(); } catch { }
 			// Ensure text color resources are initialized
 			try { _ = Services.GetRequiredService<ITextColorResourceManager>(); } catch { }
 			// Kick main view model initialization (auto-scan if possible)
@@ -123,9 +125,10 @@ namespace Pivot
 					// Get directories from settings
 					var imageDirectories = directorySettings.ImageDirectories?.ToList() ?? new List<string>();
 					var assetDirectories = directorySettings.AssetDirectories?.ToList() ?? new List<string>();
+                    var codeDirectories = directorySettings.CodeDirectories?.ToList() ?? new List<string>();
 					
 					// Combine all directories for reconcile only
-					var allDirectories = imageDirectories.Concat(assetDirectories).Distinct().ToList();
+					var allDirectories = imageDirectories.Concat(assetDirectories).Concat(codeDirectories).Distinct().ToList();
 					
 					// Phase 0: Reconcile - delete orphaned assets from removed directories
 					System.Diagnostics.Debug.WriteLine($"[Startup] Reconciling database with {allDirectories.Count} configured directories");
@@ -161,6 +164,14 @@ namespace Pivot
 					{
 						System.Diagnostics.Debug.WriteLine("[Startup] No Asset-only directories to scan (all overlap with Image directories)");
 					}
+                    
+                    if (codeDirectories.Count > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Startup] Scanning {codeDirectories.Count} Code directories");
+                        // Code directories might only contain scripts
+                        var codeKinds = new HashSet<Pivot.Models.AssetKind> { Pivot.Models.AssetKind.Script, Pivot.Models.AssetKind.Code };
+                        await scanner.ScanAsync(codeDirectories, progress: null, cancellationToken: default, allowedKinds: codeKinds);
+                    }
 					
 					System.Diagnostics.Debug.WriteLine("[Startup] Directory scan completed");
 					
@@ -252,7 +263,9 @@ namespace Pivot
             sc.AddTransient<CodeFilterViewModel>();
             sc.AddTransient<CodeListViewModel>();
             sc.AddTransient<CodeEditorViewModel>();
+            sc.AddSingleton<CodeSettingsService>();
 			sc.AddTransient<AssetSettingsViewModel>();
+            sc.AddTransient<CodeSettingsViewModel>();
             
             Services = sc.BuildServiceProvider();
 

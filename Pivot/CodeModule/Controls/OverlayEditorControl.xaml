@@ -8,6 +8,7 @@
     xmlns:vm="using:Pivot.CodeModule.ViewModels"
     xmlns:controls="using:Pivot.CodeModule.Controls"
     xmlns:converters="using:Pivot.Converters"
+    xmlns:editor="using:WinUIEditor"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=vm:CodeEditorViewModel}">
 
@@ -49,16 +50,11 @@
                      Background="Transparent"
                      Margin="0,0,0,16"/>
 
-            <!-- Monaco Editor -->
-            <controls:MonacoEditorControl x:Name="MonacoEditor"
-                                          Grid.Row="1"
-                                          Text="{x:Bind ViewModel.TextContent, Mode=TwoWay}"
-                                          EditorLanguage="{x:Bind ViewModel.CurrentLanguage, Mode=OneWay}"
-                                          CornerRadius="8"
-                                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                          BorderThickness="1"
-                                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                          Margin="0,0,0,16"/>
+            <!-- WinUI Editor -->
+            <editor:CodeEditorControl x:Name="CodeEditor"
+                                      Grid.Row="1"
+                                      HighlightingLanguage="{x:Bind ViewModel.CurrentLanguage, Mode=OneWay}"
+                                      Margin="0,0,0,16"/>
 
             <!-- Tags Section -->
             <Grid Grid.Row="2" Margin="0,0,0,16">

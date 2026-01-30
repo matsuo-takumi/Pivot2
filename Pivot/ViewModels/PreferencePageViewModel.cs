@@ -35,7 +35,6 @@ namespace Pivot.ViewModels
                 "Directories" => new DirectoryPage(),
                 "Theme" => new ThemePage(),
 
-                "Code" => CreateCodeSettingsPage(),
                 "Color" => CreateColorSettingsPage(),
                 _ => null
             };
@@ -52,10 +51,7 @@ namespace Pivot.ViewModels
             }
         }
 
-        private object? CreateCodeSettingsPage()
-        {
-            return TryCreatePreferenceContent(nameof(Views.CodeSettingsPage), () => new Views.CodeSettingsPage());
-        }
+
 
         private object? CreateColorSettingsPage()
         {

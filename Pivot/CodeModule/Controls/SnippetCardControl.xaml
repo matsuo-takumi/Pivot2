@@ -30,7 +30,7 @@
     </UserControl.Resources>
 
     <Grid CornerRadius="8" 
-          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
+          Background="{Binding DataContext.CodePreferences.CardBackground, ElementName=RootPage, FallbackValue={ThemeResource SubtleFillColorSecondaryBrush}, TargetNullValue={ThemeResource SubtleFillColorSecondaryBrush}}" 
           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
           BorderThickness="1"
           Padding="12"

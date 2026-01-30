@@ -15,6 +15,7 @@ namespace Pivot.Views
     public sealed partial class ColorSettingsPage : Page
     {
         public ColorSettingsViewModel ViewModel { get; }
+        public CodeModule.ViewModels.CodeSettingsViewModel CodeViewModel { get; }
         
         private readonly ILogger<ColorSettingsPage>? _logger;
         private bool _isPresetsLoading;
@@ -36,6 +37,7 @@ namespace Pivot.Views
             {
                 // Create ViewModel immediately - entries will be loaded asynchronously after page loads
                 ViewModel = new ColorSettingsViewModel(themeSettings, textColorManager, presetService, presetLogger);
+                CodeViewModel = App.Current.Services.GetRequiredService<CodeModule.ViewModels.CodeSettingsViewModel>();
                 this.DataContext = ViewModel;
                 _logger?.LogInformation("ColorSettingsPage initialized successfully.");
             }
@@ -209,6 +211,18 @@ namespace Pivot.Views
 
 
 
+
+        // Code Settings Color Picker Handler
+        private void CodeColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        {
+            if (CodeViewModel.IsCustomColor)
+            {
+                var color = args.NewColor;
+                // Simple manual hex string creation
+                var hex = $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
+                CodeViewModel.UpdateColorCommand.Execute(hex);
+            }
+        }
     }
 }
 

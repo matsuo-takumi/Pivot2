@@ -17,6 +17,8 @@
         <converters:BoolToIconConverter x:Key="BoolToIconConverter"/>
         <converters:SelectionToBackgroundConverter x:Key="SelectionToBackgroundConverter"/>
         <converters:TagDeleteVisibilityConverter x:Key="TagDeleteVis"/>
+        <converters:BoolToSelectionModeConverter x:Key="BoolToSelectionModeConverter"/>
+        <converters:BooleanNegationConverter x:Key="BoolNegationConverter"/>
     </Page.Resources>
 
     <Grid Background="Transparent">
@@ -190,11 +192,13 @@
                       CanReorderItems="{x:Bind ViewModel.ListVM.CanReorder, Mode=OneWay}"
                       CanDragItems="{x:Bind ViewModel.ListVM.CanReorder, Mode=OneWay}"
                       AllowDrop="True"
-                      SelectionMode="None"
-                      IsItemClickEnabled="True"
+                      SelectionMode="{x:Bind ViewModel.ListVM.IsSelectionMode, Mode=OneWay, Converter={StaticResource BoolToSelectionModeConverter}}"
+                      IsItemClickEnabled="{x:Bind ViewModel.ListVM.IsSelectionMode, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}"
                       ItemClick="SnippetsGridView_ItemClick"
                       HorizontalContentAlignment="Stretch"
-                      VerticalContentAlignment="Stretch">
+                      VerticalContentAlignment="Stretch"
+                      Background="Transparent"
+                      Padding="0,0,0,100">
                 <GridView.ItemContainerStyle>
                     <Style TargetType="GridViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>

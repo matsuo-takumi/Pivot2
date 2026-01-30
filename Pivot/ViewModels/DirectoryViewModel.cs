@@ -227,6 +227,11 @@ namespace Pivot.ViewModels
                 category = DirectoryCategory.Project;
                 System.Diagnostics.Debug.WriteLine($"[Debug] Remove: Found in ProjectDirectories.");
             }
+            else if (CodeDirectories.Any(d => NormalizePath(d) == normalizedPathToRemove))
+            {
+                category = DirectoryCategory.Code;
+                System.Diagnostics.Debug.WriteLine($"[Debug] Remove: Found in CodeDirectories.");
+            }
 
             if (category.HasValue)
             {

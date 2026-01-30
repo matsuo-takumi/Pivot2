@@ -15,6 +15,7 @@
         <converters:HexToColorConverter x:Key="HexToColorConverter" />
         <converters:DoubleFormatConverter x:Key="DoubleFormatConverter" />
         <converters:OpacityToPercentConverter x:Key="OpacityToPercentConverter" />
+        <converters:BooleanNegationConverter x:Key="BoolInverter"/>
     </Page.Resources>
 
     <Grid Padding="20">
@@ -194,6 +195,38 @@
                 </ScrollViewer>
             </muxc:PivotItem>
 
+            <muxc:PivotItem Header="Code">
+                <StackPanel Spacing="24" MaxWidth="800" HorizontalAlignment="Left" Padding="0,12">
+                     <!-- Snippet Card Appearance -->
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Snippet Card Appearance" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                        <TextBlock Text="Customize how code snippets appear in the library grid." Style="{StaticResource BodyTextBlockStyle}" Opacity="0.7"/>
+
+                        <RadioButtons Header="Background Style">
+                            <RadioButton Content="Match Theme (Default)" 
+                                         IsChecked="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolInverter}}"
+                                         Command="{x:Bind CodeViewModel.SetThemeModeCommand}"/>
+                            <RadioButton Content="Custom Color" 
+                                         IsChecked="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay}"
+                                         Command="{x:Bind CodeViewModel.SetCustomColorModeCommand}"/>
+                        </RadioButtons>
+
+                        <StackPanel Visibility="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" 
+                                    Spacing="8" 
+                                    Margin="0,8,0,0">
+                            <TextBlock Text="Custom Background Color"/>
+                            <muxc:ColorPicker x:Name="CodeColorPickerControl"
+                                         ColorSpectrumShape="Box"
+                                         IsMoreButtonVisible="False"
+                                         IsColorSliderVisible="True"
+                                         IsColorChannelTextInputVisible="True"
+                                         IsHexInputVisible="True"
+                                         IsAlphaEnabled="False"
+                                         ColorChanged="CodeColorPicker_ColorChanged"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </muxc:PivotItem>
         </muxc:Pivot>
     </Grid>
 </Page>

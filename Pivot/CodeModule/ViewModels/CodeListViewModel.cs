@@ -94,12 +94,14 @@ namespace Pivot.CodeModule.ViewModels
             {
                 foreach (var s in Snippets) s.IsSelected = false;
             }
+            OnPropertyChanged(nameof(CanReorder));
         }
 
         /// <summary>
         /// Reordering allowed only when no filter/search active AND Manual sort is selected
         /// </summary>
-        public bool CanReorder => string.IsNullOrEmpty(_activeTagFilter) && 
+        public bool CanReorder => !IsSelectionMode && 
+                                  string.IsNullOrEmpty(_activeTagFilter) && 
                                   string.IsNullOrEmpty(_searchQuery) &&
                                   SelectedSortOption?.Value == "manual";
 

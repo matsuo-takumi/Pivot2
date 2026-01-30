@@ -18,17 +18,20 @@ namespace Pivot.CodeModule.ViewModels
         public CodeFilterViewModel FilterVM { get; }
         public CodeListViewModel ListVM { get; }
         public CodeEditorViewModel EditorVM { get; }
+        public CodeSettingsViewModel CodePreferences { get; }
 
         public CodeViewModel(
             CodeFilterViewModel filterVM,
             CodeListViewModel listVM,
             CodeEditorViewModel editorVM,
+            CodeSettingsViewModel codeSettingsVM,
             ILogger<CodeViewModel> logger,
             IMessenger messenger)
         {
             FilterVM = filterVM;
             ListVM = listVM;
             EditorVM = editorVM;
+            CodePreferences = codeSettingsVM;
             _logger = logger;
             
             _logger.LogInformation("CodeViewModel (Coordinator) Initialized.");

@@ -34,11 +34,6 @@
                         <FontIcon Glyph="&#xEB9F;"/> <!-- Image icon -->
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="Code" Tag="Code">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE943;"/> <!-- Code icon -->
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
                 <NavigationViewItem Icon="Folder" Content="Directories" Tag="Directories" />
                 <NavigationViewItem Content="Color" Tag="Color">
                     <NavigationViewItem.Icon>
