@@ -39,10 +39,10 @@
                     <Setter Property="MinHeight" Value="0"/>
                 </Style>
             </Pivot.Resources>
-            <PivotItem>
-                <PivotItem.Header>
-                    <TextBlock Text="Home" Margin="18,0,0,0"/>
-                </PivotItem.Header>
+            <Pivot.LeftHeader>
+                <Grid Width="18"/>
+            </Pivot.LeftHeader>
+            <PivotItem Header="Home">
                 <Frame x:Name="HomeFrame" Background="Transparent"/>
             </PivotItem>
             <PivotItem Header="Asset">
