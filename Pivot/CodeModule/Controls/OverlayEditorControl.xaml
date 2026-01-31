@@ -36,7 +36,7 @@
 
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/> <!-- Header -->
-                <RowDefinition Height="*"/>    <!-- Monaco Editor -->
+                <RowDefinition Height="*"/>    <!-- Editor Control -->
                 <RowDefinition Height="Auto"/> <!-- Tags -->
                 <RowDefinition Height="Auto"/> <!-- Actions -->
             </Grid.RowDefinitions>

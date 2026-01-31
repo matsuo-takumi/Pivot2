@@ -56,7 +56,7 @@ namespace Pivot.CodeModule.Helpers
         }
 
         /// <summary>
-        /// Maps a file extension to Monaco Editor language identifier.
+        /// Maps a file extension to Editor language identifier.
         /// </summary>
         public static string GetLanguageFromExtension(string? filePath)
         {
