@@ -65,10 +65,9 @@ namespace Pivot.CodeModule.ViewModels
             // 2. Populate Tags (Async, optimized)
             await FilterVM.LoadTagsAsync();
             
-            // Default to "All" if not set
             if (string.IsNullOrEmpty(FilterVM.SelectedTag))
             {
-                FilterVM.SelectedTag = "All";
+                FilterVM.SelectedTag = null;
             }
         }
 

@@ -24,6 +24,12 @@ namespace Pivot.CodeModule.ViewModels
         [ObservableProperty]
         private string? _selectedTag;
 
+        [CommunityToolkit.Mvvm.Input.RelayCommand]
+        public void ClearSelection()
+        {
+            SelectedTag = null;
+        }
+
         public CodeFilterViewModel(
             CodeTagService tagService, 
             CodeService codeService,
@@ -50,10 +56,12 @@ namespace Pivot.CodeModule.ViewModels
             var sorted = allTags.OrderBy(t => t).ToList();
 
             Tags.Clear();
-            Tags.Add("All");
             foreach (var tag in sorted)
             {
-                Tags.Add(tag);
+                if (!string.Equals(tag, "All", StringComparison.OrdinalIgnoreCase))
+                {
+                    Tags.Add(tag);
+                }
             }
         }
 

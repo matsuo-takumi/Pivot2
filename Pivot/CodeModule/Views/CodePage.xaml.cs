@@ -16,8 +16,14 @@ namespace Pivot.CodeModule.Views
 
         public CodePage()
         {
+            // Resolve ViewModel from App Services BEFORE InitializeComponent
+            ViewModel = ((App)Application.Current).Services.GetService<CodeViewModel>() 
+                ?? throw new InvalidOperationException("CodeViewModel not registered in DI");
+            
             this.InitializeComponent();
             
+            this.DataContext = ViewModel;
+
             // Register Keyboard Accelerators
             var saveAccelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
             {
@@ -26,11 +32,11 @@ namespace Pivot.CodeModule.Views
             };
             saveAccelerator.Invoked += SaveAccelerator_Invoked;
             this.KeyboardAccelerators.Add(saveAccelerator);
-            
-            // Resolve ViewModel from App Services
-            ViewModel = ((App)Application.Current).Services.GetService<CodeViewModel>() 
-                ?? throw new InvalidOperationException("CodeViewModel not registered in DI");
-            this.DataContext = ViewModel;
+        }
+
+        private Windows.UI.Text.FontWeight GetAllButtonFontWeight(string? selectedTag)
+        {
+            return string.IsNullOrEmpty(selectedTag) ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
         }
 
         private async void SaveAccelerator_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)

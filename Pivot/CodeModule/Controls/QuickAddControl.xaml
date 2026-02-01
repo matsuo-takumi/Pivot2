@@ -47,35 +47,13 @@
             <!-- Language Selector + Code Editor -->
             <Grid Grid.Row="1" Margin="0,0,0,12">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 
-                <ComboBox x:Name="LanguageSelector"
-                          HorizontalAlignment="Left"
-                          Width="150"
-                          Margin="0,0,0,8"
-                          SelectedIndex="0">
-                    <ComboBoxItem Content="Text" Tag="text"/>
-                    <ComboBoxItem Content="VEX" Tag="vex"/>
-                    <ComboBoxItem Content="Python" Tag="python"/>
-                    <ComboBoxItem Content="JavaScript" Tag="javascript"/>
-                    <ComboBoxItem Content="TypeScript" Tag="typescript"/>
-                    <ComboBoxItem Content="C#" Tag="csharp"/>
-                    <ComboBoxItem Content="C++" Tag="cpp"/>
-                    <ComboBoxItem Content="HLSL" Tag="hlsl"/>
-                    <ComboBoxItem Content="GLSL" Tag="glsl"/>
-                    <ComboBoxItem Content="SQL" Tag="sql"/>
-                    <ComboBoxItem Content="Shell" Tag="shell"/>
-                    <ComboBoxItem Content="PowerShell" Tag="powershell"/>
-                    <ComboBoxItem Content="JSON" Tag="json"/>
-                    <ComboBoxItem Content="XML" Tag="xml"/>
-                    <ComboBoxItem Content="YAML" Tag="yaml"/>
-                    <ComboBoxItem Content="Markdown" Tag="markdown"/>
-                </ComboBox>
+
                 
                 <TextBox x:Name="CodeEditor"
-                         Grid.Row="1"
+                         Grid.Row="0"
                          PlaceholderText="コードを入力..."
                          AcceptsReturn="True"
                          TextWrapping="Wrap"

@@ -9,6 +9,7 @@
     xmlns:controls="using:Pivot.CodeModule.Controls"
     xmlns:converters="using:Pivot.Converters"
     xmlns:editor="using:WinUIEditor"
+    xmlns:behaviors="using:Pivot.CodeModule.Behaviors"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=vm:CodeEditorViewModel}">
 
@@ -50,11 +51,17 @@
                      Background="Transparent"
                      Margin="0,0,0,16"/>
 
-            <!-- WinUI Editor -->
-            <editor:CodeEditorControl x:Name="CodeEditor"
-                                      Grid.Row="1"
-                                      HighlightingLanguage="{x:Bind ViewModel.CurrentLanguage, Mode=OneWay}"
-                                      Margin="0,0,0,16"/>
+            <!-- Editor Area -->
+            <Grid Grid.Row="1" Margin="0,0,0,16">
+                
+                <!-- WinUI Editor (Full Width) -->
+                <editor:CodeEditorControl x:Name="CodeEditor"
+                                          HighlightingLanguage="{x:Bind ViewModel.CurrentLanguage, Mode=OneWay}"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          behaviors:EditorScrollBehavior.EnableInertia="True"
+                                          behaviors:EditorScrollBehavior.EnableMiddleClickScroll="True"/>
+            </Grid>
 
             <!-- Tags Section -->
             <Grid Grid.Row="2" Margin="0,0,0,16">

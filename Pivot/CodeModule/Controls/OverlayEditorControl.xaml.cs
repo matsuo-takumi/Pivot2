@@ -13,24 +13,119 @@ namespace Pivot.CodeModule.Controls
     {
         public CodeEditorViewModel? ViewModel => DataContext as CodeEditorViewModel;
 
+        private DispatcherTimer _syncTimer;
+
+
         public OverlayEditorControl()
         {
             this.InitializeComponent();
             this.DataContextChanged += OnDataContextChanged;
+            
+            _syncTimer = new DispatcherTimer();
+            _syncTimer.Interval = TimeSpan.FromMilliseconds(500); // Slower interval for auto-save checks if needed
+            _syncTimer.Tick += SyncTimer_Tick;
+            
+            this.Loaded += (s, e) => {
+                 _syncTimer.Start();
+            };
+            this.Unloaded += (s, e) => {
+                 _syncTimer.Stop();
+            };
         }
+
+
+
+        private bool _isSyncing = false;
+
+
+        private void SyncTimer_Tick(object? sender, object e)
+        {
+            try
+            {
+                if (_isSyncing) return;
+
+                // Simple check for content update loop if needed
+                // Currently only used for ViewModel sync
+                if (ViewModel != null)
+                {
+                     var mainLen = CodeEditor.Editor.Length;
+                     if (mainLen > 0)
+                     {
+                         var mainText = CodeEditor.Editor.GetText(mainLen + 1);
+                         if (mainText != ViewModel.TextContent)
+                         {
+                             try
+                             {
+                                 _isSyncing = true;
+                                 ViewModel.TextContent = mainText; // This might trigger PropertyChanged -> UpdateEditorText
+                             }
+                             finally
+                             {
+                                 _isSyncing = false;
+                             }
+                         }
+                     }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SyncTimer] Error: {ex.Message}");
+            }
+        }
+
+
 
 
         private void OnDataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
         {
             if (ViewModel != null)
             {
+                ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+                
                 var titleBox = this.FindName("TitleBox") as TextBox;
                 if (titleBox != null)
                 {
                     titleBox.Text = ViewModel.CurrentSnippet?.FileName ?? string.Empty;
                 }
+
+                UpdateEditorText();
             }
         }
+
+        private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(CodeEditorViewModel.TextContent))
+            {
+                UpdateEditorText();
+            }
+        }
+
+        private void UpdateEditorText()
+        {
+            if (_isSyncing || ViewModel == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UpdateEditorText] Skipped - isSyncing:{_isSyncing}, ViewModel null:{ViewModel == null}");
+                return;
+            }
+            
+            try 
+            {
+                _isSyncing = true;
+                var text = ViewModel.TextContent ?? string.Empty;
+                System.Diagnostics.Debug.WriteLine($"[UpdateEditorText] Syncing {text.Length} chars to editor");
+                
+                // Update editor
+                CodeEditor.Editor.SetText(text);
+                
+                System.Diagnostics.Debug.WriteLine($"[UpdateEditorText] Sync complete");
+            }
+            finally
+            {
+                _isSyncing = false;
+            }
+        }
+
+
 
         private async void Background_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
@@ -48,6 +143,18 @@ namespace Pivot.CodeModule.Controls
                     ViewModel.CurrentSnippet.FileName = titleBox.Text;
                 }
                 
+                // Get current text from editor and sync to ViewModel
+                try
+                {
+                    var length = CodeEditor.Editor.Length;
+                    var editorText = CodeEditor.Editor.GetText(length + 1); // +1 for null terminator
+                    ViewModel.TextContent = editorText;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OverlayEditor] Error getting text: {ex.Message}");
+                }
+                
                 // Ensure tags are synced before saving
                 if (ViewModel.CurrentSnippet != null)
                 {
@@ -55,7 +162,6 @@ namespace Pivot.CodeModule.Controls
                     System.Diagnostics.Debug.WriteLine($"[OverlayEditor] Syncing {ViewModel.Tags.Count} tags before save: {string.Join(", ", ViewModel.Tags)}");
                 }
                 
-                // TextContent is already synced via two-way binding
                 await ViewModel.SaveContentAsync();
                 await ViewModel.CloseEditorAsync();
             }
