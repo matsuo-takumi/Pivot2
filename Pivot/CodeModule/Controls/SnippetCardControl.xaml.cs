@@ -11,6 +11,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Pivot.Models;
 using Pivot.Services;
 using Pivot.CodeModule.ViewModels;
+using System.Diagnostics;
 
 namespace Pivot.CodeModule.Controls
 {
@@ -164,6 +165,17 @@ namespace Pivot.CodeModule.Controls
             {
                 return content; // Fallback to original on error
             }
+        }
+
+        private void OpenDirectoryMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (Asset == null || string.IsNullOrEmpty(Asset.FilePath)) return;
+
+            try
+            {
+                Process.Start("explorer.exe", $"/select,\"{Asset.FilePath}\"");
+            }
+            catch { }
         }
 
         private async void DuplicateMenuItem_Click(object sender, RoutedEventArgs e)

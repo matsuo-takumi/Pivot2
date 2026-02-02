@@ -77,7 +77,6 @@ namespace Pivot.CodeModule.Controls
             TitleBox.Text = string.Empty;
             CodeEditor.Text = string.Empty;
             NewTagBox.Text = string.Empty;
-            LanguageSelector.SelectedIndex = 0; // Reset to Text
             _selectedTags.Clear();
             
             // Reset all toggle buttons
@@ -132,8 +131,8 @@ namespace Pivot.CodeModule.Controls
                     }
                 }
 
-                // Focus moved outside - collapse without saving
-                Collapse(clearFields: true);
+                // Focus moved outside - Save and collapse
+                Save();
             });
         }
 
@@ -165,15 +164,7 @@ namespace Pivot.CodeModule.Controls
             // Fallback handler (kept for XAML binding)
         }
 
-        private void SaveButton_Click(object sender, RoutedEventArgs e)
-        {
-            Save();
-        }
-
-        private void CancelButton_Click(object sender, RoutedEventArgs e)
-        {
-            Collapse(clearFields: true);
-        }
+        // Removed SaveButton_Click and CancelButton_Click as they are removed from XAML
 
         private void NewTagBox_KeyDown(object sender, KeyRoutedEventArgs e)
         {
@@ -240,9 +231,8 @@ namespace Pivot.CodeModule.Controls
 
             var title = TitleBox.Text?.Trim() ?? string.Empty;
             
-            // Get selected language from ComboBox
-            var selectedItem = LanguageSelector.SelectedItem as ComboBoxItem;
-            var language = selectedItem?.Tag?.ToString() ?? "text";
+            // Auto-detect language
+            var language = DetectLanguage(code);
             
             // Collect selected tags from toggle buttons
             CollectSelectedTags();

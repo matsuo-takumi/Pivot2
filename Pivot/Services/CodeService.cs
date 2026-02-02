@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Pivot.Models;
@@ -83,6 +86,67 @@ namespace Pivot.Services
             {
                 _logger.LogError(ex, "Failed to save snippet.");
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Creates a complete AssetEntity from file path and content.
+        /// This ensures consistency with FileScannerService-created entities.
+        /// </summary>
+        public AssetEntity CreateAssetEntityFromFile(string filePath, string content, string[] tags)
+        {
+            var fileInfo = new FileInfo(filePath);
+            var ext = fileInfo.Extension ?? string.Empty;
+            
+            return new AssetEntity
+            {
+                FilePath = filePath,
+                FileName = Path.GetFileName(filePath),
+                Directory = Path.GetDirectoryName(filePath) ?? string.Empty,
+                Extension = ext,
+                FileSize = Encoding.UTF8.GetByteCount(content), // Will be updated after actual file write
+                Hash = ComputeHash(content),
+                LastModifiedUtc = DateTime.UtcNow,
+                Kind = AssetKind.Code,
+                Language = ext.TrimStart('.').ToLowerInvariant(),
+                Tool = null,
+                ContentIndex = content.Length > 500 ? content.Substring(0, 500) : content,
+                UserTagsJson = JsonSerializer.Serialize(tags),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+        }
+
+        /// <summary>
+        /// Computes SHA256 hash of content string.
+        /// </summary>
+        private string ComputeHash(string content)
+        {
+            using var sha = SHA256.Create();
+            var bytes = Encoding.UTF8.GetBytes(content);
+            var hashBytes = sha.ComputeHash(bytes);
+            return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Updates file metadata after writing to disk.
+        /// </summary>
+        public void UpdateFileMetadata(AssetEntity snippet)
+        {
+            if (snippet == null || string.IsNullOrEmpty(snippet.FilePath)) return;
+            
+            try
+            {
+                if (File.Exists(snippet.FilePath))
+                {
+                    var fileInfo = new FileInfo(snippet.FilePath);
+                    snippet.FileSize = fileInfo.Length;
+                    snippet.LastModifiedUtc = fileInfo.LastWriteTimeUtc;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update file metadata for {Path}", snippet.FilePath);
             }
         }
 

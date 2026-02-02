@@ -146,7 +146,7 @@ namespace Pivot.Repositories
             // Delete assets where Directory matches exactly or is a subdirectory
             var assetsToDelete = await _context.Assets
                 .Where(a => a.Directory == normalizedDir || 
-                           EF.Functions.Like(a.Directory, dirPattern))
+                           a.Directory.StartsWith(normalizedDir + "\\"))
                 .ToListAsync(ct);
 
             if (assetsToDelete.Count > 0)
@@ -167,7 +167,7 @@ namespace Pivot.Repositories
             // Get all assets in directory and subdirectories
             var assets = await _context.Assets
                 .AsNoTracking()  // Read-only for performance
-                .Where(a => !a.IsDeleted && a.Directory.StartsWith(normalizedDir))
+                .Where(a => !a.IsDeleted && (a.Directory == normalizedDir || a.Directory.StartsWith(normalizedDir + "\\")))
                 .ToListAsync(ct);
 
             // Build dictionary keyed by FilePath (case-insensitive for Windows)

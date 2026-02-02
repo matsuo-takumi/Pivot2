@@ -14,7 +14,9 @@ namespace Pivot.Services
 				".mp4" or ".mov" or ".avi" or ".mkv" or ".webm" => AssetKind.Video,
 				".fbx" or ".obj" or ".usd" or ".usdz" or ".gltf" or ".glb" => AssetKind.Model3D,
 				".cs" or ".py" or ".js" or ".ts" or ".cpp" or ".h" or ".hlsl" or ".glsl" or
-				".json" or ".md" or ".xml" or ".txt" or ".bat" or ".ps1" or ".sh" or ".sql" or ".yaml" or ".yml" or ".css" or ".html" => AssetKind.Script,
+				".json" or ".md" or ".xml" or ".txt" or ".bat" or ".ps1" or ".sh" or ".sql" or 
+				".yaml" or ".yml" or ".css" or ".html" or ".c" or ".cc" or ".cxx" or ".hpp" or 
+				".rs" or ".go" or ".rb" or ".php" or ".swift" or ".kt" => AssetKind.Script,
 				".uproject" or ".sln" or ".csproj" => AssetKind.Project,
 				_ => AssetKind.General
 			};

@@ -30,7 +30,6 @@
         <Grid x:Name="ExpandedPanel" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
@@ -44,49 +43,20 @@
                      FontWeight="SemiBold"
                      Margin="0,0,0,8"/>
 
-            <!-- Language Selector + Code Editor -->
-            <Grid Grid.Row="1" Margin="0,0,0,12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                
-                <ComboBox x:Name="LanguageSelector"
-                          HorizontalAlignment="Left"
-                          Width="150"
-                          Margin="0,0,0,8"
-                          SelectedIndex="0">
-                    <ComboBoxItem Content="Text" Tag="text"/>
-                    <ComboBoxItem Content="VEX" Tag="vex"/>
-                    <ComboBoxItem Content="Python" Tag="python"/>
-                    <ComboBoxItem Content="JavaScript" Tag="javascript"/>
-                    <ComboBoxItem Content="TypeScript" Tag="typescript"/>
-                    <ComboBoxItem Content="C#" Tag="csharp"/>
-                    <ComboBoxItem Content="C++" Tag="cpp"/>
-                    <ComboBoxItem Content="HLSL" Tag="hlsl"/>
-                    <ComboBoxItem Content="GLSL" Tag="glsl"/>
-                    <ComboBoxItem Content="SQL" Tag="sql"/>
-                    <ComboBoxItem Content="Shell" Tag="shell"/>
-                    <ComboBoxItem Content="PowerShell" Tag="powershell"/>
-                    <ComboBoxItem Content="JSON" Tag="json"/>
-                    <ComboBoxItem Content="XML" Tag="xml"/>
-                    <ComboBoxItem Content="YAML" Tag="yaml"/>
-                    <ComboBoxItem Content="Markdown" Tag="markdown"/>
-                </ComboBox>
-                
-                <TextBox x:Name="CodeEditor"
-                         Grid.Row="1"
-                         PlaceholderText="コードを入力..."
-                         AcceptsReturn="True"
-                         TextWrapping="Wrap"
-                         FontFamily="Cascadia Code, Consolas, monospace"
-                         MinHeight="120"
-                         MaxHeight="300"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-            </Grid>
+            <!-- Code Editor -->
+            <TextBox x:Name="CodeEditor"
+                     Grid.Row="1"
+                     PlaceholderText="コードを入力..."
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     FontFamily="Cascadia Code, Consolas, monospace"
+                     MinHeight="120"
+                     MaxHeight="300"
+                     Margin="0,0,0,12"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"/>
 
             <!-- Tags Section (Google Keep style) -->
-            <Grid Grid.Row="2" Margin="0,0,0,12">
+            <Grid Grid.Row="2">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -129,17 +99,8 @@
                             Click="AddTagButton_Click"/>
                 </StackPanel>
             </Grid>
-
-            <!-- Action Buttons -->
-            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                <TextBlock Text="Ctrl+Enter で保存" 
-                           VerticalAlignment="Center"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           Margin="0,0,12,0"/>
-                <Button x:Name="CancelButton" Content="キャンセル" Click="CancelButton_Click"/>
-                <Button x:Name="SaveButton" Content="保存" Style="{StaticResource AccentButtonStyle}" Click="SaveButton_Click"/>
-            </StackPanel>
         </Grid>
     </Grid>
 </UserControl>
+
+

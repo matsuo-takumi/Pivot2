@@ -179,34 +179,39 @@ namespace Pivot.CodeModule.ViewModels
         {
             if (string.IsNullOrWhiteSpace(code)) return null;
 
-            var fileName = !string.IsNullOrWhiteSpace(title) 
-                ? CodeFileHelper.SanitizeFileName(title) 
-                : $"snippet_{DateTime.Now:yyyyMMdd_HHmmss}";
-            
-            var extension = CodeFileHelper.GetExtensionForLanguage(language);
-            fileName = $"{fileName}{extension}";
-
-            var snippet = new AssetEntity
-            {
-                FilePath = Path.Combine(CodeFileHelper.GetCodeDirectory(), fileName),
-                FileName = fileName,
-                Kind = AssetKind.Code,
-                Tool = language,
-                ContentIndex = code.Length > 500 ? code.Substring(0, 500) : code,
-                UserTagsJson = JsonSerializer.Serialize(tags),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
             try
             {
+                var fileName = !string.IsNullOrWhiteSpace(title) 
+                    ? CodeFileHelper.SanitizeFileName(title) 
+                    : $"snippet_{DateTime.Now:yyyyMMdd_HHmmss}";
+                
+                var extension = CodeFileHelper.GetExtensionForLanguage(language);
+                fileName = $"{fileName}{extension}";
+
+                var filePath = Path.Combine(CodeFileHelper.GetCodeDirectory(), fileName);
+
+                // Use factory method to create complete AssetEntity
+                var snippet = _codeService.CreateAssetEntityFromFile(filePath, code, tags);
+
+                // Write content to file
                 await _codeService.WriteContentAsync(snippet, code);
+                
+                // Update file metadata after write (FileSize, LastModifiedUtc)
+                _codeService.UpdateFileMetadata(snippet);
+
+                // Save to database
+                await _codeService.SaveSnippetAsync(snippet, saveToDisk: false);
+
+                System.Diagnostics.Debug.WriteLine($"[CodeEditor] Created snippet: {snippet.FileName} with {tags.Length} tags");
+                System.Diagnostics.Debug.WriteLine($"[CodeEditor] Metadata: Dir={snippet.Directory}, Ext={snippet.Extension}, Size={snippet.FileSize}, Hash={snippet.Hash?.Substring(0, 8)}");
+
+                return snippet;
             }
-            catch {}
-
-            await _codeService.SaveSnippetAsync(snippet, saveToDisk: false);
-
-            return snippet;
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CodeEditor] Error creating snippet: {ex.Message}");
+                return null;
+            }
         }
 
 
