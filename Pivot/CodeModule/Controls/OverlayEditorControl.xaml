@@ -60,7 +60,7 @@
                                           HorizontalAlignment="Stretch"
                                           VerticalAlignment="Stretch"
                                           behaviors:EditorScrollBehavior.EnableInertia="True"
-                                          behaviors:EditorScrollBehavior.EnableMiddleClickScroll="True"/>
+                                          behaviors:EditorScrollBehavior.EnableRightClickScroll="True"/>
             </Grid>
 
             <!-- Tags Section -->
