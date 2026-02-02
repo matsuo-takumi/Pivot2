@@ -33,9 +33,13 @@ namespace Pivot.CodeModule.Behaviors
         private static double _velocityX = 0; // Added horizontal velocity
         private static double _accumulatorY = 0; // Renamed from _wheelAccumulatorY
         private static double _accumulatorX = 0; // Added horizontal accumulator
-        private static DispatcherTimer? _inertiaTimer;
+        
+        // Timer replaced with CompositionTarget.Rendering
+        private static bool _isInertiaActive = false;
+        private static DateTime _lastFrameTime;
+        
         private static CodeEditorControl? _activeEditor; 
-        private const double Friction = 0.92; // Slightly lower friction for glide feel
+        private const double FrictionBase = 0.92; // Friction per ~16ms tick
 
         private static void Editor_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
@@ -55,51 +59,79 @@ namespace Pivot.CodeModule.Behaviors
                     _velocityY = Math.Clamp(_velocityY, -50, 50);
 
                     _activeEditor = editor;
-                    StartInertiaTimer();
+                    StartInertia();
                     
                     e.Handled = true;
                 }
             }
         }
 
-        private static void StartInertiaTimer()
+        private static void StartInertia()
         {
-            if (_inertiaTimer == null)
+            if (!_isInertiaActive)
             {
-                _inertiaTimer = new DispatcherTimer();
-                _inertiaTimer.Interval = TimeSpan.FromMilliseconds(16); // ~60fps
-                _inertiaTimer.Tick += InertiaTimer_Tick;
+                _isInertiaActive = true;
+                _lastFrameTime = DateTime.Now;
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnRendering;
             }
-            _inertiaTimer.Start();
         }
 
-        private static void InertiaTimer_Tick(object? sender, object e)
+        private static void StopInertia()
+        {
+            if (_isInertiaActive)
+            {
+                _isInertiaActive = false;
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
+            }
+        }
+
+        private static void OnRendering(object? sender, object e)
         {
             if (_activeEditor == null) 
             {
-                _inertiaTimer?.Stop();
+                StopInertia();
                 return;
             }
 
+            var now = DateTime.Now;
+            var dt = (now - _lastFrameTime).TotalSeconds;
+            _lastFrameTime = now;
+
+            // Avoid crazy jumps if thread hangs
+            if (dt > 0.1) dt = 0.1;
+
+            // Normalize dt to "ticks" (1 tick = 16ms = 1/60 sec)
+            // This allows us to keep our existing constants (Friction 0.92 etc) logic working
+            double ticks = dt / 0.01666;
+
+            // Calculate Friction scaled by time
+            // If 1 tick passes, Friction^1. If 0.5 ticks, Friction^0.5 (less decay).
+            double effectiveFriction = Math.Pow(FrictionBase, ticks);
+
             // --- Y Axis ---
-            _accumulatorY += _velocityY;
+            // Move: Velocity * TimeScaling
+            _accumulatorY += _velocityY * ticks;
+            
             int linesToScroll = (int)_accumulatorY;
             if (linesToScroll != 0)
             {
                 _activeEditor.Editor.LineScroll(0, linesToScroll);
                 _accumulatorY -= linesToScroll;
             }
-            _velocityY *= Friction;
+            
+            _velocityY *= effectiveFriction;
 
             // --- X Axis ---
-            _accumulatorX += _velocityX;
+            _accumulatorX += _velocityX * ticks;
+            
             int charsToScroll = (int)_accumulatorX;
             if (charsToScroll != 0)
             {
                 _activeEditor.Editor.LineScroll(charsToScroll, 0);
                 _accumulatorX -= charsToScroll;
             }
-            _velocityX *= Friction;
+            
+            _velocityX *= effectiveFriction;
 
             // Stop if velocity is negligible
             if (Math.Abs(_velocityY) < 0.1 && Math.Abs(_velocityX) < 0.1 &&
@@ -109,7 +141,7 @@ namespace Pivot.CodeModule.Behaviors
                 _velocityX = 0;
                 _accumulatorY = 0;
                 _accumulatorX = 0;
-                _inertiaTimer?.Stop();
+                StopInertia();
             }
         }
         #endregion
@@ -192,11 +224,11 @@ namespace Pivot.CodeModule.Behaviors
                 _activeEditor = null;
                 
                 // --- Release Inertia ---
-                // If velocity is significant, start the timer
+                // If velocity is significant, start inertia
                 if (Math.Abs(_velocityX) > 0.5 || Math.Abs(_velocityY) > 0.5)
                 {
                      _activeEditor = sender as CodeEditorControl;
-                     StartInertiaTimer();
+                     StartInertia();
                 }
 
                 System.Diagnostics.Debug.WriteLine($"Grab Scroll: END (VelX={_velocityX:F2}, VelY={_velocityY:F2})");
