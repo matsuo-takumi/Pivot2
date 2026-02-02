@@ -74,72 +74,27 @@ namespace Pivot.CodeModule.ViewModels
             }
         }
 
-        [ObservableProperty]
-        private bool _isGridLayout = true;
 
-        [RelayCommand]
-        private void ToggleLayout()
-        {
-            IsGridLayout = !IsGridLayout;
-        }
 
-        [ObservableProperty]
-        private bool _isSelectionMode = false;
 
-        [RelayCommand]
-        private void ToggleSelectionMode()
-        {
-            IsSelectionMode = !IsSelectionMode;
-            if (!IsSelectionMode)
-            {
-                foreach (var s in Snippets) s.IsSelected = false;
-            }
-            OnPropertyChanged(nameof(CanReorder));
-        }
 
         /// <summary>
         /// Reordering allowed only when no filter/search active AND Manual sort is selected
         /// </summary>
-        public bool CanReorder => !IsSelectionMode && 
-                                  string.IsNullOrEmpty(_activeTagFilter) && 
+        public bool CanReorder => string.IsNullOrEmpty(_activeTagFilter) && 
                                   string.IsNullOrEmpty(_searchQuery) &&
                                   SelectedSortOption?.Value == "manual";
 
         #region CRUD Operations
 
-        [RelayCommand]
-        private async Task DeleteSelectedAsync(AssetEntity? singleItem = null)
-        {
-            List<AssetEntity> itemsToDelete;
 
-            if (singleItem != null)
-            {
-                itemsToDelete = new List<AssetEntity> { singleItem };
-            }
-            else
-            {
-                itemsToDelete = Snippets.Where(s => s.IsSelected).ToList();
-            }
-
-            if (!itemsToDelete.Any()) return;
-
-            foreach (var item in itemsToDelete)
-            {
-                Snippets.Remove(item);
-                await _codeService.DeleteSnippetAsync(item);
-            }
-            
-            if (Snippets.Count == 0)
-            {
-                IsSelectionMode = false;
-            }
-        }
 
         [RelayCommand]
         private async Task DeleteItemAsync(AssetEntity item)
         {
             if (item == null) return;
-            await DeleteSelectedAsync(item);
+            Snippets.Remove(item);
+            await _codeService.DeleteSnippetAsync(item);
         }
 
         [RelayCommand]
@@ -311,127 +266,9 @@ namespace Pivot.CodeModule.ViewModels
         }
 
         #endregion
-
-        #region Import / Export
-
-        /// <summary>
-        /// Export all snippets to JSON file
-        /// </summary>
-        [RelayCommand]
-        private async Task ExportAsync()
-        {
-            try
-            {
-                var picker = new Windows.Storage.Pickers.FileSavePicker();
-                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
-                picker.FileTypeChoices.Add("JSON", new List<string> { ".json" });
-                picker.SuggestedFileName = $"pivot_snippets_{DateTime.Now:yyyyMMdd}";
-
-                // Get window handle for WinUI3
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
-                var file = await picker.PickSaveFileAsync();
-                if (file == null) return;
-
-                // Fetch all for export
-                var criteria = new FilterCriteria { TargetKind = AssetKind.Code };
-                var allSnippets = await _queryService.QueryAsync(criteria, 0, 100000);
-
-                var exportData = new List<SnippetExportData>();
-                foreach (var snippet in allSnippets)
-                {
-                    string content = await _codeService.ReadContentAsync(snippet);
-
-                    exportData.Add(new SnippetExportData
-                    {
-                        FileName = snippet.FileName,
-                        Language = snippet.Tool ?? "text",
-                        Content = content,
-                        Tags = snippet.GetTags().ToArray(),
-                        CreatedAt = snippet.CreatedAt,
-                        UpdatedAt = snippet.UpdatedAt
-                    });
-                }
-
-                var json = System.Text.Json.JsonSerializer.Serialize(exportData, new System.Text.Json.JsonSerializerOptions 
-                { 
-                    WriteIndented = true 
-                });
-                await Windows.Storage.FileIO.WriteTextAsync(file, json);
-            }
-            catch { }
-        }
-
-        /// <summary>
-        /// Import snippets from JSON file
-        /// </summary>
-        [RelayCommand]
-        private async Task ImportAsync()
-        {
-            try
-            {
-                var picker = new Windows.Storage.Pickers.FileOpenPicker();
-                picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
-                picker.FileTypeFilter.Add(".json");
-
-                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-
-                var file = await picker.PickSingleFileAsync();
-                if (file == null) return;
-
-                var json = await Windows.Storage.FileIO.ReadTextAsync(file);
-                var importData = System.Text.Json.JsonSerializer.Deserialize<List<SnippetExportData>>(json);
-                if (importData == null) return;
-
-                foreach (var item in importData)
-                {
-                    // Check if already exists - skipped for performance or implement DB check
-                    // if (_allSnippets.Any(s => s.FileName == item.FileName)) continue;
-
-                    var snippet = new AssetEntity
-                    {
-                        FileName = item.FileName,
-                        FilePath = System.IO.Path.Combine(CodeFileHelper.GetCodeDirectory(), item.FileName),
-                        Kind = AssetKind.Code,
-                        Tool = item.Language,
-                        ContentIndex = item.Content?.Length > 500 ? item.Content.Substring(0, 500) : item.Content,
-                        UserTagsJson = System.Text.Json.JsonSerializer.Serialize(item.Tags ?? Array.Empty<string>()),
-                        CreatedAt = item.CreatedAt,
-                        UpdatedAt = item.UpdatedAt
-                    };
-
-                    // Write file using CodeService
-                    await _codeService.WriteContentAsync(snippet, item.Content ?? string.Empty);
-
-                    // Save to DB
-                    await _codeService.SaveSnippetAsync(snippet, saveToDisk: false);
-                }
-
-                // Reload
-                await LoadSnippetsAsync();
-            }
-            catch { }
-        }
-
-
-
-        #endregion
     }
 
-    /// <summary>
-    /// Data structure for import/export
-    /// </summary>
-    public class SnippetExportData
-    {
-        public string FileName { get; set; } = string.Empty;
-        public string Language { get; set; } = "text";
-        public string Content { get; set; } = string.Empty;
-        public string[] Tags { get; set; } = Array.Empty<string>();
-        public DateTime CreatedAt { get; set; }
-        public DateTime UpdatedAt { get; set; }
-    }
+
 
     public class SortOption
     {
