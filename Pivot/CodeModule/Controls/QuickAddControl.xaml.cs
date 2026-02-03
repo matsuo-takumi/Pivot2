@@ -51,11 +51,34 @@ namespace Pivot.CodeModule.Controls
             if (_isExpanded) return;
             _isExpanded = true;
 
-            CollapsedPlaceholder.Visibility = Visibility.Collapsed;
-            ExpandedPanel.Visibility = Visibility.Visible;
+            // Ensure Popup knows where to display (WinUI 3 requirement)
+            if (QuickAddPopup.XamlRoot == null)
+            {
+                QuickAddPopup.XamlRoot = this.XamlRoot;
+            }
+
+            // Position the popup over the RootGrid
+            // Get the position of RootGrid relative to the window
+            var transform = RootGrid.TransformToVisual(null);
+            var position = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+            
+            QuickAddPopup.HorizontalOffset = position.X;
+            QuickAddPopup.VerticalOffset = position.Y;
+
+            // Set the popup width to match the control's actual width
+            PopupBorder.Width = this.ActualWidth;
+
+            // Keep placeholder visible to maintain layout size (prevent shift)
+            // CollapsedPlaceholder.Visibility = Visibility.Collapsed; 
+            
+            QuickAddPopup.IsOpen = true;
 
             // Focus on code editor (Google Keep style: focus on content)
-            CodeEditor.Focus(FocusState.Programmatic);
+            // We need to wait for the popup to open before focusing
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                CodeEditor.Focus(FocusState.Programmatic);
+            });
         }
 
         private void Collapse(bool clearFields = true)
@@ -63,12 +86,21 @@ namespace Pivot.CodeModule.Controls
             if (!_isExpanded) return;
             _isExpanded = false;
 
-            ExpandedPanel.Visibility = Visibility.Collapsed;
-            CollapsedPlaceholder.Visibility = Visibility.Visible;
+            QuickAddPopup.IsOpen = false;
+            // CollapsedPlaceholder.Visibility = Visibility.Visible;
 
             if (clearFields)
             {
                 ClearFields();
+            }
+        }
+
+        private void QuickAddPopup_Closed(object sender, object e)
+        {
+            // Handle LightDismiss (clicking outside)
+            if (_isExpanded)
+            {
+                Collapse(clearFields: true);
             }
         }
 
@@ -114,27 +146,7 @@ namespace Pivot.CodeModule.Controls
 
         private void UserControl_LostFocus(object sender, RoutedEventArgs e)
         {
-            // Defer the collapse check to allow focus to settle
-            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
-            {
-                // Check if still expanded
-                if (!_isExpanded) return;
-                
-                // Check if focus moved outside this control
-                var focusedElement = FocusManager.GetFocusedElement(this.XamlRoot);
-                if (focusedElement is DependencyObject dep)
-                {
-                    var current = dep;
-                    while (current != null)
-                    {
-                        if (current == this) return; // Still inside
-                        current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
-                    }
-                }
-
-                // Focus moved outside - collapse without saving
-                Collapse(clearFields: true);
-            });
+            // With Popup LightDismiss, we don't need manual focus tracking for collapse
         }
 
         private void OnKeyDownHandler(object sender, KeyRoutedEventArgs e)
