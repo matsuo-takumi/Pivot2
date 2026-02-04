@@ -13,16 +13,26 @@ namespace Pivot.CodeModule.Views
     public sealed partial class CodePage : Page
     {
         public CodeViewModel ViewModel { get; private set; } = null!;
+        private QuickAddViewModel QuickAddVM { get; set; } = null!;
 
         public CodePage()
         {
-            // Resolve ViewModel from App Services BEFORE InitializeComponent
-            ViewModel = ((App)Application.Current).Services.GetService<CodeViewModel>() 
+            // Resolve ViewModels from App Services BEFORE InitializeComponent
+            var services = ((App)Application.Current).Services;
+            ViewModel = services.GetService<CodeViewModel>() 
                 ?? throw new InvalidOperationException("CodeViewModel not registered in DI");
+            QuickAddVM = services.GetService<QuickAddViewModel>()
+                ?? throw new InvalidOperationException("QuickAddViewModel not registered in DI");
             
             this.InitializeComponent();
             
             this.DataContext = ViewModel;
+            
+            // Set QuickAddBar's DataContext
+            QuickAddBar.DataContext = QuickAddVM;
+            
+            // Subscribe to QuickAddViewModel's SnippetCreated event
+            QuickAddVM.SnippetCreated += QuickAddBar_SnippetCreated;
 
             // Register Keyboard Accelerators
             var saveAccelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
@@ -48,56 +58,46 @@ namespace Pivot.CodeModule.Views
             }
             else
             {
-                QuickAddBar?.TrySave();
+                QuickAddBar.TrySave();
             }
         }
 
-        protected override void OnNavigatedTo(NavigationEventArgs e)
+        protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
-            if (ViewModel != null)
+            await ViewModel.InitializeAsync();
+            
+            // Update QuickAdd tags after initialization
+            UpdateQuickAddTags();
+        }
+
+        private void AllButton_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel.FilterVM.SelectedTag = null;
+        }
+
+        private void SnippetCard_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element && element.DataContext is AssetEntity snippet)
             {
-               _ = InitializePageAsync();
+                _ = ViewModel.EditorVM.SetSnippetAsync(snippet);
             }
         }
 
-        private async Task InitializePageAsync()
+        private async void QuickAddBar_SnippetCreated(object? sender, QuickAddEventArgs e)
         {
-            await ViewModel.InitializeAsync();
+            // Delegate to CodeViewModel's orchestration method
+            await ViewModel.OnSnippetCreatedAsync(e);
+            
+            // Update QuickAdd tags after creation
             UpdateQuickAddTags();
         }
 
         private void UpdateQuickAddTags()
         {
-            if (ViewModel?.FilterVM?.Tags != null)
-            {
-                QuickAddBar.SetAvailableTags(ViewModel.FilterVM.Tags);
-                ViewModel.EditorVM?.SetAvailableTags(ViewModel.FilterVM.Tags);
-            }
+            QuickAddVM.SetAvailableTags(ViewModel.FilterVM.Tags);
         }
 
-        private async void QuickAddBar_SnippetCreated(object sender, QuickAddEventArgs e)
-        {
-            if (ViewModel?.EditorVM == null) return;
-
-            var newSnippet = await ViewModel.EditorVM.CreateSnippetAsync(
-                e.Title, 
-                e.Language, 
-                e.Code, 
-                e.Tags);
-
-            if (newSnippet != null)
-            {
-                await Task.Delay(100);
-                await ViewModel.ListVM.LoadSnippetsAsync();
-                await ViewModel.FilterVM.LoadTagsAsync();
-                UpdateQuickAddTags();
-            }
-        }
-
-        /// <summary>
-        /// GridView item click handler - opens snippet editor
-        /// </summary>
         private async void SnippetsGridView_ItemClick(object sender, ItemClickEventArgs e)
         {
             if (e.ClickedItem is AssetEntity asset)

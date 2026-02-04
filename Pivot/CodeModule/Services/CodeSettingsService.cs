@@ -37,6 +37,9 @@ namespace Pivot.CodeModule.Services
             }
 
             CustomColorHex = await _settingsStore.GetAsync(KeyCustomColor) ?? "#FF2D2D2D";
+
+            EditorTextColorHex = await _settingsStore.GetAsync(KeyEditorTextColor) ?? "#FFFFFFFF";
+            EditorBackgroundColorHex = await _settingsStore.GetAsync(KeyEditorBackgroundColor) ?? "#FF1E1E1E";
         }
 
         public async Task SetModeAsync(BackgroundMode mode)
@@ -51,6 +54,49 @@ namespace Pivot.CodeModule.Services
             CustomColorHex = hex;
             await _settingsStore.UpsertAsync(KeyCustomColor, hex);
             SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        // New Editor Colors
+        private const string KeyEditorTextColor = "Code_EditorTextColor";
+        private const string KeyEditorBackgroundColor = "Code_EditorBackgroundColor";
+
+        public string EditorTextColorHex { get; private set; } = "#FFFFFFFF"; // Default White
+        public string EditorBackgroundColorHex { get; private set; } = "#FF1E1E1E"; // Default Dark
+
+        public async Task SetEditorTextColorAsync(string hex)
+        {
+            EditorTextColorHex = hex;
+            await _settingsStore.UpsertAsync(KeyEditorTextColor, hex);
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public async Task SetEditorBackgroundColorAsync(string hex)
+        {
+            EditorBackgroundColorHex = hex;
+            await _settingsStore.UpsertAsync(KeyEditorBackgroundColor, hex);
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public Brush? GetEditorTextBrush()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(EditorTextColorHex)) return new SolidColorBrush(Colors.White);
+                var color = ParseHexColor(EditorTextColorHex);
+                return new SolidColorBrush(color);
+            }
+            catch { return new SolidColorBrush(Colors.White); }
+        }
+
+        public Brush? GetEditorBackgroundBrush()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(EditorBackgroundColorHex)) return new SolidColorBrush(ParseHexColor("#FF1E1E1E"));
+                var color = ParseHexColor(EditorBackgroundColorHex);
+                return new SolidColorBrush(color);
+            }
+            catch { return new SolidColorBrush(ParseHexColor("#FF1E1E1E")); }
         }
 
         public Brush? GetBackgroundBrush()

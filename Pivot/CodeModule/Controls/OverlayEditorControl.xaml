@@ -64,7 +64,9 @@
                                           HorizontalAlignment="Stretch"
                                           VerticalAlignment="Stretch"
                                           behaviors:EditorScrollBehavior.EnableInertia="True"
-                                          behaviors:EditorScrollBehavior.EnableRightClickScroll="True"/>
+                                          behaviors:EditorScrollBehavior.EnableRightClickScroll="True"
+                                          Foreground="{x:Bind ViewModel.EditorTextBrush, Mode=OneWay}"
+                                          Background="{x:Bind ViewModel.EditorBackgroundBrush, Mode=OneWay}"/>
             </Grid>
 
             <!-- Tags Section -->

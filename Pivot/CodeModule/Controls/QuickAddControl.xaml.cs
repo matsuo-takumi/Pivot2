@@ -2,9 +2,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Pivot.CodeModule.ViewModels;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using Windows.System;
 
@@ -12,15 +12,10 @@ namespace Pivot.CodeModule.Controls
 {
     public sealed partial class QuickAddControl : UserControl
     {
-        public event EventHandler<QuickAddEventArgs>? SnippetCreated;
+        // ViewModel property for data binding
+        public QuickAddViewModel? ViewModel => DataContext as QuickAddViewModel;
 
         private bool _isExpanded = false;
-        
-        // Available tags from existing snippets (set by parent)
-        private readonly ObservableCollection<string> _availableTags = new();
-        
-        // Currently selected tags for this snippet
-        private readonly HashSet<string> _selectedTags = new(StringComparer.OrdinalIgnoreCase);
 
         public QuickAddControl()
         {
@@ -29,69 +24,56 @@ namespace Pivot.CodeModule.Controls
             // Use AddHandler with handledEventsToo=true to capture keyboard events
             this.AddHandler(KeyDownEvent, new KeyEventHandler(OnKeyDownHandler), true);
             
-            ExistingTagsRepeater.ItemsSource = _availableTags;
+            // Subscribe to ViewModel events when DataContext changes
+            this.DataContextChanged += OnDataContextChanged;
         }
 
-        /// <summary>
-        /// Set available tags (called from CodePage when tags are loaded)
-        /// </summary>
-        public void SetAvailableTags(IEnumerable<string> tags)
+        private void OnDataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
         {
-            _availableTags.Clear();
-            foreach (var tag in tags.Take(20)) // Limit to 20 tags for UI
+            if (ViewModel != null)
             {
-                _availableTags.Add(tag);
+                // Subscribe to ViewModel's IsExpanded property changes
+                ViewModel.PropertyChanged += (s, e) =>
+                {
+                    if (e.PropertyName == nameof(QuickAddViewModel.IsExpanded))
+                    {
+                        UpdateExpandedState();
+                    }
+                };
+                
+                // Bind ItemsSource for tags
+                ExistingTagsRepeater.ItemsSource = ViewModel.AvailableTags;
             }
         }
 
-        #region Expand / Collapse
-
-        private void Expand()
+        private void UpdateExpandedState()
         {
-            if (_isExpanded) return;
-            _isExpanded = true;
-
-            ExpandedPanel.Visibility = Visibility.Visible;
-
-            // Focus on code editor (Google Keep style: focus on content)
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                CodeEditor.Focus(FocusState.Programmatic);
-            });
-        }
-
-        private void Collapse(bool clearFields = true)
-        {
-            if (!_isExpanded) return;
-            _isExpanded = false;
-
-            ExpandedPanel.Visibility = Visibility.Collapsed;
-            // CollapsedPlaceholder.Visibility = Visibility.Visible;
-
-            if (clearFields)
-            {
-                ClearFields();
-            }
-        }
-
-
-
-        private void ClearFields()
-        {
-            TitleBox.Text = string.Empty;
-            CodeEditor.Text = string.Empty;
-            NewTagBox.Text = string.Empty;
-            NewTagBox.Text = string.Empty;
-            _selectedTags.Clear();
+            if (ViewModel == null) return;
             
-            // Reset all toggle buttons
-            ResetTagToggles();
+            _isExpanded = ViewModel.IsExpanded;
+            ExpandedPanel.Visibility = _isExpanded ? Visibility.Visible : Visibility.Collapsed;
+            
+            if (_isExpanded)
+            {
+                // Focus on code editor when expanded
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    CodeEditor.Focus(FocusState.Programmatic);
+                });
+            }
+            else
+            {
+                // Reset tag toggles when collapsed
+                ResetTagToggles();
+            }
         }
 
         private void ResetTagToggles()
         {
             // Walk through ItemsRepeater and reset toggles
-            for (int i = 0; i < _availableTags.Count; i++)
+            if (ViewModel == null) return;
+            
+            for (int i = 0; i < ViewModel.AvailableTags.Count; i++)
             {
                 var element = ExistingTagsRepeater.TryGetElement(i);
                 if (element is ToggleButton toggle)
@@ -101,62 +83,43 @@ namespace Pivot.CodeModule.Controls
             }
         }
 
-        #endregion
-
         #region Event Handlers
 
         private void CollapsedPlaceholder_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            // Direct click handler - no focus issues
-            Expand();
-        }
-
-        private void UserControl_GotFocus(object sender, RoutedEventArgs e)
-        {
-            // Only expand if focus came from outside
-        }
-
-        private void UserControl_LostFocus(object sender, RoutedEventArgs e)
-        {
-            // With Popup LightDismiss, we don't need manual focus tracking for collapse
+            ViewModel?.ExpandCommand.Execute(null);
         }
 
         private void OnKeyDownHandler(object sender, KeyRoutedEventArgs e)
         {
-            // Ctrl + Enter: Save
-            if (e.Key == VirtualKey.Enter)
-            {
-                var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control);
-                if (ctrlState.HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
-                {
-                    e.Handled = true;
-                    Save();
-                    return;
-                }
-            }
-
-            // Esc: Cancel
-            if (e.Key == VirtualKey.Escape)
+            // Ctrl+Enter to save
+            if (e.Key == VirtualKey.Enter && 
+                (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)))
             {
                 e.Handled = true;
-                Collapse(clearFields: true);
-                return;
+                ViewModel?.CreateSnippetCommand.Execute(null);
             }
-        }
-
-        private void UserControl_KeyDown(object sender, KeyRoutedEventArgs e)
-        {
-            // Fallback handler (kept for XAML binding)
+            // Escape to collapse
+            else if (e.Key == VirtualKey.Escape && _isExpanded)
+            {
+                e.Handled = true;
+                ViewModel?.CollapseCommand.Execute(null);
+            }
         }
 
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
-            Save();
+            ViewModel?.CreateSnippetCommand.Execute(null);
         }
 
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
-            Collapse(clearFields: true);
+            ViewModel?.CollapseCommand.Execute(null);
+        }
+
+        private void AddTagButton_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.AddTagCommand.Execute(null);
         }
 
         private void NewTagBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -164,123 +127,43 @@ namespace Pivot.CodeModule.Controls
             if (e.Key == VirtualKey.Enter)
             {
                 e.Handled = true;
-                AddNewTag();
+                ViewModel?.AddTagCommand.Execute(null);
             }
         }
 
-        private void AddTagButton_Click(object sender, RoutedEventArgs e)
+        private void TagToggle_Checked(object sender, RoutedEventArgs e)
         {
-            AddNewTag();
+            if (sender is ToggleButton toggle && toggle.Content is string tag)
+            {
+                ViewModel?.ToggleTag(tag, true);
+            }
         }
 
-        private void AddNewTag()
+        private void TagToggle_Unchecked(object sender, RoutedEventArgs e)
         {
-            var newTag = NewTagBox.Text?.Trim().TrimStart('#');
-            if (string.IsNullOrEmpty(newTag)) return;
-
-            // Add to selected tags
-            _selectedTags.Add(newTag);
-            
-            // Add to available tags if not already there
-            if (!_availableTags.Contains(newTag, StringComparer.OrdinalIgnoreCase))
+            if (sender is ToggleButton toggle && toggle.Content is string tag)
             {
-                _availableTags.Add(newTag);
+                ViewModel?.ToggleTag(tag, false);
             }
-            
-            // Find and check the corresponding toggle button
-            var index = _availableTags.IndexOf(newTag);
-            if (index >= 0)
-            {
-                var element = ExistingTagsRepeater.TryGetElement(index);
-                if (element is ToggleButton toggle)
-                {
-                    toggle.IsChecked = true;
-                }
-            }
-
-            NewTagBox.Text = string.Empty;
         }
 
         #endregion
 
-        #region Save Logic
-        
+        /// <summary>
+        /// Public method to set available tags from external source (e.g., CodePage).
+        /// This is a bridge method for backward compatibility.
+        /// </summary>
+        public void SetAvailableTags(IEnumerable<string> tags)
+        {
+            ViewModel?.SetAvailableTags(tags);
+        }
+
+        /// <summary>
+        /// Public method to trigger save from external keyboard shortcut (Ctrl+S).
+        /// </summary>
         public void TrySave()
         {
-            if (_isExpanded)
-            {
-                Save();
-            }
+            ViewModel?.TrySave();
         }
-
-        private void Save()
-        {
-            var code = CodeEditor.Text?.Trim();
-            if (string.IsNullOrEmpty(code))
-            {
-                Collapse(clearFields: true);
-                return;
-            }
-
-            var title = TitleBox.Text?.Trim() ?? string.Empty;
-            
-            // Detect language from extension or content
-            var language = !string.IsNullOrEmpty(title) 
-                ? Pivot.CodeModule.Helpers.CodeFileHelper.GetLanguageFromExtension(title) 
-                : DetectLanguage(code);
-
-            // Collect selected tags from toggle buttons
-            CollectSelectedTags();
-
-            // Raise event for ViewModel to handle
-            SnippetCreated?.Invoke(this, new QuickAddEventArgs
-            {
-                Title = title,
-                Language = language,
-                Code = code,
-                Tags = _selectedTags.ToArray()
-            });
-
-            Collapse(clearFields: true);
-        }
-
-        private void CollectSelectedTags()
-        {
-            for (int i = 0; i < _availableTags.Count; i++)
-            {
-                var element = ExistingTagsRepeater.TryGetElement(i);
-                if (element is ToggleButton toggle && toggle.IsChecked == true)
-                {
-                    _selectedTags.Add(_availableTags[i]);
-                }
-            }
-        }
-
-        private string DetectLanguage(string code)
-        {
-            // Simple heuristic language detection
-            if (code.Contains("def ") || code.Contains("import ") && code.Contains(":"))
-                return "python";
-            if (code.Contains("function ") || code.Contains("const ") || code.Contains("=>"))
-                return "javascript";
-            if (code.Contains("public class ") || code.Contains("namespace "))
-                return "csharp";
-            if (code.Contains("#include") || code.Contains("std::"))
-                return "cpp";
-            if (code.Contains("SELECT ") || code.Contains("FROM ") || code.Contains("WHERE "))
-                return "sql";
-            
-            return "text"; // Default
-        }
-
-        #endregion
-    }
-
-    public class QuickAddEventArgs : EventArgs
-    {
-        public string Title { get; set; } = string.Empty;
-        public string Language { get; set; } = "text";
-        public string Code { get; set; } = string.Empty;
-        public string[] Tags { get; set; } = Array.Empty<string>();
     }
 }

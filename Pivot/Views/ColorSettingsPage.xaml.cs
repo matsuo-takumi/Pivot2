@@ -61,6 +61,33 @@ namespace Pivot.Views
                 ViewModel.LoadEntriesAsync(),
                 LoadPresetsAsync()
             );
+            
+            // Initialize editor color pickers
+            InitializeEditorColorPickers();
+        }
+
+        private void InitializeEditorColorPickers()
+        {
+            try
+            {
+                // Parse and set editor text color
+                if (!string.IsNullOrEmpty(CodeViewModel.EditorTextColorHex))
+                {
+                    var textColor = CodeModule.Services.CodeSettingsService.ParseHexColor(CodeViewModel.EditorTextColorHex);
+                    EditorTextColorPicker.Color = textColor;
+                }
+                
+                // Parse and set editor background color
+                if (!string.IsNullOrEmpty(CodeViewModel.EditorBackgroundColorHex))
+                {
+                    var bgColor = CodeModule.Services.CodeSettingsService.ParseHexColor(CodeViewModel.EditorBackgroundColorHex);
+                    EditorBackgroundColorPicker.Color = bgColor;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to initialize editor color pickers.");
+            }
         }
 
         private async Task LoadPresetsAsync()
@@ -222,6 +249,20 @@ namespace Pivot.Views
                 var hex = $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
                 CodeViewModel.UpdateColorCommand.Execute(hex);
             }
+        }
+
+        private void EditorTextColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        {
+            var color = args.NewColor;
+            var hex = $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
+            CodeViewModel.UpdateEditorTextColorCommand.Execute(hex);
+        }
+
+        private void EditorBackgroundColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        {
+            var color = args.NewColor;
+            var hex = $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
+            CodeViewModel.UpdateEditorBackgroundColorCommand.Execute(hex);
         }
     }
 }

@@ -11,6 +11,8 @@ using Windows.ApplicationModel.DataTransfer;
 using Pivot.Models;
 using Pivot.Services;
 using Pivot.CodeModule.ViewModels;
+using Pivot.CodeModule.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Pivot.CodeModule.Controls
 {
@@ -25,9 +27,59 @@ namespace Pivot.CodeModule.Controls
             set => SetValue(AssetProperty, value);
         }
 
+        private CodeSettingsService? _settingsService;
+
         public SnippetCardControl()
         {
             this.InitializeComponent();
+        }
+
+        private void UserControl_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (_settingsService == null)
+            {
+                // Resolve service from App.Services
+                _settingsService = ((App)Application.Current).Services.GetService<CodeSettingsService>();
+                
+                if (_settingsService != null)
+                {
+                    _settingsService.SettingsChanged += OnSettingsChanged;
+                    UpdateBackground();
+                }
+            }
+        }
+
+        private void UserControl_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (_settingsService != null)
+            {
+                _settingsService.SettingsChanged -= OnSettingsChanged;
+                _settingsService = null;
+            }
+        }
+
+        private void OnSettingsChanged(object? sender, EventArgs e)
+        {
+            DispatcherQueue.TryEnqueue(UpdateBackground);
+        }
+
+        private void UpdateBackground()
+        {
+            if (_settingsService == null) return;
+            
+            var brush = _settingsService.GetBackgroundBrush();
+            if (brush != null)
+            {
+                CardGrid.Background = brush;
+            }
+            else
+            {
+                // Fallback to theme resource
+                if (Application.Current.Resources.TryGetValue("SubtleFillColorSecondaryBrush", out object res) && res is Brush themeBrush)
+                {
+                    CardGrid.Background = themeBrush;
+                }
+            }
         }
 
         private CodeListViewModel? GetListViewModel()
@@ -232,17 +284,7 @@ namespace Pivot.CodeModule.Controls
 
         private CodeService? GetCodeService()
         {
-            DependencyObject? current = this;
-            while (current != null)
-            {
-                if (current is Pivot.CodeModule.Views.CodePage page)
-                {
-                    // Access CodeService through DI or ViewModel
-                    return App.Current.Services.GetService(typeof(CodeService)) as CodeService;
-                }
-                current = VisualTreeHelper.GetParent(current);
-            }
-            return null;
+            return App.Current.Services.GetService(typeof(CodeService)) as CodeService;
         }
     }
 }

@@ -89,6 +89,7 @@ namespace Pivot.CodeModule.Controls
                 }
 
                 UpdateEditorText();
+                UpdateEditorColors();
             }
         }
 
@@ -97,6 +98,42 @@ namespace Pivot.CodeModule.Controls
             if (e.PropertyName == nameof(CodeEditorViewModel.TextContent))
             {
                 UpdateEditorText();
+            }
+            else if (e.PropertyName == nameof(CodeEditorViewModel.EditorTextBrush) || 
+                     e.PropertyName == nameof(CodeEditorViewModel.EditorBackgroundBrush))
+            {
+                UpdateEditorColors();
+            }
+        }
+
+        private void UpdateEditorColors()
+        {
+            if (ViewModel == null || CodeEditor?.Editor == null) return;
+
+            try
+            {
+                var textBrush = ViewModel.EditorTextBrush as Microsoft.UI.Xaml.Media.SolidColorBrush;
+                var bgBrush = ViewModel.EditorBackgroundBrush as Microsoft.UI.Xaml.Media.SolidColorBrush;
+
+                if (textBrush != null && bgBrush != null)
+                {
+                    var textColor = textBrush.Color;
+                    var bgColor = bgBrush.Color;
+                    
+                    // WinUIEditor uses Win32 COLORREF format (0x00BBGGRR)
+                    int textColorRef = (int)((textColor.B << 16) | (textColor.G << 8) | textColor.R);
+                    int bgColorRef = (int)((bgColor.B << 16) | (bgColor.G << 8) | bgColor.R);
+                    
+                    // Set colors using Scintilla style constants
+                    // STYLE_DEFAULT = 32
+                    CodeEditor.Editor.StyleSetFore(32, textColorRef);
+                    CodeEditor.Editor.StyleSetBack(32, bgColorRef);
+                    CodeEditor.Editor.StyleClearAll(); // Apply to all styles
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UpdateEditorColors] Failed: {ex.Message}");
             }
         }
 

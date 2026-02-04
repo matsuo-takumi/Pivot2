@@ -196,39 +196,101 @@
             </muxc:PivotItem>
 
             <muxc:PivotItem Header="Code">
-                <StackPanel Spacing="24" MaxWidth="800" HorizontalAlignment="Left" Padding="0,12">
-                     <!-- Snippet Card Appearance -->
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="Snippet Card Appearance" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                        <TextBlock Text="Customize how code snippets appear in the library grid." Style="{StaticResource BodyTextBlockStyle}" Opacity="0.7"/>
+                <Grid ColumnSpacing="24" Padding="12,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="350"/>
+                        <ColumnDefinition Width="*" MaxWidth="300"/>
+                        <ColumnDefinition Width="*" MaxWidth="300"/>
+                    </Grid.ColumnDefinitions>
 
-                        <RadioButtons Header="Background Style">
-                            <RadioButton Content="Match Theme (Default)" 
-                                         IsChecked="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolInverter}}"
-                                         Command="{x:Bind CodeViewModel.SetThemeModeCommand}"/>
-                            <RadioButton Content="Custom Color" 
-                                         IsChecked="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay}"
-                                         Command="{x:Bind CodeViewModel.SetCustomColorModeCommand}"/>
-                        </RadioButtons>
+                    <!-- Column 1: Editor Appearance -->
+                    <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="24">
+                            <TextBlock Text="Editor Appearance" FontSize="18" FontWeight="SemiBold"/>
+                            
+                            <!-- Editor Text Color -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Editor Text Color" FontSize="14" FontWeight="SemiBold"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Text Color" VerticalAlignment="Center" FontSize="12"/>
+                                    <muxc:ColorPicker x:Name="EditorTextColorPicker"
+                                             Grid.Column="1"
+                                             ColorSpectrumShape="Box"
+                                             IsMoreButtonVisible="False"
+                                             IsColorSliderVisible="False"
+                                             IsColorChannelTextInputVisible="True"
+                                             IsHexInputVisible="True"
+                                             IsAlphaEnabled="False"
+                                             ColorChanged="EditorTextColorPicker_ColorChanged"/>
+                                </Grid>
+                            </StackPanel>
 
-                        <StackPanel Visibility="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" 
-                                    Spacing="8" 
-                                    Margin="0,8,0,0">
-                            <TextBlock Text="Custom Background Color"/>
-                            <muxc:ColorPicker x:Name="CodeColorPickerControl"
-                                         ColorSpectrumShape="Box"
-                                         IsMoreButtonVisible="False"
-                                         IsColorSliderVisible="True"
-                                         IsColorChannelTextInputVisible="True"
-                                         IsHexInputVisible="True"
-                                         IsAlphaEnabled="False"
-                                         ColorChanged="CodeColorPicker_ColorChanged"/>
+                            <!-- Editor Background Color -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Editor Background" FontSize="14" FontWeight="SemiBold"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Background" VerticalAlignment="Center" FontSize="12"/>
+                                    <muxc:ColorPicker x:Name="EditorBackgroundColorPicker"
+                                             Grid.Column="1"
+                                             ColorSpectrumShape="Box"
+                                             IsMoreButtonVisible="False"
+                                             IsColorSliderVisible="False"
+                                             IsColorChannelTextInputVisible="True"
+                                             IsHexInputVisible="True"
+                                             IsAlphaEnabled="False"
+                                             ColorChanged="EditorBackgroundColorPicker_ColorChanged"/>
+                                </Grid>
+                            </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Column 2: Snippet Card Appearance -->
+                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="24">
+                            <TextBlock Text="Snippet Card Appearance" FontSize="18" FontWeight="SemiBold"/>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Background Style" FontSize="14" FontWeight="SemiBold"/>
+                                <RadioButtons>
+                                    <RadioButton Content="Match Theme (Default)" 
+                                                 IsChecked="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolInverter}}"
+                                                 Command="{x:Bind CodeViewModel.SetThemeModeCommand}"/>
+                                    <RadioButton Content="Custom Color" 
+                                                 IsChecked="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay}"
+                                                 Command="{x:Bind CodeViewModel.SetCustomColorModeCommand}"/>
+                                </RadioButtons>
+
+                                <StackPanel Visibility="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}" 
+                                            Spacing="8" 
+                                            Margin="0,8,0,0">
+                                    <TextBlock Text="Custom Color" FontSize="12"/>
+                                    <muxc:ColorPicker x:Name="CodeColorPickerControl"
+                                                 ColorSpectrumShape="Box"
+                                                 IsMoreButtonVisible="False"
+                                                 IsColorSliderVisible="False"
+                                                 IsColorChannelTextInputVisible="True"
+                                                 IsHexInputVisible="True"
+                                                 IsAlphaEnabled="False"
+                                                 ColorChanged="CodeColorPicker_ColorChanged"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Column 3: Reserved / Other Settings -->
+                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                        <!-- Empty for now, can be used for syntax highlighting themes later -->
+                    </ScrollViewer>
+                </Grid>
             </muxc:PivotItem>
         </muxc:Pivot>
     </Grid>
 </Page>
-
-

@@ -38,8 +38,7 @@
             <!-- Quick Add Bar -->
             <local:QuickAddControl x:Name="QuickAddBar" 
                                    Grid.Row="0" 
-                                   Margin="0,0,0,24"
-                                   SnippetCreated="QuickAddBar_SnippetCreated"/>
+                                   Margin="0,0,0,24"/>
 
             <!-- Search & Sort Bar -->
             <Grid Grid.Row="1" Margin="0,0,0,16">

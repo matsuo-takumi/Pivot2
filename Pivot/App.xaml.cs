@@ -259,6 +259,9 @@ namespace Pivot
             // Filter service (depends on SettingsService)
             sc.AddSingleton<FilterService>();
 
+            // Code Module Services and ViewModels
+            sc.AddSingleton<LanguageDetectionService>();
+            sc.AddTransient<QuickAddViewModel>();
             sc.AddTransient<CodeViewModel>();
             sc.AddTransient<CodeFilterViewModel>();
             sc.AddTransient<CodeListViewModel>();

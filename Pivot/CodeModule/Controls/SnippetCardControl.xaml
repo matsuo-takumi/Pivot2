@@ -6,7 +6,9 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:converters="using:Pivot.Converters"
     mc:Ignorable="d"
-    x:Name="RootControl">
+    x:Name="RootControl"
+    Loaded="UserControl_Loaded"
+    Unloaded="UserControl_Unloaded">
     
     <UserControl.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
@@ -29,8 +31,9 @@
         </MenuFlyout>
     </UserControl.Resources>
 
-    <Grid CornerRadius="8" 
-          Background="{Binding DataContext.CodePreferences.CardBackground, ElementName=RootPage, FallbackValue={ThemeResource SubtleFillColorSecondaryBrush}, TargetNullValue={ThemeResource SubtleFillColorSecondaryBrush}}" 
+    <Grid x:Name="CardGrid"
+          CornerRadius="8" 
+          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
           BorderThickness="1"
           Padding="12"

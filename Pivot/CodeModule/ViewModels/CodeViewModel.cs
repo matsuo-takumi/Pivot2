@@ -1,9 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using Pivot.Messages;
+using Pivot.CodeModule.Messages;
 
 namespace Pivot.CodeModule.ViewModels
 {
@@ -14,6 +16,7 @@ namespace Pivot.CodeModule.ViewModels
     public partial class CodeViewModel : ObservableObject
     {
         private readonly ILogger<CodeViewModel> _logger;
+        private readonly IMessenger _messenger;
 
         public CodeFilterViewModel FilterVM { get; }
         public CodeListViewModel ListVM { get; }
@@ -33,6 +36,7 @@ namespace Pivot.CodeModule.ViewModels
             EditorVM = editorVM;
             CodePreferences = codeSettingsVM;
             _logger = logger;
+            _messenger = messenger;
             
             _logger.LogInformation("CodeViewModel (Coordinator) Initialized.");
 
@@ -76,6 +80,31 @@ namespace Pivot.CodeModule.ViewModels
             // Reload snippets and tags when asset is updated/created/deleted
             await ListVM.LoadSnippetsAsync();
             await FilterVM.LoadTagsAsync();
+        }
+
+        /// <summary>
+        /// Handles snippet creation from QuickAdd control.
+        /// Orchestrates snippet creation, data reload, and tag updates.
+        /// </summary>
+        public async Task OnSnippetCreatedAsync(QuickAddEventArgs args)
+        {
+            var newSnippet = await EditorVM.CreateSnippetAsync(
+                args.Title,
+                args.Language,
+                args.Code,
+                args.Tags);
+
+            if (newSnippet != null)
+            {
+                // Reload data in parallel
+                await Task.WhenAll(
+                    ListVM.LoadSnippetsAsync(),
+                    FilterVM.LoadTagsAsync()
+                );
+
+                // Notify QuickAdd to update its available tags
+                _messenger.Send(new TagsUpdatedMessage(FilterVM.Tags));
+            }
         }
     }
 }

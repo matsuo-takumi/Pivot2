@@ -5,6 +5,8 @@ using Pivot.Models;
 using Pivot.Services;
 using Pivot.Messages;
 using Pivot.CodeModule.Helpers;
+using Pivot.CodeModule.Services;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.IO;
 using System.Text.Json;
@@ -19,6 +21,7 @@ namespace Pivot.CodeModule.ViewModels
     {
         private readonly CodeService _codeService;
         private readonly IMessenger _messenger;
+        private readonly CodeSettingsService _settingsService;
 
         [ObservableProperty]
         private AssetEntity? _currentSnippet;
@@ -38,10 +41,31 @@ namespace Pivot.CodeModule.ViewModels
         [ObservableProperty]
         private string _currentLanguage = "plaintext";
 
-        public CodeEditorViewModel(CodeService codeService, IMessenger messenger)
+        // Color Settings
+        [ObservableProperty]
+        private Brush? _editorTextBrush;
+
+        [ObservableProperty]
+        private Brush? _editorBackgroundBrush;
+
+        public CodeEditorViewModel(
+            CodeService codeService, 
+            CodeSettingsService settingsService,
+            IMessenger messenger)
         {
             _codeService = codeService;
+            _settingsService = settingsService;
             _messenger = messenger;
+
+            // Initialize colors and listen to changes
+            UpdateColors();
+            _settingsService.SettingsChanged += (s, e) => UpdateColors();
+        }
+
+        private void UpdateColors()
+        {
+            EditorTextBrush = _settingsService.GetEditorTextBrush();
+            EditorBackgroundBrush = _settingsService.GetEditorBackgroundBrush();
         }
 
         public void SetAvailableTags(IEnumerable<string> tags)
@@ -143,10 +167,10 @@ namespace Pivot.CodeModule.ViewModels
                 await _codeService.SaveSnippetAsync(CurrentSnippet, saveToDisk: false);
                 
                 // Notify changes (Updated)
-                _messenger.Send(new Messages.AssetEntityChangedMessage(
+                _messenger.Send(new AssetEntityChangedMessage(
                     CurrentSnippet, 
                     CurrentSnippet.FilePath, 
-                    Messages.AssetEntityChangedMessage.ChangeType.Updated));
+                    AssetEntityChangedMessage.ChangeType.Updated));
             }
             catch (Exception ex)
             {
