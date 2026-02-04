@@ -51,30 +51,9 @@ namespace Pivot.CodeModule.Controls
             if (_isExpanded) return;
             _isExpanded = true;
 
-            // Ensure Popup knows where to display (WinUI 3 requirement)
-            if (QuickAddPopup.XamlRoot == null)
-            {
-                QuickAddPopup.XamlRoot = this.XamlRoot;
-            }
-
-            // Position the popup over the RootGrid
-            // Get the position of RootGrid relative to the window
-            var transform = RootGrid.TransformToVisual(null);
-            var position = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
-            
-            QuickAddPopup.HorizontalOffset = position.X;
-            QuickAddPopup.VerticalOffset = position.Y;
-
-            // Set the popup width to match the control's actual width
-            PopupBorder.Width = this.ActualWidth;
-
-            // Keep placeholder visible to maintain layout size (prevent shift)
-            // CollapsedPlaceholder.Visibility = Visibility.Collapsed; 
-            
-            QuickAddPopup.IsOpen = true;
+            ExpandedPanel.Visibility = Visibility.Visible;
 
             // Focus on code editor (Google Keep style: focus on content)
-            // We need to wait for the popup to open before focusing
             DispatcherQueue.TryEnqueue(() =>
             {
                 CodeEditor.Focus(FocusState.Programmatic);
@@ -86,7 +65,7 @@ namespace Pivot.CodeModule.Controls
             if (!_isExpanded) return;
             _isExpanded = false;
 
-            QuickAddPopup.IsOpen = false;
+            ExpandedPanel.Visibility = Visibility.Collapsed;
             // CollapsedPlaceholder.Visibility = Visibility.Visible;
 
             if (clearFields)
@@ -95,14 +74,7 @@ namespace Pivot.CodeModule.Controls
             }
         }
 
-        private void QuickAddPopup_Closed(object sender, object e)
-        {
-            // Handle LightDismiss (clicking outside)
-            if (_isExpanded)
-            {
-                Collapse(clearFields: true);
-            }
-        }
+
 
         private void ClearFields()
         {

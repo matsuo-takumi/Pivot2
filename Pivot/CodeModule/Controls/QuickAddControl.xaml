@@ -28,28 +28,25 @@
 
         <!-- Expanded State -->
         <!-- Expanded State (Floating Popup) -->
-        <Popup x:Name="QuickAddPopup" 
-               IsLightDismissEnabled="True" 
-               LightDismissOverlayMode="Off"
-               Closed="QuickAddPopup_Closed">
-            <Border x:Name="PopupBorder"
-                    MinWidth="600"
-                    MinHeight="300"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="16">
-                <Border.Shadow>
-                    <ThemeShadow />
-                </Border.Shadow>
-                <Grid x:Name="ExpandedPanel">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+        <!-- Expanded State -->
+        <Grid x:Name="ExpandedPanel" 
+              Visibility="Collapsed"
+              Background="{ThemeResource LayerFillColorDefaultBrush}"
+              BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+              BorderThickness="1"
+              CornerRadius="8"
+              Padding="16"
+              Margin="0,0,0,12">
+            <Grid.Shadow>
+                <ThemeShadow />
+            </Grid.Shadow>
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
                     <!-- Title -->
                     <TextBox x:Name="TitleBox"
@@ -66,7 +63,6 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-
                         <TextBox x:Name="CodeEditor"
                              Grid.Row="0"
                              PlaceholderText="コードを入力..."
@@ -74,7 +70,7 @@
                              TextWrapping="Wrap"
                              FontFamily="Cascadia Code, Consolas, monospace"
                              MinHeight="120"
-                             MaxHeight="300"
+                             MaxHeight="400"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                     </Grid>
 
@@ -123,18 +119,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Action Buttons -->
-                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                        <TextBlock Text="Ctrl+Enter で保存" 
-                               VerticalAlignment="Center"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               Margin="0,0,12,0"/>
-                        <Button x:Name="CancelButton" Content="キャンセル" Click="CancelButton_Click"/>
-                        <Button x:Name="SaveButton" Content="保存" Style="{StaticResource AccentButtonStyle}" Click="SaveButton_Click"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-        </Popup>
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

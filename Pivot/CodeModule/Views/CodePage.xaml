@@ -30,6 +30,7 @@
         <Grid Padding="24">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/> <!-- Quick Add -->
+
                 <RowDefinition Height="Auto"/> <!-- Search & Sort -->
                 <RowDefinition Height="*"/>    <!-- Grid -->
             </Grid.RowDefinitions>
