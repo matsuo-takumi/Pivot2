@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI;
 using Pivot.Services;
 using Pivot.ViewModels;
 using Pivot.Converters;
@@ -62,33 +64,9 @@ namespace Pivot.Views
                 LoadPresetsAsync()
             );
             
-            // Initialize editor color pickers
-            InitializeEditorColorPickers();
         }
 
-        private void InitializeEditorColorPickers()
-        {
-            try
-            {
-                // Parse and set editor text color
-                if (!string.IsNullOrEmpty(CodeViewModel.EditorTextColorHex))
-                {
-                    var textColor = CodeModule.Services.CodeSettingsService.ParseHexColor(CodeViewModel.EditorTextColorHex);
-                    EditorTextColorPicker.Color = textColor;
-                }
-                
-                // Parse and set editor background color
-                if (!string.IsNullOrEmpty(CodeViewModel.EditorBackgroundColorHex))
-                {
-                    var bgColor = CodeModule.Services.CodeSettingsService.ParseHexColor(CodeViewModel.EditorBackgroundColorHex);
-                    EditorBackgroundColorPicker.Color = bgColor;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to initialize editor color pickers.");
-            }
-        }
+
 
         private async Task LoadPresetsAsync()
         {
@@ -235,10 +213,6 @@ namespace Pivot.Views
             }
         }
 
-
-
-
-
         // Code Settings Color Picker Handler
         private void CodeColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
         {
@@ -251,18 +225,36 @@ namespace Pivot.Views
             }
         }
 
-        private void EditorTextColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        private void CodeColorSwatch_Click(object sender, RoutedEventArgs e)
         {
-            var color = args.NewColor;
-            var hex = $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
-            CodeViewModel.UpdateEditorTextColorCommand.Execute(hex);
-        }
+            if (sender is Button button && button.Tag is CodeModule.ViewModels.CodeColorSettingViewModel entry)
+            {
+                var flyout = new Flyout
+                {
+                    Placement = FlyoutPlacementMode.Bottom
+                };
 
-        private void EditorBackgroundColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
-        {
-            var color = args.NewColor;
-            var hex = $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
-            CodeViewModel.UpdateEditorBackgroundColorCommand.Execute(hex);
+                var colorPicker = new Microsoft.UI.Xaml.Controls.ColorPicker
+                {
+                    Color = entry.PreviewBrush is SolidColorBrush solid ? solid.Color : Colors.White,
+                    ColorSpectrumShape = Microsoft.UI.Xaml.Controls.ColorSpectrumShape.Ring,
+                    IsMoreButtonVisible = false,
+                    IsColorSliderVisible = true,
+                    IsColorChannelTextInputVisible = false,
+                    IsHexInputVisible = false,
+                    IsAlphaEnabled = true,
+                    IsAlphaSliderVisible = true,
+                    IsAlphaTextInputVisible = true
+                };
+
+                colorPicker.ColorChanged += (s, args) =>
+                {
+                    entry.UpdateColorFromPicker(args.NewColor);
+                };
+
+                flyout.Content = colorPicker;
+                flyout.ShowAt(button);
+            }
         }
     }
 }

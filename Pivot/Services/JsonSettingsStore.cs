@@ -69,6 +69,27 @@ namespace Pivot.Services
 			}
 		}
 
+		public async Task DeleteAsync(string key, CancellationToken ct = default)
+		{
+			await _lock.WaitAsync(ct).ConfigureAwait(false);
+			try
+			{
+				if (_cache.Remove(key))
+				{
+					var tmp = _settingsPath + ".tmp";
+					var json = JsonSerializer.Serialize(_cache);
+					await File.WriteAllTextAsync(tmp, json, ct).ConfigureAwait(false);
+					var bak = _settingsPath + ".bak";
+					if (File.Exists(_settingsPath)) File.Copy(_settingsPath, bak, overwrite: true);
+					File.Move(tmp, _settingsPath, overwrite: true);
+				}
+			}
+			finally
+			{
+				_lock.Release();
+			}
+		}
+
 		public async Task<IDictionary<string, string>> GetAllAsync(CancellationToken ct = default)
 		{
 			await _lock.WaitAsync(ct).ConfigureAwait(false);

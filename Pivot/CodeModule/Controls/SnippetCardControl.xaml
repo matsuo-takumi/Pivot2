@@ -33,7 +33,7 @@
 
     <Grid x:Name="CardGrid"
           CornerRadius="8" 
-          Background="{ThemeResource SubtleFillColorSecondaryBrush}" 
+          Background="{x:Bind Settings.CardBackground, Mode=OneWay, TargetNullValue={ThemeResource SubtleFillColorSecondaryBrush}}" 
           BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
           BorderThickness="1"
           Padding="12"
@@ -81,6 +81,7 @@
             <TextBlock Grid.Column="1"
                        Text="{Binding Asset.FileName, ElementName=RootControl}" 
                        Style="{StaticResource BodyStrongTextBlockStyle}" 
+                       Foreground="{x:Bind Settings.TitleBrush, Mode=OneWay}"
                        TextTrimming="CharacterEllipsis" 
                        VerticalAlignment="Center"/>
             
@@ -99,7 +100,7 @@
         <TextBlock Grid.Row="1" 
                    Text="{Binding Asset.ContentIndex, ElementName=RootControl}" 
                    Style="{StaticResource CaptionTextBlockStyle}" 
-                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Foreground="{x:Bind Settings.EditorTextBrush, Mode=OneWay}"
                    MaxLines="8" 
                    TextTrimming="CharacterEllipsis" 
                    TextWrapping="Wrap"
@@ -118,8 +119,10 @@
                  </ItemsControl.ItemsPanel>
                  <ItemsControl.ItemTemplate>
                      <DataTemplate>
-                         <Border Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" CornerRadius="4" Padding="4,2">
-                             <TextBlock Text="{Binding}" FontSize="10"/>
+                         <Border Background="{Binding Settings.TagBackgroundBrush, ElementName=RootControl}" 
+                                 BorderBrush="{Binding Settings.TagBorderBrush, ElementName=RootControl}" 
+                                 CornerRadius="4" Padding="4,2">
+                             <TextBlock Text="{Binding}" FontSize="10" Foreground="{Binding Settings.TagTextBrush, ElementName=RootControl}"/>
                          </Border>
                      </DataTemplate>
                  </ItemsControl.ItemTemplate>

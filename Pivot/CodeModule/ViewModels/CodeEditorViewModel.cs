@@ -42,11 +42,13 @@ namespace Pivot.CodeModule.ViewModels
         private string _currentLanguage = "plaintext";
 
         // Color Settings
-        [ObservableProperty]
-        private Brush? _editorTextBrush;
-
-        [ObservableProperty]
-        private Brush? _editorBackgroundBrush;
+        [ObservableProperty] private Brush? _editorTextBrush;
+        [ObservableProperty] private Brush? _editorBackgroundBrush;
+        [ObservableProperty] private Brush? _titleBrush;
+        [ObservableProperty] private Brush? _tagTextBrush;
+        [ObservableProperty] private Brush? _tagBackgroundBrush;
+        [ObservableProperty] private Brush? _tagBorderBrush;
+        [ObservableProperty] private Brush? _lineNumberBrush;
 
         public CodeEditorViewModel(
             CodeService codeService, 
@@ -66,6 +68,11 @@ namespace Pivot.CodeModule.ViewModels
         {
             EditorTextBrush = _settingsService.GetEditorTextBrush();
             EditorBackgroundBrush = _settingsService.GetEditorBackgroundBrush();
+            TitleBrush = _settingsService.GetTitleBrush();
+            TagTextBrush = _settingsService.GetTagTextBrush();
+            TagBackgroundBrush = _settingsService.GetTagBackgroundBrush();
+            TagBorderBrush = _settingsService.GetTagBorderBrush();
+            LineNumberBrush = _settingsService.GetLineNumberBrush();
         }
 
         public void SetAvailableTags(IEnumerable<string> tags)

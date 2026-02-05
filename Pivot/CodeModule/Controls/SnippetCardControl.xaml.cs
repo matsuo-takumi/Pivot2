@@ -27,7 +27,14 @@ namespace Pivot.CodeModule.Controls
             set => SetValue(AssetProperty, value);
         }
 
-        private CodeSettingsService? _settingsService;
+        public static readonly DependencyProperty SettingsProperty =
+            DependencyProperty.Register(nameof(Settings), typeof(CodeSettingsViewModel), typeof(SnippetCardControl), new PropertyMetadata(null));
+
+        public CodeSettingsViewModel Settings
+        {
+            get => (CodeSettingsViewModel)GetValue(SettingsProperty);
+            set => SetValue(SettingsProperty, value);
+        }
 
         public SnippetCardControl()
         {
@@ -36,51 +43,21 @@ namespace Pivot.CodeModule.Controls
 
         private void UserControl_Loaded(object sender, RoutedEventArgs e)
         {
-            if (_settingsService == null)
+            if (Settings == null)
             {
-                // Resolve service from App.Services
-                _settingsService = ((App)Application.Current).Services.GetService<CodeSettingsService>();
-                
-                if (_settingsService != null)
-                {
-                    _settingsService.SettingsChanged += OnSettingsChanged;
-                    UpdateBackground();
-                }
+                Settings = ((App)Application.Current).Services.GetService<CodeSettingsViewModel>();
             }
         }
 
         private void UserControl_Unloaded(object sender, RoutedEventArgs e)
         {
-            if (_settingsService != null)
-            {
-                _settingsService.SettingsChanged -= OnSettingsChanged;
-                _settingsService = null;
-            }
+            // Optional cleanup
         }
 
-        private void OnSettingsChanged(object? sender, EventArgs e)
-        {
-            DispatcherQueue.TryEnqueue(UpdateBackground);
-        }
+        // Removed manual OnSettingsChanged and UpdateBackground as we will use bindings
+        private void Dummy() { } // Placeholder to keep diff clean if needed or just remove methods entirely
 
-        private void UpdateBackground()
-        {
-            if (_settingsService == null) return;
-            
-            var brush = _settingsService.GetBackgroundBrush();
-            if (brush != null)
-            {
-                CardGrid.Background = brush;
-            }
-            else
-            {
-                // Fallback to theme resource
-                if (Application.Current.Resources.TryGetValue("SubtleFillColorSecondaryBrush", out object res) && res is Brush themeBrush)
-                {
-                    CardGrid.Background = themeBrush;
-                }
-            }
-        }
+
 
         private CodeListViewModel? GetListViewModel()
         {

@@ -33,13 +33,19 @@ namespace Pivot.CodeModule.Services
             var modeStr = await _settingsStore.GetAsync(KeyBackgroundMode);
             if (!string.IsNullOrEmpty(modeStr) && Enum.TryParse<BackgroundMode>(modeStr, out var mode))
             {
-                CurrentMode = mode;
+            CurrentMode = mode;
             }
 
             CustomColorHex = await _settingsStore.GetAsync(KeyCustomColor) ?? "#FF2D2D2D";
 
-            EditorTextColorHex = await _settingsStore.GetAsync(KeyEditorTextColor) ?? "#FFFFFFFF";
-            EditorBackgroundColorHex = await _settingsStore.GetAsync(KeyEditorBackgroundColor) ?? "#FF1E1E1E";
+            EditorTextColorHex = await _settingsStore.GetAsync(KeyEditorTextColor);
+            EditorBackgroundColorHex = await _settingsStore.GetAsync(KeyEditorBackgroundColor);
+            
+            TitleColorHex = await _settingsStore.GetAsync(KeyTitleColor);
+            TagTextColorHex = await _settingsStore.GetAsync(KeyTagTextColor);
+            TagBackgroundColorHex = await _settingsStore.GetAsync(KeyTagBackgroundColor); 
+            TagBorderColorHex = await _settingsStore.GetAsync(KeyTagBorderColor); 
+            LineNumberColorHex = await _settingsStore.GetAsync(KeyLineNumberColor);
         }
 
         public async Task SetModeAsync(BackgroundMode mode)
@@ -60,43 +66,69 @@ namespace Pivot.CodeModule.Services
         private const string KeyEditorTextColor = "Code_EditorTextColor";
         private const string KeyEditorBackgroundColor = "Code_EditorBackgroundColor";
 
-        public string EditorTextColorHex { get; private set; } = "#FFFFFFFF"; // Default White
-        public string EditorBackgroundColorHex { get; private set; } = "#FF1E1E1E"; // Default Dark
-
-        public async Task SetEditorTextColorAsync(string hex)
+        public string? EditorTextColorHex { get; private set; } // Null = Theme Default
+        public string? EditorBackgroundColorHex { get; private set; } // Null = Theme Default
+        
+        public async Task SetEditorTextColorAsync(string? hex)
         {
             EditorTextColorHex = hex;
-            await _settingsStore.UpsertAsync(KeyEditorTextColor, hex);
+            if (hex == null) await _settingsStore.DeleteAsync(KeyEditorTextColor);
+            else await _settingsStore.UpsertAsync(KeyEditorTextColor, hex);
             SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        public async Task SetEditorBackgroundColorAsync(string hex)
+        public async Task SetEditorBackgroundColorAsync(string? hex)
         {
             EditorBackgroundColorHex = hex;
-            await _settingsStore.UpsertAsync(KeyEditorBackgroundColor, hex);
+            if (hex == null) await _settingsStore.DeleteAsync(KeyEditorBackgroundColor);
+            else await _settingsStore.UpsertAsync(KeyEditorBackgroundColor, hex);
             SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+        
+        // New Customizable Colors
+        private const string KeyTitleColor = "Code_TitleColor";
+        private const string KeyTagTextColor = "Code_TagTextColor";
+        private const string KeyTagBackgroundColor = "Code_TagBackgroundColor";
+        private const string KeyTagBorderColor = "Code_TagBorderColor";
+        private const string KeyLineNumberColor = "Code_LineNumberColor";
+
+        public string? TitleColorHex { get; private set; }
+        public string? TagTextColorHex { get; private set; }
+        public string? TagBackgroundColorHex { get; private set; }
+        public string? TagBorderColorHex { get; private set; }
+        public string? LineNumberColorHex { get; private set; }
+
+        public async Task SetTitleColorAsync(string? hex) { TitleColorHex = hex; if(hex==null) await _settingsStore.DeleteAsync(KeyTitleColor); else await _settingsStore.UpsertAsync(KeyTitleColor, hex); SettingsChanged?.Invoke(this, EventArgs.Empty); }
+        public async Task SetTagTextColorAsync(string? hex) { TagTextColorHex = hex; if(hex==null) await _settingsStore.DeleteAsync(KeyTagTextColor); else await _settingsStore.UpsertAsync(KeyTagTextColor, hex); SettingsChanged?.Invoke(this, EventArgs.Empty); }
+        public async Task SetTagBackgroundColorAsync(string? hex) { TagBackgroundColorHex = hex; if(hex==null) await _settingsStore.DeleteAsync(KeyTagBackgroundColor); else await _settingsStore.UpsertAsync(KeyTagBackgroundColor, hex); SettingsChanged?.Invoke(this, EventArgs.Empty); }
+        public async Task SetTagBorderColorAsync(string? hex) { TagBorderColorHex = hex; if(hex==null) await _settingsStore.DeleteAsync(KeyTagBorderColor); else await _settingsStore.UpsertAsync(KeyTagBorderColor, hex); SettingsChanged?.Invoke(this, EventArgs.Empty); }
+        public async Task SetLineNumberColorAsync(string? hex) { LineNumberColorHex = hex; if(hex==null) await _settingsStore.DeleteAsync(KeyLineNumberColor); else await _settingsStore.UpsertAsync(KeyLineNumberColor, hex); SettingsChanged?.Invoke(this, EventArgs.Empty); }
+
+        public Brush? GetTitleBrush() => GetBrushFromHex(TitleColorHex);
+        public Brush? GetTagTextBrush() => GetBrushFromHex(TagTextColorHex);
+        public Brush? GetTagBackgroundBrush() => GetBrushFromHex(TagBackgroundColorHex);
+        public Brush? GetTagBorderBrush() => GetBrushFromHex(TagBorderColorHex);
+        public Brush? GetLineNumberBrush() => GetBrushFromHex(LineNumberColorHex);
+
+        private Brush? GetBrushFromHex(string? hex)
+        {
+            if (string.IsNullOrEmpty(hex)) return null;
+            try
+            {
+                var color = ParseHexColor(hex);
+                return new SolidColorBrush(color);
+            }
+            catch { return null; }
         }
 
         public Brush? GetEditorTextBrush()
         {
-            try
-            {
-                if (string.IsNullOrEmpty(EditorTextColorHex)) return new SolidColorBrush(Colors.White);
-                var color = ParseHexColor(EditorTextColorHex);
-                return new SolidColorBrush(color);
-            }
-            catch { return new SolidColorBrush(Colors.White); }
+            return GetBrushFromHex(EditorTextColorHex);
         }
 
         public Brush? GetEditorBackgroundBrush()
         {
-            try
-            {
-                if (string.IsNullOrEmpty(EditorBackgroundColorHex)) return new SolidColorBrush(ParseHexColor("#FF1E1E1E"));
-                var color = ParseHexColor(EditorBackgroundColorHex);
-                return new SolidColorBrush(color);
-            }
-            catch { return new SolidColorBrush(ParseHexColor("#FF1E1E1E")); }
+            return GetBrushFromHex(EditorBackgroundColorHex);
         }
 
         public Brush? GetBackgroundBrush()
