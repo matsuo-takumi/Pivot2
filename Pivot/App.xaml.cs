@@ -246,6 +246,12 @@ namespace Pivot
 					sp.GetRequiredService<ISettingsStore>(),
 					"TextColorPresets"));
 
+            sc.AddSingleton<IPresetService<Pivot.Models.CodeColorPresetData>>(sp =>
+                new PresetService<Pivot.Models.CodeColorPresetData>(
+                    sp.GetRequiredService<ILogger<PresetService<Pivot.Models.CodeColorPresetData>>>(),
+                    sp.GetRequiredService<ISettingsStore>(),
+                    "CodeColorPresets"));
+
 			// ViewModels
 			sc.AddTransient<MainViewModel>();
 			sc.AddTransient<HomeViewModel>();

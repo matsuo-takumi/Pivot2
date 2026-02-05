@@ -13,25 +13,37 @@ namespace Pivot.CodeModule.ViewModels
     {
         private readonly CodeSettingsService _settingsService;
         
+        // Preset ViewModel
+        public CodeColorPresetViewModel PresetViewModel { get; }
+
         [ObservableProperty]
         private Brush? _cardBackground;
 
         [ObservableProperty]
         private bool _isCustomColor;
+        
+        [ObservableProperty]
+        private bool _isCustomizationEnabled;
 
         [ObservableProperty]
         private string? _customColorHex = "#FF2D2D2D";
 
-        public CodeSettingsViewModel(CodeSettingsService settingsService)
+        public CodeSettingsViewModel(
+            CodeSettingsService settingsService,
+            CodeColorPresetViewModel presetViewModel)
         {
             _settingsService = settingsService;
+            PresetViewModel = presetViewModel;
             
-            _settingsService.SettingsChanged += (s, e) => Refresh();
+            _settingsService.SettingsChanged += (s, e) => {
+                _ = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().TryEnqueue(Refresh);
+            };
             Refresh();
         }
 
         private void Refresh()
         {
+            IsCustomizationEnabled = _settingsService.IsCustomizationEnabled;
             IsCustomColor = _settingsService.CurrentMode == CodeSettingsService.BackgroundMode.Custom;
             CustomColorHex = _settingsService.CustomColorHex;
             
@@ -64,6 +76,15 @@ namespace Pivot.CodeModule.ViewModels
 
         [ObservableProperty]
         private Brush? _editorBackgroundBrush;
+        
+        // Command to toggle customization
+        partial void OnIsCustomizationEnabledChanged(bool value)
+        {
+            if (_settingsService.IsCustomizationEnabled != value)
+            {
+                _ = _settingsService.SetCustomizationEnabledAsync(value);
+            }
+        }
 
         // Old hex properties removed as they are now in the list items
 

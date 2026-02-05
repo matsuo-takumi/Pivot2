@@ -33,7 +33,13 @@ namespace Pivot.CodeModule.Services
             var modeStr = await _settingsStore.GetAsync(KeyBackgroundMode);
             if (!string.IsNullOrEmpty(modeStr) && Enum.TryParse<BackgroundMode>(modeStr, out var mode))
             {
-            CurrentMode = mode;
+                CurrentMode = mode;
+            }
+
+            var enabledStr = await _settingsStore.GetAsync(KeyIsCustomizationEnabled);
+            if (!string.IsNullOrEmpty(enabledStr) && bool.TryParse(enabledStr, out var enabled))
+            {
+                IsCustomizationEnabled = enabled;
             }
 
             CustomColorHex = await _settingsStore.GetAsync(KeyCustomColor) ?? "#FF2D2D2D";
@@ -110,8 +116,20 @@ namespace Pivot.CodeModule.Services
         public Brush? GetTagBorderBrush() => GetBrushFromHex(TagBorderColorHex);
         public Brush? GetLineNumberBrush() => GetBrushFromHex(LineNumberColorHex);
 
+        // Toggle Customization
+        private const string KeyIsCustomizationEnabled = "Code_IsCustomizationEnabled";
+        public bool IsCustomizationEnabled { get; private set; } = true;
+
+        public async Task SetCustomizationEnabledAsync(bool enabled)
+        {
+            IsCustomizationEnabled = enabled;
+            await _settingsStore.UpsertAsync(KeyIsCustomizationEnabled, enabled.ToString());
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         private Brush? GetBrushFromHex(string? hex)
         {
+            if (!IsCustomizationEnabled) return null; // Force default if disabled
             if (string.IsNullOrEmpty(hex)) return null;
             try
             {
@@ -121,18 +139,9 @@ namespace Pivot.CodeModule.Services
             catch { return null; }
         }
 
-        public Brush? GetEditorTextBrush()
-        {
-            return GetBrushFromHex(EditorTextColorHex);
-        }
-
-        public Brush? GetEditorBackgroundBrush()
-        {
-            return GetBrushFromHex(EditorBackgroundColorHex);
-        }
-
         public Brush? GetBackgroundBrush()
         {
+            if (!IsCustomizationEnabled) return null; // Force default
             if (CurrentMode == BackgroundMode.Theme)
             {
                 return null; 
@@ -149,6 +158,48 @@ namespace Pivot.CodeModule.Services
             {
                 return null;
             }
+        }
+        
+        // Preset Support
+        public Pivot.Models.CodeColorPresetData CreatePresetData()
+        {
+            return new Pivot.Models.CodeColorPresetData
+            {
+                IsCustomizationEnabled = IsCustomizationEnabled,
+                BackgroundMode = CurrentMode.ToString(),
+                CustomBackgroundColor = CustomColorHex,
+                EditorTextColor = EditorTextColorHex,
+                EditorBackgroundColor = EditorBackgroundColorHex,
+                TitleColor = TitleColorHex,
+                TagTextColor = TagTextColorHex,
+                TagBackgroundColor = TagBackgroundColorHex,
+                TagBorderColor = TagBorderColorHex,
+                LineNumberColor = LineNumberColorHex
+            };
+        }
+
+        public async Task ApplyPresetAsync(Pivot.Models.CodeColorPresetData data)
+        {
+            if (data == null) return;
+
+            // Apply Settings one by one to trigger updates and persistence
+            await SetCustomizationEnabledAsync(data.IsCustomizationEnabled);
+            
+            if (Enum.TryParse<BackgroundMode>(data.BackgroundMode, out var mode))
+            {
+                await SetModeAsync(mode);
+            }
+            
+            await SetCustomColorAsync(data.CustomBackgroundColor);
+            await SetEditorTextColorAsync(data.EditorTextColor);
+            await SetEditorBackgroundColorAsync(data.EditorBackgroundColor);
+            await SetTitleColorAsync(data.TitleColor);
+            await SetTagTextColorAsync(data.TagTextColor);
+            await SetTagBackgroundColorAsync(data.TagBackgroundColor);
+            await SetTagBorderColorAsync(data.TagBorderColor);
+            await SetLineNumberColorAsync(data.LineNumberColor);
+            
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public static Windows.UI.Color ParseHexColor(string hex)

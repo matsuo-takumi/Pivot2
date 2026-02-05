@@ -61,7 +61,8 @@ namespace Pivot.Views
             // Load entries and presets asynchronously to avoid blocking UI
             await Task.WhenAll(
                 ViewModel.LoadEntriesAsync(),
-                LoadPresetsAsync()
+                LoadPresetsAsync(),
+                CodeViewModel.PresetViewModel.LoadPresetsAsync()
             );
             
         }
@@ -256,7 +257,84 @@ namespace Pivot.Views
                 flyout.ShowAt(button);
             }
         }
+        // Code Preset Event Handlers
+        private async void SaveCodePresetButton_Click(object sender, RoutedEventArgs e)
+        {
+            // プリセット名を入力するダイアログを表示
+            var nameTextBox = new TextBox
+            {
+                Header = "Preset Name",
+                PlaceholderText = "Preset name...",
+                Text = $"Code Preset {DateTime.Now:yyyy-MM-dd HH:mm}"
+            };
+
+            var panel = new StackPanel();
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Enter a name for this code color preset:",
+                Margin = new Microsoft.UI.Xaml.Thickness(0, 0, 0, 8)
+            });
+            panel.Children.Add(nameTextBox);
+
+            var dialog = new ContentDialog
+            {
+                Title = "Save Code Preset",
+                Content = panel,
+                PrimaryButtonText = "Save",
+                CloseButtonText = "Cancel",
+                XamlRoot = this.XamlRoot
+            };
+
+            // Apply app theme to dialog
+            try
+            {
+                var themeSettings = App.Current.Services.GetRequiredService<ThemeSettingsService>();
+                dialog.RequestedTheme = themeSettings.AppTheme;
+            }
+            catch { }
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                var presetName = nameTextBox.Text?.Trim();
+                if (!string.IsNullOrWhiteSpace(presetName))
+                {
+                    await CodeViewModel.PresetViewModel.SaveCurrentAsPresetAsync(presetName);
+                }
+            }
+        }
+
+        private async void CodePresetItem_Click(object sender, ItemClickEventArgs e)
+        {
+            if (e.ClickedItem is Models.Preset<Models.CodeColorPresetData> preset)
+            {
+                await CodeViewModel.PresetViewModel.ApplyPresetAsync(preset);
+            }
+        }
+
+        private async void DeleteCodePresetButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is Models.Preset<Models.CodeColorPresetData> preset)
+            {
+                await CodeViewModel.PresetViewModel.DeletePresetAsync(preset);
+            }
+        }
+
+        private async void ApplySelectedCodePresetButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (CodeViewModel.PresetViewModel.SelectedPreset != null)
+            {
+                await CodeViewModel.PresetViewModel.ApplyPresetAsync(CodeViewModel.PresetViewModel.SelectedPreset);
+            }
+        }
+
+        private async void DeleteSelectedCodePresetButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (CodeViewModel.PresetViewModel.SelectedPreset != null)
+            {
+                await CodeViewModel.PresetViewModel.DeletePresetAsync(CodeViewModel.PresetViewModel.SelectedPreset);
+            }
+        }
     }
 }
-
 

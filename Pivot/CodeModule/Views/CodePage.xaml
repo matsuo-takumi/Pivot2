@@ -21,7 +21,7 @@
         <converters:BooleanNegationConverter x:Key="BoolNegationConverter"/>
     </Page.Resources>
 
-    <Grid Background="Transparent">
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
 
 

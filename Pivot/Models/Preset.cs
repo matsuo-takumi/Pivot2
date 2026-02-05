@@ -23,6 +23,26 @@ namespace Pivot.Models
     {
         public Dictionary<string, string> ColorOverrides { get; set; } = new Dictionary<string, string>();
     }
+
+    /// <summary>
+    /// コードエディタ配色設定用のプリセットデータ
+    /// </summary>
+    public class CodeColorPresetData
+    {
+        // Settings
+        public bool IsCustomizationEnabled { get; set; }
+        public string BackgroundMode { get; set; } = "Theme"; // Theme or Custom
+        public string CustomBackgroundColor { get; set; } = "";
+
+        // Colors (Nullable hex strings)
+        public string? EditorTextColor { get; set; }
+        public string? EditorBackgroundColor { get; set; }
+        public string? TitleColor { get; set; }
+        public string? TagTextColor { get; set; }
+        public string? TagBackgroundColor { get; set; }
+        public string? TagBorderColor { get; set; }
+        public string? LineNumberColor { get; set; }
+    }
 }
 
 
