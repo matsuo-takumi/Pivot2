@@ -95,18 +95,6 @@ namespace Pivot
             try { await Services.GetRequiredService<CodeSettingsService>().LoadAsync(); } catch { }
 			// Ensure text color resources are initialized
 			try { _ = Services.GetRequiredService<ITextColorResourceManager>(); } catch { }
-			// Initialize ThumbnailService with cache directory (CRITICAL for thumbnail generation)
-			try
-			{
-				var thumbnailService = Services.GetRequiredService<IThumbnailService>();
-				var cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Pivot", "thumbnails");
-				await thumbnailService.InitializeAsync(cacheDir, 500L * 1024 * 1024); // 500MB cache
-				System.Diagnostics.Debug.WriteLine($"[Startup] ThumbnailService initialized: {cacheDir}");
-			}
-			catch (Exception ex)
-			{
-				System.Diagnostics.Debug.WriteLine($"[Startup] ThumbnailService initialization failed: {ex.Message}");
-			}
 			// Kick main view model initialization (auto-scan if possible)
 			try { await Services.GetRequiredService<MainViewModel>().InitializeAsync(); } catch { }
 
@@ -237,7 +225,7 @@ namespace Pivot
 			
 			// File scanner service
 			sc.AddSingleton<FileScannerService>();
-			sc.AddSingleton<IThumbnailService, ThumbnailService>();
+			            sc.AddSingleton<Pivot.Services.ImageEngine.IThumbnailService, Pivot.Services.ImageEngine.ThumbnailService>();
 			sc.AddSingleton<IBitmapCacheService, BitmapCacheService>();  // Bitmap memory cache for scrolling performance
             
             // New Code Logic Layer

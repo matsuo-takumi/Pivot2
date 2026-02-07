@@ -24,7 +24,7 @@ namespace Pivot.Services
 		private readonly ILogger<FileScannerService> _logger;
 		private readonly IServiceProvider _serviceProvider;  // For scoped DB access
 		private readonly Pivot.Repositories.IAssetRepository _repository;  // Fallback for non-parallel ops
-		private readonly IThumbnailService? _thumbnailService;
+		private readonly Pivot.Services.ImageEngine.IThumbnailService? _thumbnailService;
 		private readonly IMessenger _messenger;
 		private string? _currentRootPath;
 		// Phase 4: 複数ルート監視に備えたコレクション（段階的導入）
@@ -72,12 +72,12 @@ namespace Pivot.Services
 		private const int AssetFlushIntervalMs = 300; // Phase 6: move to config
 		private const int AssetFlushBatchMax = 100;   // Phase 6: move to config
 
-		public FileScannerService(
-			ILogger<FileScannerService> logger, 
-			IServiceProvider serviceProvider,
-			Pivot.Repositories.IAssetRepository repository, 
-			IMessenger messenger, 
-			IThumbnailService? thumbnailService = null)
+		        public FileScannerService(
+            ILogger<FileScannerService> logger, 
+            IServiceProvider serviceProvider,
+            Pivot.Repositories.IAssetRepository repository, 
+            IMessenger messenger, 
+            Pivot.Services.ImageEngine.IThumbnailService? thumbnailService = null)
 		{
 			_logger = logger;
 			_serviceProvider = serviceProvider;
@@ -507,7 +507,7 @@ namespace Pivot.Services
 				{
 					try
 					{
-						thumbnailPath = await _thumbnailService.GetOrCreateThumbnailAsync(path, 300, 200);
+						thumbnailPath = await _thumbnailService.GenerateThumbnailAsync(path, hash ?? "", 256);
 					}
 					catch (Exception thumbEx)
 					{
@@ -660,7 +660,7 @@ namespace Pivot.Services
 				{
 					try
 					{
-						thumbnailPath = await _thumbnailService.GetOrCreateThumbnailAsync(path, 300, 200);
+						thumbnailPath = await _thumbnailService.GenerateThumbnailAsync(path, hash ?? "", 256);
 					}
 					catch (Exception thumbEx)
 					{
