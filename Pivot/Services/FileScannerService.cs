@@ -454,8 +454,8 @@ namespace Pivot.Services
 
             if (isUpToDate)
             {
-                var engine = _engineRegistry.GetEngine(ext);
-                if (engine != null && !engine.IsUpToDate(existing!))
+                var skipEngine = _engineRegistry.GetEngine(ext);
+                if (skipEngine != null && !skipEngine.IsUpToDate(existing!))
                 {
                     isUpToDate = false; // Engine says re-process needed (e.g. missing thumbnail)
                 }
@@ -585,8 +585,8 @@ namespace Pivot.Services
 
             if (isUpToDate)
             {
-                var engine = _engineRegistry.GetEngine(ext);
-                if (engine != null && !engine.IsUpToDate(existing!))
+                var skipEngine = _engineRegistry.GetEngine(ext);
+                if (skipEngine != null && !skipEngine.IsUpToDate(existing!))
                 {
                     isUpToDate = false; // Engine says re-process needed
                 }
@@ -610,23 +610,6 @@ namespace Pivot.Services
 				finally
 				{
 					_hashSemaphore.Release();
-				}
-			}
-
-
-			else if (kind == AssetKind.Script || kind == AssetKind.Code)
-			{
-				try
-				{
-					if (fileInfo.Length < 1024 * 1024) 
-					{
-						contentIndex = await File.ReadAllTextAsync(path, ct);
-					}
-					language = ext.TrimStart('.').ToLowerInvariant();
-				}
-				catch (Exception codeEx)
-				{
-					_logger.LogDebug(codeEx, "Failed to read code content: {Path}", path);
 				}
 			}
 
