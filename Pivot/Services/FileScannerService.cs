@@ -24,7 +24,7 @@ namespace Pivot.Services
 		private readonly ILogger<FileScannerService> _logger;
 		private readonly IServiceProvider _serviceProvider;  // For scoped DB access
 		private readonly Pivot.Repositories.IAssetRepository _repository;  // Fallback for non-parallel ops
-		private readonly Pivot.Services.ImageEngine.IThumbnailService? _thumbnailService;
+        private readonly Pivot.Services.Engines.EngineRegistry _engineRegistry;
 		private readonly IMessenger _messenger;
 		private string? _currentRootPath;
 		// Phase 4: 複数ルート監視に備えたコレクション（段階的導入）
@@ -77,13 +77,13 @@ namespace Pivot.Services
             IServiceProvider serviceProvider,
             Pivot.Repositories.IAssetRepository repository, 
             IMessenger messenger, 
-            Pivot.Services.ImageEngine.IThumbnailService? thumbnailService = null)
+            Pivot.Services.Engines.EngineRegistry engineRegistry)
 		{
 			_logger = logger;
 			_serviceProvider = serviceProvider;
 			_repository = repository;
 			_messenger = messenger;
-			_thumbnailService = thumbnailService;
+			_engineRegistry = engineRegistry;
 
 
 			// Start periodic flush loop for asset changes (using PeriodicTimer to avoid deadlock)
@@ -447,13 +447,21 @@ namespace Pivot.Services
 
 			// Quick check: skip if unchanged
 			var existing = await repository.GetByPathAsync(path, ct);
-			if (existing != null && 
+			
+            bool isUpToDate = existing != null && 
 			    existing.FileSize == fileInfo.Length && 
-			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc &&
-                !string.IsNullOrEmpty(existing.ThumbnailPath) && (_thumbnailService == null || _thumbnailService.ThumbnailExists(existing.Hash ?? "")))
-			{
-				return; // No change
-			}
+			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc;
+
+            if (isUpToDate)
+            {
+                var engine = _engineRegistry.GetEngine(ext);
+                if (engine != null && !engine.IsUpToDate(existing!))
+                {
+                    isUpToDate = false; // Engine says re-process needed (e.g. missing thumbnail)
+                }
+            }
+
+            if (isUpToDate) return;
 
 			// Hash calculation
 			string? hash = existing?.Hash;
@@ -475,66 +483,7 @@ namespace Pivot.Services
 				}
 			}
 
-			// Extract metadata for images
-			int? width = null;
-			int? height = null;
-			double? aspectRatio = null;
-			string? thumbnailPath = null;
-			
-			// Code specific metadata
-			string? language = null;
-			string? tool = null;
-			string? contentIndex = null;
-
-			if (kind == AssetKind.Image)
-			{
-				try
-				{
-					var imageInfo = await SixLabors.ImageSharp.Image.IdentifyAsync(path);
-					if (imageInfo != null)
-					{
-						width = imageInfo.Width;
-						height = imageInfo.Height;
-						aspectRatio = height > 0 ? (double)width / height : null;
-					}
-				}
-				catch (Exception dimEx)
-				{
-					_logger.LogDebug(dimEx, "Failed to read image dimensions: {Path}", path);
-				}
-
-				// Generate thumbnail
-				if (_thumbnailService != null)
-				{
-					try
-					{
-						thumbnailPath = await _thumbnailService.GenerateThumbnailAsync(path, hash ?? "", 256);
-					}
-					catch (Exception thumbEx)
-					{
-						_logger.LogDebug(thumbEx, "Failed to generate thumbnail: {Path}", path);
-					}
-				}
-			}
-			else if (kind == AssetKind.Script || kind == AssetKind.Code)
-			{
-				try
-				{
-					// Index content for Full Text Search (limit to 1MB to prevent OOM)
-					if (fileInfo.Length < 1024 * 1024) 
-					{
-						contentIndex = await File.ReadAllTextAsync(path, ct);
-					}
-					language = ext.TrimStart('.').ToLowerInvariant();
-					// Tool logic can be refined later
-				}
-				catch (Exception codeEx)
-				{
-					_logger.LogDebug(codeEx, "Failed to read code content: {Path}", path);
-				}
-			}
-
-			// Create or update AssetEntity
+			// Create base AssetEntity
 			var asset = new AssetEntity
 			{
 				FilePath = path,
@@ -545,15 +494,42 @@ namespace Pivot.Services
 				LastModifiedUtc = fileInfo.LastWriteTimeUtc,
 				Hash = hash,
 				Kind = kind,
-				Width = width,
-				Height = height,
-				AspectRatio = aspectRatio,
-				ThumbnailPath = thumbnailPath,
-				ThumbnailGeneratedAt = thumbnailPath != null ? DateTime.UtcNow : null,
-				Language = language,
-				Tool = tool,
-				ContentIndex = contentIndex
+                // Preserve existing metadata if valid, engines will overwrite if needed
+                ThumbnailPath = existing?.ThumbnailPath, 
+                ThumbnailGeneratedAt = existing?.ThumbnailGeneratedAt,
+                Language = existing?.Language,
+                Tool = existing?.Tool,
+                ContentIndex = existing?.ContentIndex,
+                Width = existing?.Width,
+                Height = existing?.Height,
+                AspectRatio = existing?.AspectRatio
 			};
+
+            // Dispatch to Engine
+            var engine = _engineRegistry.GetEngine(ext);
+            if (engine != null)
+            {
+                await engine.ProcessFileAsync(path, asset, ct);
+            }
+            else
+            {
+                // Fallback for types without specific engine (e.g. Code/Script legacy logic)
+                if (kind == AssetKind.Script || kind == AssetKind.Code)
+			    {
+				    try
+				    {
+					    if (fileInfo.Length < 1024 * 1024) 
+					    {
+						    asset.ContentIndex = await File.ReadAllTextAsync(path, ct);
+					    }
+					    asset.Language = ext.TrimStart('.').ToLowerInvariant();
+				    }
+				    catch (Exception codeEx)
+				    {
+					    _logger.LogDebug(codeEx, "Failed to read code content: {Path}", path);
+				    }
+			    }
+            }
 
 			await repository.UpsertAsync(asset, ct);
 
@@ -602,13 +578,21 @@ namespace Pivot.Services
 
 			// Quick check: O(1) lookup from pre-loaded cache instead of DB query
 			existingAssetsCache.TryGetValue(path, out var existing);
-			if (existing != null && 
+			
+            bool isUpToDate = existing != null && 
 			    existing.FileSize == fileInfo.Length && 
-			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc &&
-                !string.IsNullOrEmpty(existing.ThumbnailPath) && (_thumbnailService == null || _thumbnailService.ThumbnailExists(existing.Hash ?? "")))
-			{
-				return; // No change
-			}
+			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc;
+
+            if (isUpToDate)
+            {
+                var engine = _engineRegistry.GetEngine(ext);
+                if (engine != null && !engine.IsUpToDate(existing!))
+                {
+                    isUpToDate = false; // Engine says re-process needed
+                }
+            }
+
+            if (isUpToDate) return;
 
 			// Hash calculation
 			string? hash = existing?.Hash;
@@ -629,47 +613,7 @@ namespace Pivot.Services
 				}
 			}
 
-			// Extract metadata for images
-			int? width = null;
-			int? height = null;
-			double? aspectRatio = null;
-			string? thumbnailPath = null;
-			
-			// Code specific metadata
-			string? language = null;
-			string? tool = null;
-			string? contentIndex = null;
 
-			if (kind == AssetKind.Image)
-			{
-				try
-				{
-					var imageInfo = await SixLabors.ImageSharp.Image.IdentifyAsync(path);
-					if (imageInfo != null)
-					{
-						width = imageInfo.Width;
-						height = imageInfo.Height;
-						aspectRatio = height > 0 ? (double)width / height : null;
-					}
-				}
-				catch (Exception dimEx)
-				{
-					_logger.LogDebug(dimEx, "Failed to read image dimensions: {Path}", path);
-				}
-
-				// Generate thumbnail
-				if (_thumbnailService != null)
-				{
-					try
-					{
-						thumbnailPath = await _thumbnailService.GenerateThumbnailAsync(path, hash ?? "", 256);
-					}
-					catch (Exception thumbEx)
-					{
-						_logger.LogDebug(thumbEx, "Failed to generate thumbnail: {Path}", path);
-					}
-				}
-			}
 			else if (kind == AssetKind.Script || kind == AssetKind.Code)
 			{
 				try
@@ -686,7 +630,7 @@ namespace Pivot.Services
 				}
 			}
 
-			// Create or update AssetEntity
+			// Create base AssetEntity
 			var asset = new AssetEntity
 			{
 				FilePath = path,
@@ -697,15 +641,42 @@ namespace Pivot.Services
 				LastModifiedUtc = fileInfo.LastWriteTimeUtc,
 				Hash = hash,
 				Kind = kind,
-				Width = width,
-				Height = height,
-				AspectRatio = aspectRatio,
-				ThumbnailPath = thumbnailPath,
-				ThumbnailGeneratedAt = thumbnailPath != null ? DateTime.UtcNow : null,
-				Language = language,
-				Tool = tool,
-				ContentIndex = contentIndex
+                // Preserve existing metadata
+                ThumbnailPath = existing?.ThumbnailPath, 
+                ThumbnailGeneratedAt = existing?.ThumbnailGeneratedAt,
+                Language = existing?.Language,
+                Tool = existing?.Tool,
+                ContentIndex = existing?.ContentIndex,
+                Width = existing?.Width,
+                Height = existing?.Height,
+                AspectRatio = existing?.AspectRatio
 			};
+
+            // Dispatch to Engine
+            var engine = _engineRegistry.GetEngine(ext);
+            if (engine != null)
+            {
+                await engine.ProcessFileAsync(path, asset, ct);
+            }
+            else
+            {
+                // Fallback for types without specific engine
+                if (kind == AssetKind.Script || kind == AssetKind.Code)
+			    {
+				    try
+				    {
+					    if (fileInfo.Length < 1024 * 1024) 
+					    {
+						    asset.ContentIndex = await File.ReadAllTextAsync(path, ct);
+					    }
+					    asset.Language = ext.TrimStart('.').ToLowerInvariant();
+				    }
+				    catch (Exception codeEx)
+				    {
+					    _logger.LogDebug(codeEx, "Failed to read code content: {Path}", path);
+				    }
+			    }
+            }
 
 			await repository.UpsertAsync(asset, ct);
 

@@ -225,6 +225,11 @@ namespace Pivot
 			
 			// File scanner service
             sc.AddSingleton<Pivot.Services.ImageEngine.IThumbnailService, Pivot.Services.ImageEngine.ThumbnailService>();
+			
+            // Engines
+            sc.AddSingleton<Pivot.Services.Engines.IAssetEngine, Pivot.Services.Engines.ImageEngine>();
+            sc.AddSingleton<Pivot.Services.Engines.EngineRegistry>();
+
 			sc.AddSingleton<FileScannerService>();
 			sc.AddSingleton<IBitmapCacheService, BitmapCacheService>();  // Bitmap memory cache for scrolling performance
             

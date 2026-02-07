@@ -101,9 +101,7 @@
                                 <ScalarTransition Duration="0:0:0.3"/>
                             </Image.OpacityTransition>
                             <Image.Source>
-                                <BitmapImage UriSource="{x:Bind DisplayImageSource}"
-                                             DecodePixelWidth="48"
-                                             DecodePixelType="Logical"/>
+                                <BitmapImage UriSource="{x:Bind DisplayImageSource, Converter={StaticResource ImageConverter}}"/>
                             </Image.Source>
                         </Image>
                     </Border>
