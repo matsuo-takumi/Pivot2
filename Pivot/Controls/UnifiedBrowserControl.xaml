@@ -45,6 +45,11 @@
                                 <Image.OpacityTransition>
                                     <ScalarTransition Duration="0:0:0.3"/>
                                 </Image.OpacityTransition>
+                                <Image.Source>
+                                    <BitmapImage UriSource="{x:Bind DisplayImageSource}"
+                                                 DecodePixelWidth="200"
+                                                 DecodePixelType="Logical"/>
+                                </Image.Source>
                             </Image>
                         </Border>
                         

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
 
 namespace Pivot.Services.ImageEngine
 {
@@ -66,7 +67,12 @@ namespace Pivot.Services.ImageEngine
             if (string.IsNullOrEmpty(hash))
                 throw new ArgumentException("Hash cannot be null or empty", nameof(hash));
             
-            return Path.Combine(_cacheDirectory, $"{hash}.jpg");
+            // Check for existing files
+            string jpgPath = Path.Combine(_cacheDirectory, $"{hash}.jpg");
+            string pngPath = Path.Combine(_cacheDirectory, $"{hash}.png");
+
+            if (File.Exists(pngPath)) return pngPath;
+            return jpgPath; // Default fallback (or return existing jpg)
         }
 
         public bool ThumbnailExists(string hash)
@@ -99,14 +105,20 @@ namespace Pivot.Services.ImageEngine
                 return null;
             }
 
-            var thumbnailPath = GetThumbnailPath(hash);
+            string ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+            bool isPng = ext == ".png";
+            string thumbnailFilename = $"{hash}{(isPng ? ".png" : ".jpg")}";
+            string thumbnailPath = Path.Combine(_cacheDirectory, thumbnailFilename);
 
-            // Skip if thumbnail already exists
+            // Check if thumbnail already exists (either jpg or png)
             if (File.Exists(thumbnailPath))
             {
                 _logger.LogDebug("Thumbnail already exists: {ThumbnailPath}", thumbnailPath);
                 return thumbnailPath;
             }
+            // Check for alternative format if hash collision or type change occurred (cleanup old)
+            string altPath = Path.Combine(_cacheDirectory, $"{hash}{(isPng ? ".jpg" : ".png")}");
+            if (File.Exists(altPath)) File.Delete(altPath);
 
             try
             {
@@ -128,16 +140,23 @@ namespace Pivot.Services.ImageEngine
                     newWidth = (int)((double)image.Width / image.Height * newHeight);
                 }
 
-                // Resize image
-                image.Mutate(x => x.Resize(newWidth, newHeight));
-
-                // Save as JPEG with quality 80
-                var encoder = new JpegEncoder
+                if (isPng)
                 {
-                    Quality = DefaultQuality
-                };
-
-                await image.SaveAsync(thumbnailPath, encoder, ct);
+                    // Resize only (preserve transparency)
+                    image.Mutate(x => x.Resize(newWidth, newHeight));
+                    
+                    await image.SaveAsPngAsync(thumbnailPath, ct);
+                }
+                else
+                {
+                    // Resize and fill validation (white background for transparency flattening in non-png)
+                    image.Mutate(x => x
+                        .Resize(newWidth, newHeight)
+                        .BackgroundColor(Color.White));
+                    
+                    var encoder = new JpegEncoder { Quality = DefaultQuality };
+                    await image.SaveAsJpegAsync(thumbnailPath, encoder, ct);
+                }
 
                 _logger.LogDebug("Generated thumbnail: {ThumbnailPath} ({Width}x{Height})", 
                     thumbnailPath, newWidth, newHeight);

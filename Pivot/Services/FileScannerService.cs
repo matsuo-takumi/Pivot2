@@ -450,7 +450,7 @@ namespace Pivot.Services
 			if (existing != null && 
 			    existing.FileSize == fileInfo.Length && 
 			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc &&
-                !string.IsNullOrEmpty(existing.ThumbnailPath))
+                !string.IsNullOrEmpty(existing.ThumbnailPath) && (_thumbnailService == null || _thumbnailService.ThumbnailExists(existing.Hash ?? "")))
 			{
 				return; // No change
 			}
@@ -605,7 +605,7 @@ namespace Pivot.Services
 			if (existing != null && 
 			    existing.FileSize == fileInfo.Length && 
 			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc &&
-                !string.IsNullOrEmpty(existing.ThumbnailPath))
+                !string.IsNullOrEmpty(existing.ThumbnailPath) && (_thumbnailService == null || _thumbnailService.ThumbnailExists(existing.Hash ?? "")))
 			{
 				return; // No change
 			}
