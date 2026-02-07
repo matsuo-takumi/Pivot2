@@ -40,25 +40,23 @@ namespace Pivot.Services.Engines
             return SupportedExtensions.Contains(ext);
         }
 
-        public async Task<AssetEntity> ProcessFileAsync(string filePath, AssetEntity? existing = null, CancellationToken ct = default)
+        public async Task ProcessFileAsync(string filePath, AssetEntity asset, CancellationToken ct = default)
         {
             var fileInfo = new FileInfo(filePath);
             if (!fileInfo.Exists)
                 throw new FileNotFoundException("File not found", filePath);
 
-            var entity = existing ?? new AssetEntity();
-            
-            // Basic file metadata
-            entity.FilePath = filePath;
-            entity.FileName = fileInfo.Name;
-            entity.Directory = fileInfo.DirectoryName ?? string.Empty;
-            entity.Extension = fileInfo.Extension.ToLowerInvariant();
-            entity.FileSize = fileInfo.Length;
-            entity.LastModifiedUtc = fileInfo.LastWriteTimeUtc;
-            entity.Kind = AssetKind.Script; // Mark as Script/Code
+            // Update basic file metadata
+            asset.FilePath = filePath;
+            asset.FileName = fileInfo.Name;
+            asset.Directory = fileInfo.DirectoryName ?? string.Empty;
+            asset.Extension = fileInfo.Extension.ToLowerInvariant();
+            asset.FileSize = fileInfo.Length;
+            asset.LastModifiedUtc = fileInfo.LastWriteTimeUtc;
+            asset.Kind = AssetKind.Script; // Mark as Script/Code
             
             // Detect language from extension
-            entity.Language = DetectLanguage(entity.Extension);
+            asset.Language = DetectLanguage(asset.Extension);
 
             // Read and index content (for search)
             try
@@ -67,25 +65,23 @@ namespace Pivot.Services.Engines
                 if (fileInfo.Length < 1024 * 1024)
                 {
                     var content = await File.ReadAllTextAsync(filePath, ct);
-                    entity.ContentIndex = content; // Store for full-text search
+                    asset.ContentIndex = content; // Store for full-text search
                 }
                 else
                 {
-                    entity.ContentIndex = $"[File too large: {fileInfo.Length} bytes]";
+                    asset.ContentIndex = $"[File too large: {fileInfo.Length} bytes]";
                 }
             }
             catch
             {
-                entity.ContentIndex = "[Error reading file]";
+                asset.ContentIndex = "[Error reading file]";
             }
 
-            entity.UpdatedAt = DateTime.UtcNow;
-            if (entity.Id == 0)
+            asset.UpdatedAt = DateTime.UtcNow;
+            if (asset.Id == 0)
             {
-                entity.CreatedAt = DateTime.UtcNow;
+                asset.CreatedAt = DateTime.UtcNow;
             }
-
-            return entity;
         }
 
         public bool IsUpToDate(AssetEntity entity)
