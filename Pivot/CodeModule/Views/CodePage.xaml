@@ -48,12 +48,12 @@
                 </Grid.ColumnDefinitions>
                 
                 <TextBox PlaceholderText="Search snippets..." 
-                         Text="{x:Bind ViewModel.ListVM.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Text="{Binding ListVM.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Margin="0,0,16,0"/>
                          
                 <ComboBox Grid.Column="1" 
-                          ItemsSource="{Binding ViewModel.ListVM.SortOptions}" 
-                          SelectedItem="{Binding ViewModel.ListVM.SelectedSortOption, Mode=TwoWay}"
+                          ItemsSource="{Binding ListVM.SortOptions}" 
+                          SelectedItem="{Binding ListVM.SelectedSortOption, Mode=TwoWay}"
                           DisplayMemberPath="Label"
                           MinWidth="160"
                           PlaceholderText="Sort by..."/>

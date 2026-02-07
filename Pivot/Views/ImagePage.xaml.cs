@@ -59,7 +59,7 @@ namespace Pivot.Views
             WeakReferenceMessenger.Default.Register<SettingsChangedMessage>(this);
         }
         
-        }
+
 
         private bool _isInitialized = false;
 
