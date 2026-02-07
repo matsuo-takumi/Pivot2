@@ -45,11 +45,6 @@
                                 <Image.OpacityTransition>
                                     <ScalarTransition Duration="0:0:0.3"/>
                                 </Image.OpacityTransition>
-                                <Image.Source>
-                                    <BitmapImage UriSource="{x:Bind DisplayImageSource}"
-                                                 DecodePixelWidth="300"
-                                                 DecodePixelType="Logical"/>
-                                </Image.Source>
                             </Image>
                         </Border>
                         
@@ -235,7 +230,9 @@
                            DoubleTapped="AssetRepeater_DoubleTapped"
                            RightTapped="AssetRepeater_RightTapped"
                            ElementPrepared="AssetRepeater_ElementPrepared"
-                           ElementClearing="AssetRepeater_ElementClearing">
+                           ElementClearing="AssetRepeater_ElementClearing"
+                           VerticalCacheLength="4.0"
+                           HorizontalCacheLength="0.0">
                 <ItemsRepeater.Layout>
                     <UniformGridLayout MinItemWidth="180"
                                        MinItemHeight="180"

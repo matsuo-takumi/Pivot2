@@ -30,10 +30,10 @@ namespace Pivot.Collections
         public event EventHandler<(int Loaded, int Total)>? CountsUpdated;
 
         /// <summary>
-        /// Load ALL assets for the target kind into memory at startup.
-        /// This is a one-time cost for instant subsequent filtering.
+        /// Load initial batch of assets for instant UI display.
+        /// This prevents UI freeze with large datasets while maintaining responsive startup.
         /// </summary>
-        public async Task LoadAllAsync(AssetKind kind, IServiceProvider services)
+        public async Task LoadInitialBatchAsync(AssetKind kind, IServiceProvider services, int batchSize = 500)
         {
             LoadingStateChanged?.Invoke(this, true);
 
@@ -42,13 +42,13 @@ namespace Pivot.Collections
                 using var scope = services.CreateScope();
                 var queryService = scope.ServiceProvider.GetRequiredService<AssetQueryService>();
 
-                // Load ALL assets (no pagination, no filtering except Kind)
+                // Load ONLY initial batch for instant display
                 var criteria = new FilterCriteria { TargetKind = kind };
-                _allAssets = await queryService.QueryAsync(criteria, skip: 0, take: int.MaxValue);
+                _allAssets = await queryService.QueryAsync(criteria, skip: 0, take: batchSize);
 
-                System.Diagnostics.Debug.WriteLine($"[PreloadedCollection] Loaded {_allAssets.Count} assets into memory");
+                System.Diagnostics.Debug.WriteLine($"[PreloadedCollection] Loaded {_allAssets.Count} assets (initial batch)");
 
-                // Initial display: show all
+                // Initial display: show all loaded items
                 ApplyFilter(criteria);
             }
             finally

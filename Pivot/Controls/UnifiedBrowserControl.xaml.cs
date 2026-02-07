@@ -33,6 +33,7 @@ namespace Pivot.Controls
         private LayoutBasedTemplateSelector? _templateSelector;
         private CancellationTokenSource? _searchDebounceToken;
         private bool _sortAscending = false;
+        private IBitmapCacheService? _bitmapCache;
 
         /// <summary>
         /// The target asset kind to display (Image, Code, etc).
@@ -70,6 +71,9 @@ namespace Pivot.Controls
             _viewModel.SetTargetKind(kind);
             _viewModel.CriteriaChanged += OnCriteriaChanged;
 
+            // Get BitmapCacheService for image recycling
+            _bitmapCache = App.Current.Services.GetRequiredService<IBitmapCacheService>();
+
             // Create preloaded collection for instant filtering
             _collection = new PreloadedAssetCollection();
             _collection.LoadingStateChanged += OnLoadingStateChanged;
@@ -77,8 +81,8 @@ namespace Pivot.Controls
 
             AssetRepeater.ItemsSource = _collection;
 
-            // Load ALL data at startup (one-time cost for instant subsequent operations)
-            await _collection.LoadAllAsync(kind ?? AssetKind.Image, App.Current.Services);
+            // Load initial batch for instant display (prevents UI freeze)
+            await _collection.LoadInitialBatchAsync(kind ?? AssetKind.Image, App.Current.Services);
 
             UpdateLayout(_viewModel.CurrentLayout);
             UpdateEmptyState();
@@ -439,30 +443,50 @@ namespace Pivot.Controls
             }
         }
         
-        private void AssetRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
+        
+        private async void AssetRepeater_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
         {
-             // No manual visual sync needed - Data Binding handles it
+            if (_bitmapCache == null) return;
+            if (args.Element is not FrameworkElement element) return;
+            if (element.DataContext is not AssetEntity asset) return;
+
+            try
+            {
+                // Find the Image control in the element tree
+                var image = TreeHelper.FindDescendantOfType<Image>(element);
+                if (image == null) return;
+
+                // Remember the asset for validation after async call
+                var originalAsset = asset;
+                var imagePath = asset.DisplayImageSource;
+
+                // Get cached or load new BitmapImage
+                var bitmap = await _bitmapCache.GetOrLoadAsync(imagePath, 200);
+
+                // CRITICAL: Validate DataContext hasn't changed during async operation
+                // This prevents race condition where fast scrolling causes wrong images to appear
+                if (element.DataContext != originalAsset)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ElementPrepared] DataContext changed, discarding image for {imagePath}");
+                    return; // Element is now showing a different item, discard this result
+                }
+
+                // DataContext is still the same, safe to set image
+                image.Source = bitmap;
+                image.Opacity = 0; // Start transparent for fade-in
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ElementPrepared] Error loading image: {ex.Message}");
+            }
         }
         
         private void AssetRepeater_ElementClearing(ItemsRepeater sender, ItemsRepeaterElementClearingEventArgs args)
         {
-            // Fix for ghost images: Clear the UriSource when the element is recycled.
-            // ItemsRepeater reuses the visual element but updates the DataContext.
-            // If the new image takes time to load, the Image control keeps showing the OLD image
-            // from the previous DataContext. Explicitly clearing it here ensures a blank state
-            // until the new image is ready.
-            var image = TreeHelper.FindDescendantOfType<Image>(args.Element);
-            if (image != null)
-            {
-                // Reset opacity for next fade-in
-                image.Opacity = 0;
-                
-                if (image.Source is BitmapImage bitmapImage)
-                {
-                    bitmapImage.UriSource = null;
-                }
-            }
+            // No-op: BitmapCacheService handles memory management via LRU
+            // Images remain in cache for instant reuse when scrolling back
         }
+
 
         private void Image_ImageOpened(object sender, RoutedEventArgs e)
         {
@@ -544,8 +568,8 @@ namespace Pivot.Controls
         {
             if (_viewModel == null || _collection == null) return;
 
-            // Reload all data from database
-            await _collection.LoadAllAsync(TargetKind ?? AssetKind.Image, App.Current.Services);
+            // Reload initial batch from database
+            await _collection.LoadInitialBatchAsync(TargetKind ?? AssetKind.Image, App.Current.Services);
         }
 
         #endregion
@@ -580,7 +604,7 @@ namespace Pivot.Controls
             DispatcherQueue.TryEnqueue(async () =>
             {
                 System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Directory removed: {message.Value}, refreshing...");
-                await _collection.LoadAllAsync(TargetKind ?? AssetKind.Image, App.Current.Services);
+                await _collection.LoadInitialBatchAsync(TargetKind ?? AssetKind.Image, App.Current.Services);
                 UpdateEmptyState();
             });
         }

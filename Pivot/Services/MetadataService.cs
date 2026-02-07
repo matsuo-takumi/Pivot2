@@ -106,5 +106,29 @@ namespace Pivot.Services
 
             return await repository.GetPagedAsync(kind, directory, sortField, ascending, skip, take, cancellationToken);
         }
+
+        /// <summary>
+        /// Gets images with paging support (convenience method for AssetKind.Image).
+        /// </summary>
+        public async Task<List<AssetEntity>> GetImagesPagedAsync(
+            int skip = 0,
+            int take = 100,
+            string? directory = null,
+            string sortField = "LastModifiedUtc",
+            bool ascending = false,
+            CancellationToken cancellationToken = default)
+        {
+            return await GetPagedAssetsAsync(skip, take, AssetKind.Image, directory, sortField, ascending, cancellationToken);
+        }
+
+        /// <summary>
+        /// Gets total count of images (convenience method for AssetKind.Image).
+        /// </summary>
+        public async Task<int> GetImageCountAsync(
+            string? directory = null,
+            CancellationToken cancellationToken = default)
+        {
+            return await GetAssetCountAsync(AssetKind.Image, directory, cancellationToken);
+        }
     }
 }
