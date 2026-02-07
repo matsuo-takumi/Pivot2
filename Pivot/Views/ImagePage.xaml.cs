@@ -37,7 +37,7 @@ namespace Pivot.Views
             ViewModel.FolderTree.CollectionChanged += FolderTree_CollectionChanged;
 
             // Initialize BrowserControl after Loaded event
-            this.Loaded += ImagePage_Loaded;
+            // this.Loaded += ImagePage_Loaded; // Logic moved to OnNavigatedTo
 
             try
             {
@@ -59,14 +59,24 @@ namespace Pivot.Views
             WeakReferenceMessenger.Default.Register<SettingsChangedMessage>(this);
         }
         
-        private async void ImagePage_Loaded(object sender, RoutedEventArgs e)
+        }
+
+        private bool _isInitialized = false;
+
+        protected override async void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
         {
-            try
+            base.OnNavigatedTo(e);
+
+            if (!_isInitialized)
             {
-                // Initialize BrowserControl with Image assets
-                await BrowserControl.InitializeAsync(AssetKind.Image);
+                try
+                {
+                    // Initialize BrowserControl with Image assets ONLY when navigated to
+                    await BrowserControl.InitializeAsync(AssetKind.Image);
+                    _isInitialized = true;
+                }
+                catch { }
             }
-            catch { }
         }
         
         // Event handlers for BrowserControl

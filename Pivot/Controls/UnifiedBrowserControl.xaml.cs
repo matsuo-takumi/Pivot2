@@ -81,8 +81,15 @@ namespace Pivot.Controls
 
             AssetRepeater.ItemsSource = _collection;
 
+            if (kind == null)
+            {
+                // Do not default to Image - explicit kind is required to prevent errors
+                System.Diagnostics.Debug.WriteLine("[UnifiedBrowserControl] InitializeAsync called with null kind. Aborting.");
+                return;
+            }
+
             // Load initial batch for instant display (prevents UI freeze)
-            await _collection.LoadInitialBatchAsync(kind ?? AssetKind.Image, App.Current.Services);
+            await _collection.LoadInitialBatchAsync(kind.Value, App.Current.Services);
 
             UpdateLayout(_viewModel.CurrentLayout);
             UpdateEmptyState();
