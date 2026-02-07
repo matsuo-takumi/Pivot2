@@ -378,13 +378,12 @@
                     <!-- Column 2: Snippet Card Appearance (Background Mode) -->
                     <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                         <StackPanel Spacing="24"
-                                    Opacity="{x:Bind CodeViewModel.IsCustomizationEnabled, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}"
-                                    IsEnabled="{x:Bind CodeViewModel.IsCustomizationEnabled, Mode=OneWay}">
+                                    Opacity="{x:Bind CodeViewModel.IsCustomizationEnabled, Mode=OneWay, Converter={StaticResource BoolToOpacityConverter}}">
                             <TextBlock Text="Snippet Card Background" FontSize="18" FontWeight="SemiBold"/>
 
                             <StackPanel Spacing="8">
                                 <TextBlock Text="Background Style" FontSize="14" FontWeight="SemiBold"/>
-                                <RadioButtons>
+                                <RadioButtons IsEnabled="{x:Bind CodeViewModel.IsCustomizationEnabled, Mode=OneWay}">
                                     <RadioButton Content="Match Theme (Default)" 
                                                  IsChecked="{x:Bind CodeViewModel.IsCustomColor, Mode=OneWay, Converter={StaticResource BoolInverter}}"
                                                  Command="{x:Bind CodeViewModel.SetThemeModeCommand}"/>
@@ -399,6 +398,7 @@
                                     <TextBlock Text="Custom Color" FontSize="12"/>
                                     <Grid Width="200" HorizontalAlignment="Left">
                                         <muxc:ColorPicker x:Name="CodeColorPickerControl"
+                                                          IsEnabled="{x:Bind CodeViewModel.IsCustomizationEnabled, Mode=OneWay}"
                                                           ColorSpectrumShape="Box"
                                                           IsMoreButtonVisible="False"
                                                           IsColorSliderVisible="False"

@@ -223,10 +223,12 @@
         </Border>
 
         <!-- Main content area with ItemsRepeater -->
+        <!-- CRITICAL: CanContentRenderOutsideBounds=True enables ItemsRepeater virtualization -->
         <ScrollViewer Grid.Row="1"
                       x:Name="ContentScrollViewer"
                       HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
+                      VerticalScrollBarVisibility="Auto"
+                      CanContentRenderOutsideBounds="True">
             <ItemsRepeater x:Name="AssetRepeater"
                            ItemTemplate="{StaticResource LayoutTemplateSelector}"
                            Tapped="AssetRepeater_Tapped"

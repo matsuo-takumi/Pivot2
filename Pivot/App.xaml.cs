@@ -275,6 +275,7 @@ namespace Pivot
             sc.AddSingleton<CodeSettingsService>();
 			sc.AddTransient<AssetSettingsViewModel>();
             sc.AddTransient<CodeSettingsViewModel>();
+            sc.AddTransient<CodeColorPresetViewModel>();
             
             Services = sc.BuildServiceProvider();
 

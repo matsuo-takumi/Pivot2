@@ -175,7 +175,6 @@ namespace Pivot.CodeModule.Behaviors
         private static bool _isGrabScrolling = false;
         private static Windows.Foundation.Point _lastMousePoint;
         private static DateTime _lastDragTime;
-        private static Windows.Foundation.Point _previousDragPoint; // for velocity calculation
         private const double PixelsPerLine = 20.0; // Estimate
         private const double PixelsPerChar = 10.0; // Estimate
 
@@ -187,10 +186,8 @@ namespace Pivot.CodeModule.Behaviors
                 if (sender is CodeEditorControl editor)
                 {
                     _isGrabScrolling = true;
-                    _hasDragged = false;
                     _lastMousePoint = ptr.Position;
                     _isGrabScrolling = true;
-                    _hasDragged = false;
                     _lastMousePoint = ptr.Position;
                     _lastDragTime = DateTime.Now;
                     _activeEditor = editor;
@@ -209,7 +206,6 @@ namespace Pivot.CodeModule.Behaviors
         }
 
         // Helper to detect right click without drag (for context menu if needed later)
-        private static bool _hasDragged = false;
 
         private static void Editor_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
@@ -246,7 +242,7 @@ namespace Pivot.CodeModule.Behaviors
                 var dx = currentPoint.X - _lastMousePoint.X;
                 var dy = currentPoint.Y - _lastMousePoint.Y;
 
-                if (Math.Abs(dx) > 2 || Math.Abs(dy) > 2) _hasDragged = true;
+
 
                 // --- Calculate Instantaneous Velocity ---
                 // Velocity = DeltaLines / Tick(16ms)

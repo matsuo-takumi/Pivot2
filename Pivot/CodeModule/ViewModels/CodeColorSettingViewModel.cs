@@ -21,7 +21,7 @@ namespace Pivot.CodeModule.ViewModels
         private string? _hexValue;
 
         [ObservableProperty]
-        private Brush _previewBrush;
+        private Brush _previewBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
         public bool IsCustom => !string.IsNullOrEmpty(HexValue);
 

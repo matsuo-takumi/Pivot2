@@ -29,7 +29,7 @@ namespace Pivot.Controls
         IRecipient<DirectoryRemovedMessage>
     {
         private BrowserViewModel? _viewModel;
-        private IncrementalAssetCollection? _collection;
+        private PreloadedAssetCollection? _collection;
         private LayoutBasedTemplateSelector? _templateSelector;
         private CancellationTokenSource? _searchDebounceToken;
         private bool _sortAscending = false;
@@ -70,50 +70,38 @@ namespace Pivot.Controls
             _viewModel.SetTargetKind(kind);
             _viewModel.CriteriaChanged += OnCriteriaChanged;
 
-            // Create collection
-            _collection = new IncrementalAssetCollection(
-                App.Current.Services, 
-                _viewModel.FilterCriteria);
-
+            // Create preloaded collection for instant filtering
+            _collection = new PreloadedAssetCollection();
             _collection.LoadingStateChanged += OnLoadingStateChanged;
             _collection.CountsUpdated += OnCountsUpdated;
 
             AssetRepeater.ItemsSource = _collection;
 
-            // Initial load
-            await _collection.ResetAsync(_viewModel.FilterCriteria);
+            // Load ALL data at startup (one-time cost for instant subsequent operations)
+            await _collection.LoadAllAsync(kind ?? AssetKind.Image, App.Current.Services);
 
             UpdateLayout(_viewModel.CurrentLayout);
             UpdateEmptyState();
         }
 
         /// <summary>
-        /// Handle scroll events to trigger incremental loading.
+        /// Handle scroll events (no longer needed - ScrollView handles virtualization automatically).
         /// </summary>
-        private async void ContentScrollViewer_ViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+        private void ContentScrollViewer_ViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
         {
-            if (_collection == null || !_collection.HasMoreItems) return;
-            
-            // Calculate distance from bottom
-            var scrollableHeight = ContentScrollViewer.ScrollableHeight;
-            var verticalOffset = ContentScrollViewer.VerticalOffset;
-            var distanceFromBottom = scrollableHeight - verticalOffset;
-            
-            // Load more when within 300px of bottom
-            if (distanceFromBottom < 300)
-            {
-                await _collection.LoadMoreItemsAsync(50);
-            }
+            // No-op: ScrollView + ItemsRepeater handles virtualization automatically
         }
 
         #region Criteria Change Handlers
 
-        private async void OnCriteriaChanged(object? sender, EventArgs e)
+        private void OnCriteriaChanged(object? sender, EventArgs e)
         {
             if (_viewModel == null || _collection == null) return;
 
             System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] OnCriteriaChanged - Directory: '{_viewModel.FilterCriteria.Directory ?? "(null)"}'");
-            await _collection.ResetAsync(_viewModel.FilterCriteria);
+            
+            // INSTANT client-side filter - no database query!
+            _collection.ApplyFilter(_viewModel.FilterCriteria);
             UpdateEmptyState();
         }
 
@@ -556,7 +544,8 @@ namespace Pivot.Controls
         {
             if (_viewModel == null || _collection == null) return;
 
-            await _collection.ResetAsync(_viewModel.FilterCriteria);
+            // Reload all data from database
+            await _collection.LoadAllAsync(TargetKind ?? AssetKind.Image, App.Current.Services);
         }
 
         #endregion
@@ -591,7 +580,7 @@ namespace Pivot.Controls
             DispatcherQueue.TryEnqueue(async () =>
             {
                 System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Directory removed: {message.Value}, refreshing...");
-                await _collection.ResetAsync(_viewModel.FilterCriteria);
+                await _collection.LoadAllAsync(TargetKind ?? AssetKind.Image, App.Current.Services);
                 UpdateEmptyState();
             });
         }
@@ -620,26 +609,23 @@ namespace Pivot.Controls
                             continue;
                         }
                         
-                        if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Added ||
-                            change.Type == ItemChangeData<AssetEntity>.ChangeType.Updated)
+                        if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Added)
                         {
-                            // Check if already exists
-                            var existing = _collection.FirstOrDefault(a => a.FilePath == change.Item.FilePath);
-                            if (existing == null)
-                            {
-                                // Add new item at the beginning for immediate visibility
-                                _collection.Insert(0, change.Item);
-                                System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Added: {change.Item.FileName}");
-                            }
+                            // Add to preloaded collection (automatically filters if needed)
+                            _collection.AddAsset(change.Item);
+                            System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Added: {change.Item.FileName}");
+                        }
+                        else if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Updated)
+                        {
+                            // Update existing asset
+                            _collection.UpdateAsset(change.Item);
+                            System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Updated: {change.Item.FileName}");
                         }
                         else if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Deleted)
                         {
-                            var toRemove = _collection.FirstOrDefault(a => a.FilePath == change.Item.FilePath);
-                            if (toRemove != null)
-                            {
-                                _collection.Remove(toRemove);
-                                System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Removed: {change.Item.FileName}");
-                            }
+                            // Remove from collection
+                            _collection.RemoveAsset(change.Item.FilePath);
+                            System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Removed: {change.Item.FileName}");
                         }
                     }
                     
