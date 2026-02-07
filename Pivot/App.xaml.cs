@@ -224,8 +224,8 @@ namespace Pivot
 			sc.AddScoped<Pivot.Repositories.IAssetRepository, Pivot.Repositories.AssetRepository>();
 			
 			// File scanner service
+            sc.AddSingleton<Pivot.Services.ImageEngine.IThumbnailService, Pivot.Services.ImageEngine.ThumbnailService>();
 			sc.AddSingleton<FileScannerService>();
-			            sc.AddSingleton<Pivot.Services.ImageEngine.IThumbnailService, Pivot.Services.ImageEngine.ThumbnailService>();
 			sc.AddSingleton<IBitmapCacheService, BitmapCacheService>();  // Bitmap memory cache for scrolling performance
             
             // New Code Logic Layer

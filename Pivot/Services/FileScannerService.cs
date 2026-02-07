@@ -449,7 +449,8 @@ namespace Pivot.Services
 			var existing = await repository.GetByPathAsync(path, ct);
 			if (existing != null && 
 			    existing.FileSize == fileInfo.Length && 
-			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc)
+			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc &&
+                !string.IsNullOrEmpty(existing.ThumbnailPath))
 			{
 				return; // No change
 			}
@@ -603,7 +604,8 @@ namespace Pivot.Services
 			existingAssetsCache.TryGetValue(path, out var existing);
 			if (existing != null && 
 			    existing.FileSize == fileInfo.Length && 
-			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc)
+			    existing.LastModifiedUtc == fileInfo.LastWriteTimeUtc &&
+                !string.IsNullOrEmpty(existing.ThumbnailPath))
 			{
 				return; // No change
 			}
