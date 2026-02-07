@@ -15,6 +15,7 @@
     <UserControl.Resources>
         <converters:SelectionToBorderBrushConverter x:Key="SelectionConverter"/>
         <converters:SelectionToBorderThicknessConverter x:Key="SelectionThicknessConverter"/>
+        <converters:CachedBitmapImageConverter x:Key="ImageConverter"/>
         <!-- Card Template for Masonry/Grid layouts -->
         <DataTemplate x:Key="AssetCardTemplate" x:DataType="models:AssetEntity">
             <Grid Margin="2" CanDrag="True" DragStarting="ItemBorder_DragStarting">
@@ -41,15 +42,11 @@
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    Opacity="0"
-                                   ImageOpened="Image_ImageOpened">
+                                   ImageOpened="Image_ImageOpened"
+                                   Source="{x:Bind DisplayImageSource, Converter={StaticResource ImageConverter}}">
                                 <Image.OpacityTransition>
                                     <ScalarTransition Duration="0:0:0.3"/>
                                 </Image.OpacityTransition>
-                                <Image.Source>
-                                    <BitmapImage UriSource="{x:Bind DisplayImageSource}"
-                                                 DecodePixelWidth="200"
-                                                 DecodePixelType="Logical"/>
-                                </Image.Source>
                             </Image>
                         </Border>
                         

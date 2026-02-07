@@ -42,8 +42,7 @@ namespace Pivot.Converters
                 var uri = new Uri(path, UriKind.RelativeOrAbsolute);
                 var bmp = new BitmapImage();
 
-                // Set decode pixel width for memory optimization
-                bmp.DecodePixelWidth = decodeSize;
+                // bmp.DecodePixelWidth = decodeSize; // Removed to fix PNG display issue
 
                 // Optimization settings
                 bmp.CreateOptions = BitmapCreateOptions.None;
