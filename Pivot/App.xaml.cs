@@ -228,6 +228,7 @@ namespace Pivot
 			
             // Engines
             sc.AddSingleton<Pivot.Services.Engines.IAssetEngine, Pivot.Services.Engines.ImageEngine>();
+            sc.AddSingleton<Pivot.Services.Engines.IAssetEngine, Pivot.Services.Engines.CodeEngine>();
             sc.AddSingleton<Pivot.Services.Engines.EngineRegistry>();
 
 			sc.AddSingleton<FileScannerService>();
