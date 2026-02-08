@@ -69,6 +69,22 @@ namespace Pivot
 				System.Diagnostics.Debug.WriteLine($"Database initialization failed: {ex}");
 			}
 			
+			// Initialize Pivot Engine (thumbnail generation, background processing)
+			try
+			{
+				var engine = Services.GetRequiredService<Pivot.Engine.IPivotEngine>();
+				var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+				var cachePath = System.IO.Path.Combine(appData, "Pivot", "Cache");
+				var dbPath = System.IO.Path.Combine(appData, "Pivot", "pivot.db");
+				
+				await engine.InitializeAsync(cachePath, dbPath);
+				System.Diagnostics.Debug.WriteLine("[Startup] Pivot Engine initialized successfully");
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Engine initialization failed: {ex}");
+			}
+			
 			// Initialize the settings store (load settings.json into memory cache)
 			try
 			{
@@ -222,6 +238,9 @@ namespace Pivot
 			sc.AddDbContext<Pivot.Engine.Data.PivotDbContext>(options =>
 				options.UseSqlite($"Data Source={dbPath}"));
 			sc.AddScoped<Pivot.Repositories.IAssetRepository, Pivot.Repositories.AssetRepository>();
+			
+			// Pivot Engine (thumbnail generation, metadata indexing)
+			sc.AddSingleton<Pivot.Engine.IPivotEngine, Pivot.Engine.PivotEngine>();
 			
 			// File scanner service
 			sc.AddSingleton<FileScannerService>();
