@@ -8,6 +8,7 @@
     xmlns:models="using:Pivot.Engine.Models"
     xmlns:converters="using:Pivot.Converters"
     xmlns:viewmodels="using:Pivot.CodeModule.ViewModels"
+    xmlns:controls="using:Pivot.CodeModule.Controls"
     mc:Ignorable="d"
     x:Name="RootPage">
 
@@ -36,7 +37,7 @@
             </Grid.RowDefinitions>
 
             <!-- Quick Add Bar -->
-            <local:QuickAddControl x:Name="QuickAddBar" 
+            <controls:QuickAddControl x:Name="QuickAddBar" 
                                    Grid.Row="0" 
                                    Margin="0,0,0,24"/>
 
@@ -90,7 +91,7 @@
                 </GridView.ItemsPanel>
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="models:AssetEntity">
-                        <local:SnippetCardControl Asset="{x:Bind}" 
+                        <controls:SnippetCardControl Asset="{x:Bind}" 
                                                   HorizontalAlignment="Stretch" 
                                                   VerticalAlignment="Stretch"/>
                     </DataTemplate>
@@ -99,7 +100,7 @@
         </Grid>
 
         <!-- Floating Overlay Editor -->
-        <local:OverlayEditorControl
+        <controls:OverlayEditorControl
                                     Visibility="{x:Bind ViewModel.EditorVM.IsEditing, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                                     DataContext="{x:Bind ViewModel.EditorVM}"/>
     </Grid>
