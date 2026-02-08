@@ -7,7 +7,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Pivot.Messages;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.ViewModels;
 
 namespace Pivot.Services

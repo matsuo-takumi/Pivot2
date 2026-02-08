@@ -12,7 +12,7 @@ using Microsoft.UI.Xaml.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.WinUI.Controls;
 using Pivot.Collections;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Messages;
 using Pivot.Services;
 using Pivot.ViewModels;

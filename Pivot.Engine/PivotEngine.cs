@@ -37,11 +37,11 @@ public class PivotEngine : IPivotEngine, IDisposable
         _logger.LogInformation("PivotEngine initialized at {Path}", _cacheDir);
     }
 
-    public async Task<Data.AssetMetadata?> GetMetadataAsync(string assetId, CancellationToken ct = default)
+    public async Task<Models.AssetEntity?> GetMetadataAsync(string assetId, CancellationToken ct = default)
     {
         if (!_isInitialized || _dbContext == null) throw new InvalidOperationException("Engine not initialized");
         
-        return await _dbContext.AssetMetadata
+        return await _dbContext.Assets
             .FirstOrDefaultAsync(a => a.FilePath == assetId, ct);
     }
 
@@ -54,7 +54,7 @@ public class PivotEngine : IPivotEngine, IDisposable
         // Here we just create one for the read.
         using (var db = new PivotDbContext(new DbContextOptionsBuilder<PivotDbContext>().UseSqlite($"Data Source={_dbPath}").Options)) 
         {
-            var meta = await db.AssetMetadata.FirstOrDefaultAsync(a => a.FilePath == assetId, ct);
+            var meta = await db.Assets.FirstOrDefaultAsync(a => a.FilePath == assetId, ct);
             if (meta != null && !string.IsNullOrEmpty(meta.ThumbnailPath) && File.Exists(meta.ThumbnailPath))
             {
                 return meta.ThumbnailPath;

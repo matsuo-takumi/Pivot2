@@ -9,7 +9,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Streams;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Pivot.Models;
+using Pivot.Engine.Models;
 
 namespace Pivot.Services
 {

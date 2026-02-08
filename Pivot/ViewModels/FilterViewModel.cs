@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Pivot.Models;
+using Pivot.Engine.Models;
 
 namespace Pivot.ViewModels
 {

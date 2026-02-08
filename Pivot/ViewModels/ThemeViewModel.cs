@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml;
 using Pivot.Messages;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Services;
 using System;
 using System.Threading.Tasks;

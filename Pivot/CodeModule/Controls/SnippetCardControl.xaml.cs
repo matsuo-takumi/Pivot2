@@ -8,7 +8,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Services;
 using Pivot.CodeModule.ViewModels;
 using Pivot.CodeModule.Services;

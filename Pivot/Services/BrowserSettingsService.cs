@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Pivot.Models;
+using Pivot.Engine.Models;
 
 namespace Pivot.Services
 {

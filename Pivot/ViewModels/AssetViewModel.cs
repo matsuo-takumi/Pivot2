@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Messages;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Services;
 using Pivot.Utilities;
 using System.Collections.Generic;

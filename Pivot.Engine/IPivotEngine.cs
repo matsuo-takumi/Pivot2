@@ -6,5 +6,5 @@ public interface IPivotEngine
     
     Task<string> GetThumbnailAsync(string assetId, int width, int height, CancellationToken ct = default);
     
-    Task<Data.AssetMetadata?> GetMetadataAsync(string assetId, CancellationToken ct = default);
+    Task<Models.AssetEntity?> GetMetadataAsync(string assetId, CancellationToken ct = default);
 }

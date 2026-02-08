@@ -6,7 +6,7 @@ using Pivot.CodeModule.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Threading.Tasks;
-using Pivot.Models;
+using Pivot.Engine.Models;
 
 namespace Pivot.CodeModule.Views
 {

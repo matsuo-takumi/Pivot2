@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Repositories;
 using Pivot.Services;
 

@@ -1,11 +1,11 @@
 using Microsoft.EntityFrameworkCore;
-using System.ComponentModel.DataAnnotations;
+using Pivot.Engine.Models;
 
 namespace Pivot.Engine.Data;
 
 public class PivotDbContext : DbContext
 {
-    public DbSet<AssetMetadata> AssetMetadata { get; set; }
+    public DbSet<AssetEntity> Assets { get; set; }
 
     public PivotDbContext(DbContextOptions<PivotDbContext> options) : base(options)
     {
@@ -13,30 +13,11 @@ public class PivotDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<AssetMetadata>()
-            .HasKey(a => a.Id);
-            
-        modelBuilder.Entity<AssetMetadata>()
-            .HasIndex(a => a.FilePath)
-            .IsUnique();
+        base.OnModelCreating(modelBuilder);
+
+        // Global query filter: 論理削除されたものは除外
+        modelBuilder.Entity<AssetEntity>()
+            .HasQueryFilter(a => !a.IsDeleted);
     }
 }
 
-public class AssetMetadata
-{
-    [Key]
-    public int Id { get; set; }
-
-    [Required]
-    public string FilePath { get; set; } = string.Empty;
-
-    public string? ThumbnailPath { get; set; }
-
-    public string? ComputeHash { get; set; }
-
-    public long FileSizeBytes { get; set; }
-
-    public long LastModifiedTicks { get; set; }
-    
-    public string? Tags { get; set; } // JSON or comma-separated
-}

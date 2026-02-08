@@ -1,4 +1,4 @@
-namespace Pivot.Models
+namespace Pivot.Engine.Models
 {
 	public enum AssetKind
 	{

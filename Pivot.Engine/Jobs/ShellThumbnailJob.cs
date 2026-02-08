@@ -4,6 +4,7 @@ using Pivot.Engine.Core;
 using Pivot.Engine.Data;
 using System.Drawing;
 using System.Drawing.Imaging;
+using Pivot.Engine.Models;
 
 namespace Pivot.Engine.Jobs;
 
@@ -37,7 +38,7 @@ public class ShellThumbnailJob : Job
             if (TryCreateThumbnailFromShell(_sourcePath, _width, _height, _destinationPath))
             {
                 using var db = new PivotDbContext(_dbContextOptions);
-                var metadata = await db.AssetMetadata.FirstOrDefaultAsync(a => a.FilePath == _sourcePath, ct);
+                var metadata = await db.Assets.FirstOrDefaultAsync(a => a.FilePath == _sourcePath, ct);
                 if (metadata != null)
                 {
                     metadata.ThumbnailPath = _destinationPath;
@@ -45,12 +46,16 @@ public class ShellThumbnailJob : Job
                 }
                 else
                 {
-                    db.AssetMetadata.Add(new AssetMetadata
+                    db.Assets.Add(new AssetEntity
                     {
                         FilePath = _sourcePath,
+                        FileName = Path.GetFileName(_sourcePath),
+                        Directory = Path.GetDirectoryName(_sourcePath) ?? string.Empty,
+                        Extension = Path.GetExtension(_sourcePath),
+                        FileSize = new FileInfo(_sourcePath).Length,
+                        LastModifiedUtc = File.GetLastWriteTimeUtc(_sourcePath),
                         ThumbnailPath = _destinationPath,
-                        LastModifiedTicks = File.GetLastWriteTimeUtc(_sourcePath).Ticks,
-                        FileSizeBytes = new FileInfo(_sourcePath).Length
+                        ThumbnailGeneratedAt = DateTime.UtcNow
                     });
                     await db.SaveChangesAsync(ct);
                 }

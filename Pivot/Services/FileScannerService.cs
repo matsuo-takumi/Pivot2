@@ -9,7 +9,7 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using CommunityToolkit.Mvvm.Messaging;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Messages;
 using System.Timers;
 using Microsoft.Extensions.Configuration;

@@ -9,7 +9,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using System;
 using System.Linq;
 using Windows.ApplicationModel.DataTransfer;

@@ -6,7 +6,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using System.IO;
 
 namespace Pivot.ViewModels

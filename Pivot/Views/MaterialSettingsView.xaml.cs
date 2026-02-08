@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Services;
 using Pivot.ViewModels;
 using Pivot.Messages;

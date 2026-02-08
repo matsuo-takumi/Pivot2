@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Windows.Foundation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Data;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Services;
 
 namespace Pivot.Collections

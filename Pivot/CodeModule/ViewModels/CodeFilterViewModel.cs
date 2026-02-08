@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Services;
-using Pivot.Models; // AssetEntity
+using Pivot.Engine.Models; // AssetEntity
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Collections.Generic;

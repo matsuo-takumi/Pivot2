@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 
-namespace Pivot.Models
+namespace Pivot.Engine.Models
 {
     [Index(nameof(FilePath), IsUnique = true)]
     [Index(nameof(Directory))]

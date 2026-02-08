@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -61,7 +61,7 @@ namespace Pivot
 			try
 			{
 				using var scope = Services.CreateScope();
-				var dbContext = scope.ServiceProvider.GetRequiredService<Pivot.Data.PivotDbContext>();
+				var dbContext = scope.ServiceProvider.GetRequiredService<Pivot.Engine.Data.PivotDbContext>();
 				dbContext.Database.Migrate();
 			}
 			catch (Exception ex)
@@ -219,7 +219,7 @@ namespace Pivot
 			var dbPath = System.IO.Path.Combine(
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"Pivot", "pivot.db");
-			sc.AddDbContext<Pivot.Data.PivotDbContext>(options =>
+			sc.AddDbContext<Pivot.Engine.Data.PivotDbContext>(options =>
 				options.UseSqlite($"Data Source={dbPath}"));
 			sc.AddScoped<Pivot.Repositories.IAssetRepository, Pivot.Repositories.AssetRepository>();
 			

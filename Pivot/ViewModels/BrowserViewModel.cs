@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Pivot.Models;
+using Pivot.Engine.Models;
 using Pivot.Services;
 
 namespace Pivot.ViewModels

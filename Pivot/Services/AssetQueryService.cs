@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Pivot.Data;
-using Pivot.Models;
+using Pivot.Engine.Data;
+using Pivot.Engine.Models;
 
 namespace Pivot.Services
 {
