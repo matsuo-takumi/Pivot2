@@ -13,6 +13,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.WinUI.Controls;
 using Pivot.Collections;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using Pivot.Messages;
 using Pivot.Services;
 using Pivot.ViewModels;

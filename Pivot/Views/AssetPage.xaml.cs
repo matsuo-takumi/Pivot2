@@ -6,6 +6,7 @@ using Pivot.Messages;
 using Pivot.ViewModels;
 using Pivot.Services;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;

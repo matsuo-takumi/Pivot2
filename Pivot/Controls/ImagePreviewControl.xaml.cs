@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using System;
 using System.Threading;
 using System.Threading.Tasks;

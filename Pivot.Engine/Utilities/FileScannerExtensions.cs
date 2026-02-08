@@ -1,6 +1,6 @@
 using Pivot.Engine.Models;
 
-namespace Pivot.Services
+namespace Pivot.Engine.Utilities
 {
 	public static class FileScannerExtensions
 	{

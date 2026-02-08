@@ -15,6 +15,9 @@ using System.IO;
 
 using Pivot.CodeModule.ViewModels;
 using Pivot.CodeModule.Services;
+using Pivot.Engine; // Added
+using Pivot.Engine.Models; // Added
+
 
 namespace Pivot
 {
@@ -136,7 +139,8 @@ namespace Pivot
 				{
 					// Phase 1: Scan directories from settings and populate database
 					var directorySettings = Services.GetRequiredService<DirectorySettingsService>();
-					var scanner = Services.GetRequiredService<FileScannerService>();
+					var engine = Services.GetRequiredService<IPivotEngine>();
+
 					
 					// Get directories from settings
 					var imageDirectories = directorySettings.ImageDirectories?.ToList() ?? new List<string>();
@@ -147,15 +151,19 @@ namespace Pivot
 					var allDirectories = imageDirectories.Concat(assetDirectories).Concat(codeDirectories).Distinct().ToList();
 					
 					// Phase 0: Reconcile - delete orphaned assets from removed directories
+					// Phase 0: Reconcile - delete orphaned assets from removed directories
 					System.Diagnostics.Debug.WriteLine($"[Startup] Reconciling database with {allDirectories.Count} configured directories");
-					await scanner.ReconcileAsync(allDirectories);
+					await engine.ReconcileAsync(allDirectories);
+
+
 					
 					// Phase 1a: Scan Image directories (all asset types)
 					if (imageDirectories.Count > 0)
 					{
 						System.Diagnostics.Debug.WriteLine($"[Startup] Scanning {imageDirectories.Count} Image directories (all types)");
-						await scanner.ScanAsync(imageDirectories);
+						await engine.ScanAsync(imageDirectories);
 					}
+
 					
 					// Phase 1b: Scan Asset directories (Model3D only to avoid duplicate images)
 					// Only scan Asset dirs that are NOT also Image dirs
@@ -173,9 +181,10 @@ namespace Pivot
 					if (assetOnlyDirs.Count > 0)
 					{
 						System.Diagnostics.Debug.WriteLine($"[Startup] Scanning {assetOnlyDirs.Count} Asset directories (Model3D only)");
-						var model3DOnly = new HashSet<Pivot.Models.AssetKind> { Pivot.Models.AssetKind.Model3D };
-						await scanner.ScanAsync(assetOnlyDirs, progress: null, cancellationToken: default, allowedKinds: model3DOnly);
+						var model3DOnly = new HashSet<Pivot.Engine.Models.AssetKind> { Pivot.Engine.Models.AssetKind.Model3D };
+						await engine.ScanAsync(assetOnlyDirs, progress: null, ct: default, allowedKinds: model3DOnly);
 					}
+
 					else
 					{
 						System.Diagnostics.Debug.WriteLine("[Startup] No Asset-only directories to scan (all overlap with Image directories)");
@@ -184,10 +193,11 @@ namespace Pivot
                     if (codeDirectories.Count > 0)
                     {
                         System.Diagnostics.Debug.WriteLine($"[Startup] Scanning {codeDirectories.Count} Code directories");
-                        // Code directories might only contain scripts
-                        var codeKinds = new HashSet<Pivot.Models.AssetKind> { Pivot.Models.AssetKind.Script, Pivot.Models.AssetKind.Code };
-                        await scanner.ScanAsync(codeDirectories, progress: null, cancellationToken: default, allowedKinds: codeKinds);
+                        var codeKinds = new HashSet<Pivot.Engine.Models.AssetKind> { Pivot.Engine.Models.AssetKind.Script, Pivot.Engine.Models.AssetKind.Code };
+                        await engine.ScanAsync(codeDirectories, progress: null, ct: default, allowedKinds: codeKinds);
                     }
+
+
 					
 					System.Diagnostics.Debug.WriteLine("[Startup] Directory scan completed");
 					
@@ -237,14 +247,17 @@ namespace Pivot
 				"Pivot", "pivot.db");
 			sc.AddDbContext<Pivot.Engine.Data.PivotDbContext>(options =>
 				options.UseSqlite($"Data Source={dbPath}"));
-			sc.AddScoped<Pivot.Repositories.IAssetRepository, Pivot.Repositories.AssetRepository>();
+			sc.AddScoped<Pivot.Engine.Repositories.IAssetRepository, Pivot.Engine.Repositories.AssetRepository>();
+
 			
 			// Pivot Engine (thumbnail generation, metadata indexing)
 			sc.AddSingleton<Pivot.Engine.IPivotEngine, Pivot.Engine.PivotEngine>();
 			
 			// File scanner service
-			sc.AddSingleton<FileScannerService>();
+			// File scanner service - Removed (Logic moved to Engine)
+			// sc.AddSingleton<FileScannerService>();
 			sc.AddSingleton<IThumbnailService, ThumbnailService>();
+
             
             // New Code Logic Layer
             sc.AddScoped<CodeService>();

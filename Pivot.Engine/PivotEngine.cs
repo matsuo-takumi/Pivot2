@@ -1,22 +1,27 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Engine.Core;
 using Pivot.Engine.Data;
+using Pivot.Engine.Services;
 
 namespace Pivot.Engine;
 
 public class PivotEngine : IPivotEngine, IDisposable
 {
     private readonly ILogger<PivotEngine> _logger;
+    private readonly IMessenger _messenger;
     private readonly JobScheduler _jobScheduler;
     private string _cacheDir = string.Empty;
     private string _dbPath = string.Empty;
-    private PivotDbContext? _dbContext; // In real app, use IDbContextFactory or scope
+    private PivotDbContext? _dbContext; // For metadata retrieval
+    private FileScannerService? _fileScanner;
     private bool _isInitialized;
 
-    public PivotEngine(ILogger<PivotEngine> logger)
+    public PivotEngine(ILogger<PivotEngine> logger, IMessenger messenger)
     {
         _logger = logger;
+        _messenger = messenger;
         _jobScheduler = new JobScheduler(Math.Max(2, Environment.ProcessorCount / 2));
     }
 
@@ -26,13 +31,24 @@ public class PivotEngine : IPivotEngine, IDisposable
         _dbPath = dbPath;
         Directory.CreateDirectory(_cacheDir);
 
-        // Setup DB
+        // Setup DB options
         var optionsBuilder = new DbContextOptionsBuilder<PivotDbContext>();
         optionsBuilder.UseSqlite($"Data Source={dbPath}");
-        _dbContext = new PivotDbContext(optionsBuilder.Options);
-        
+        var dbOptions = optionsBuilder.Options;
+
+        // Initialize main context
+        _dbContext = new PivotDbContext(dbOptions);
         await _dbContext.Database.EnsureCreatedAsync();
-        
+
+        // Initialize FileScannerService
+        // Pass a delegate for thumbnail generation that calls our GetThumbnailAsync
+        _fileScanner = new FileScannerService(
+            new Logger<FileScannerService>(new LoggerFactory()), // TODO: Better logger factory injection
+            _messenger,
+            dbOptions,
+            (path, w, h, ct) => GetThumbnailAsync(path, w, h, ct)
+        );
+
         _isInitialized = true;
         _logger.LogInformation("PivotEngine initialized at {Path}", _cacheDir);
     }
@@ -45,13 +61,24 @@ public class PivotEngine : IPivotEngine, IDisposable
             .FirstOrDefaultAsync(a => a.FilePath == assetId, ct);
     }
 
+    public async Task ScanAsync(IEnumerable<string> rootPaths, IProgress<int>? progress = null, CancellationToken ct = default, HashSet<Models.AssetKind>? allowedKinds = null)
+    {
+        if (!_isInitialized || _fileScanner == null) throw new InvalidOperationException("Engine not initialized");
+        await _fileScanner.ScanAsync(rootPaths, progress, ct, allowedKinds);
+    }
+
+    public async Task ReconcileAsync(IEnumerable<string> validRootPaths, CancellationToken ct = default)
+    {
+        if (!_isInitialized || _fileScanner == null) throw new InvalidOperationException("Engine not initialized");
+        await _fileScanner.ReconcileAsync(validRootPaths, ct);
+    }
+
+
     public async Task<string> GetThumbnailAsync(string assetId, int width, int height, CancellationToken ct = default)
     {
         if (!_isInitialized) throw new InvalidOperationException("Engine not initialized");
 
         // 1. Check DB for cached thumbnail
-        // Use a new context for thread safety if this method is called concurrently (or rely on factory if injected)
-        // Here we just create one for the read.
         using (var db = new PivotDbContext(new DbContextOptionsBuilder<PivotDbContext>().UseSqlite($"Data Source={_dbPath}").Options)) 
         {
             var meta = await db.Assets.FirstOrDefaultAsync(a => a.FilePath == assetId, ct);
@@ -86,8 +113,6 @@ public class PivotEngine : IPivotEngine, IDisposable
             job = new Jobs.ShellThumbnailJob(hash, assetId, thumbPath, width, height, dbOpts);
         }
 
-        // Priority logic: simpler for now, always High if requested by UI? 
-        // Or we can let UI pass priority. For now default to High as it's likely a visible item request.
         _jobScheduler.Enqueue(job, JobPriority.High);
         
         return string.Empty; // Return empty to indicate "processing"
@@ -117,5 +142,6 @@ public class PivotEngine : IPivotEngine, IDisposable
     {
         _jobScheduler.Dispose();
         _dbContext?.Dispose();
+        _fileScanner?.Dispose();
     }
 }
