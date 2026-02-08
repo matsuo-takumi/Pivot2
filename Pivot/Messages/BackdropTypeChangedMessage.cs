@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Messaging.Messages;
 using System.Collections.Generic;
 using Pivot.Engine.Models; // BackdropType moved to Models
+using Pivot.Engine.Messages;
 using Pivot.Models;
 
 namespace Pivot.Messages
