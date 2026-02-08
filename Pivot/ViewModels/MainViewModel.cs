@@ -84,12 +84,8 @@ namespace Pivot.ViewModels
 			try
 			{
 				_logger.LogInformation("Starting scan for directories: {Count}", ScanDirectories.Count);
-				// Engine doesn't support list of directories scan yet, so we scan one by one or use existing engine methods?
-                // Actually Engine.ScanAsync usually takes no args (scans all config dirs) or specific path.
-                // Assuming Engine.ScanAsync() exists and scans configured directories.
-                // If not, we might need to iterate.
-                // For now, let's just validly compile.
-				await _engine.ScanAsync(_scanCts.Token); 
+				// Engine ScanAsync takes IEnumerable<string> rootPaths
+				await _engine.ScanAsync(ScanDirectories, progress, _scanCts.Token); 
 				_logger.LogInformation("Scan completed successfully");
 			}
 			catch (OperationCanceledException)

@@ -13,6 +13,7 @@ using Pivot.Services;
 using Pivot.CodeModule.ViewModels;
 using Pivot.CodeModule.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Pivot.Models; // Added for AssetEntityExtensions
 
 namespace Pivot.CodeModule.Controls
 {

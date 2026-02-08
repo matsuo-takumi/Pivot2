@@ -60,22 +60,19 @@ namespace Pivot.CodeModule.ViewModels
             _selectedSortOption = SortOptions.First(); // Default to Manual
 
 
-            // Subscribe to bulk items changed messages
-            _messenger.Register<BulkItemsChangedMessage<AssetEntity>>(this, OnAssetsChanged);
+        // Subscribe to deletion messages from Editor (Restored legacy message)
+            _messenger.Register<AssetEntityChangedMessage>(this, OnAssetChanged);
         }
 
-        private void OnAssetsChanged(object recipient, BulkItemsChangedMessage<AssetEntity> message)
+        private void OnAssetChanged(object recipient, AssetEntityChangedMessage message)
         {
-            foreach (var change in message.Value)
+            if (message.Type == AssetEntityChangedMessage.ChangeType.Deleted)
             {
-                if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Deleted)
+                // Remove from collections when deleted from editor
+                var item = Snippets.FirstOrDefault(s => s.Id == message.Asset?.Id);
+                if (item != null)
                 {
-                    // Remove from collections when deleted from editor
-                    var item = Snippets.FirstOrDefault(s => s.Id == change.Item?.Id);
-                    if (item != null)
-                    {
-                         Snippets.Remove(item);
-                    }
+                    Snippets.Remove(item);
                 }
             }
         }

@@ -47,7 +47,7 @@ namespace Pivot.CodeModule.ViewModels
             FilterVM.PropertyChanged += FilterVM_PropertyChanged;
 
             // Subscribe to asset changes
-            messenger.Register<BulkItemsChangedMessage<AssetEntity>>(this, OnAssetsChanged);
+            messenger.Register<AssetEntityChangedMessage>(this, OnAssetChanged);
         }
 
         private void FilterVM_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -78,7 +78,7 @@ namespace Pivot.CodeModule.ViewModels
             }
         }
 
-        private async void OnAssetsChanged(object recipient, BulkItemsChangedMessage<AssetEntity> message)
+        private async void OnAssetChanged(object recipient, AssetEntityChangedMessage message)
         {
             // Reload snippets and tags when asset is updated/created/deleted
             await ListVM.LoadSnippetsAsync();

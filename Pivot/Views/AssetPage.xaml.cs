@@ -17,7 +17,7 @@ namespace Pivot.Views
 {
     public sealed partial class AssetPage : Page, 
         IRecipient<AssetsSyncedMessage>,
-        IRecipient<BulkItemsChangedMessage<AssetEntity>>
+        IRecipient<AssetEntityChangedMessage>
     {
         public AssetViewModel ViewModel { get; }
         
@@ -41,7 +41,7 @@ namespace Pivot.Views
             
             // Register for messages
             WeakReferenceMessenger.Default.Register<AssetsSyncedMessage>(this);
-            WeakReferenceMessenger.Default.Register<BulkItemsChangedMessage<AssetEntity>>(this);
+            WeakReferenceMessenger.Default.Register<AssetEntityChangedMessage>(this);
         }
         
         private async void AssetPage_Loaded(object sender, RoutedEventArgs e)
@@ -100,20 +100,10 @@ namespace Pivot.Views
             });
         }
         
-        public void Receive(BulkItemsChangedMessage<AssetEntity> message)
+        public void Receive(AssetEntityChangedMessage message)
         {
             // Reload when individual asset changes
-            bool needsReload = false;
-            foreach (var change in message.Value)
-            {
-                if (change.Item?.Kind == AssetKind.Model3D || change.Type == ItemChangeData<AssetEntity>.ChangeType.Deleted)
-                {
-                    needsReload = true;
-                    break;
-                }
-            }
-
-            if (needsReload)
+            if (message.Asset?.Kind == AssetKind.Model3D || message.Type == AssetEntityChangedMessage.ChangeType.Deleted)
             {
                 DispatcherQueue.TryEnqueue(async () =>
                 {

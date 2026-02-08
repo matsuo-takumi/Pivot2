@@ -116,6 +116,9 @@ namespace Pivot.CodeModule.Services
         public Brush? GetTagBorderBrush() => GetBrushFromHex(TagBorderColorHex);
         public Brush? GetLineNumberBrush() => GetBrushFromHex(LineNumberColorHex);
 
+        public Brush? GetEditorTextBrush() => GetBrushFromHex(EditorTextColorHex);
+        public Brush? GetEditorBackgroundBrush() => GetBrushFromHex(EditorBackgroundColorHex);
+
         // Toggle Customization
         private const string KeyIsCustomizationEnabled = "Code_IsCustomizationEnabled";
         public bool IsCustomizationEnabled { get; private set; } = true;
