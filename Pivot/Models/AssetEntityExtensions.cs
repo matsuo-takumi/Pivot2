@@ -1,15 +1,14 @@
 using System.Collections.Generic;
 using System.Text.Json;
-using Pivot.Engine.Models; // Engineのモデルを拡張
+using Pivot.Engine.Models;
 
 namespace Pivot.Models
 {
     public static class AssetEntityExtensions
     {
-        // JSON文字列として保存されているタグをリストとして取得する拡張メソッド
         public static IEnumerable<string> GetTags(this AssetEntity asset)
         {
-            if (string.IsNullOrEmpty(asset.UserTagsJson)) // Original code used UserTagsJson, user snippet used TagsJson. Pivot2 usually uses UserTagsJson based on previous files.
+            if (string.IsNullOrEmpty(asset.UserTagsJson))
                 return new List<string>();
 
             try
