@@ -1,18 +1,11 @@
 using Pivot.Engine;
 using Microsoft.Extensions.Logging;
-using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System;
 
 namespace Pivot.Services
 {
-    public interface IThumbnailService : IDisposable
-    {
-        Task InitializeAsync(string cacheDirectory, long maxCacheBytes);
-        Task<string> GetOrCreateThumbnailAsync(string sourcePath, int width, int height, CancellationToken ct = default);
-        string? TryGetCachedThumbnailPath(string sourcePath, int width, int height);
-    }
-
     // UIとEngineをつなぐだけの薄いラッパー
     public class ThumbnailService : IThumbnailService
     {
@@ -27,11 +20,11 @@ namespace Pivot.Services
 
         public Task InitializeAsync(string cacheDirectory, long maxCacheBytes)
         {
-            // Engine側で管理するため不要ですが、インターフェース互換のため残します
+            // Engine側で初期化するので何もしない
             return Task.CompletedTask;
         }
 
-        public async Task<string> GetOrCreateThumbnailAsync(string sourcePath, int width, int height, CancellationToken ct = default)
+        public async Task<string?> GetOrCreateThumbnailAsync(string sourcePath, int width, int height, CancellationToken ct = default)
         {
             // すべてEngineに丸投げします
             return await _engine.GetThumbnailAsync(sourcePath, width, height, ct);
@@ -39,7 +32,7 @@ namespace Pivot.Services
 
         public string? TryGetCachedThumbnailPath(string sourcePath, int width, int height)
         {
-            // キャッシュ確認もEngineに任せるか、非同期取得を推奨するためnullを返します
+            // キャッシュ確認もEngineに任せるか、一旦nullでOK
             return null;
         }
 
