@@ -87,13 +87,9 @@ namespace Pivot
             // Register all IRecipient<T> implementations for message handling
             _messenger.RegisterAll(this);
 
-            // 初期ナビゲーション(ViewModelからの要求でも遷移可能)
+            // 初期ナビゲーション: Home タブのみを初期化
+            // 他のタブは Pivot で選択された時に初めて NavigatedTo が呼ばれる
             NavigateTo(NavigationRegion.Home);
-            NavigateTo(NavigationRegion.Asset);
-            NavigateTo(NavigationRegion.Image);
-            NavigateTo(NavigationRegion.Project);
-            NavigateTo(NavigationRegion.Code);
-            NavigateTo(NavigationRegion.Preference);
             
             // Set initial Pivot selection
             MainPivot.SelectedIndex = 0;

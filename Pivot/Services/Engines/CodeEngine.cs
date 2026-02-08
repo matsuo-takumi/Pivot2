@@ -34,12 +34,6 @@ namespace Pivot.Services.Engines
             ".md", ".markdown", ".txt", ".log"
         };
 
-        public bool CanProcess(string filePath)
-        {
-            var ext = Path.GetExtension(filePath).ToLowerInvariant();
-            return SupportedExtensions.Contains(ext);
-        }
-
         public async Task ProcessFileAsync(string filePath, AssetEntity asset, CancellationToken ct = default)
         {
             var fileInfo = new FileInfo(filePath);
