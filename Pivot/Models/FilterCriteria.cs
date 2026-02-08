@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Pivot.Engine.Models;
 
 namespace Pivot.Models
 {

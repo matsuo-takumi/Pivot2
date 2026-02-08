@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using Pivot.Services;
 using System.Threading.Tasks;
 

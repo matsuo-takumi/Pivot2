@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using Pivot.Services;
 using System;
 using Windows.UI;

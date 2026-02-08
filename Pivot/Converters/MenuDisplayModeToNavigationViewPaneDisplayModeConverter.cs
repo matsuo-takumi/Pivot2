@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using System;
 
 namespace Pivot.Converters

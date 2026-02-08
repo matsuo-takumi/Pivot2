@@ -1,3 +1,4 @@
+using Pivot.Models;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;

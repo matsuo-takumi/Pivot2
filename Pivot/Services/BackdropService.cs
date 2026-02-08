@@ -5,6 +5,7 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using WinRT;
 
 namespace Pivot.Services

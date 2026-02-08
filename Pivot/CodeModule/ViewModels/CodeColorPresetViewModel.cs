@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using Pivot.Services;
 using Pivot.CodeModule.Services;
 using System;

@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;
 using Pivot.Engine.Models;
+using Pivot.Models;
 
 namespace Pivot.Utilities
 {

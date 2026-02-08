@@ -5,6 +5,9 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using Pivot.Messages;
+using Pivot.Engine.Messages;
+using Pivot.Engine.Models;
+using Pivot.Models;
 using Pivot.CodeModule.Messages;
 
 namespace Pivot.CodeModule.ViewModels
@@ -44,7 +47,7 @@ namespace Pivot.CodeModule.ViewModels
             FilterVM.PropertyChanged += FilterVM_PropertyChanged;
 
             // Subscribe to asset changes
-            messenger.Register<AssetEntityChangedMessage>(this, OnAssetChanged);
+            messenger.Register<BulkItemsChangedMessage<AssetEntity>>(this, OnAssetsChanged);
         }
 
         private void FilterVM_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -75,7 +78,7 @@ namespace Pivot.CodeModule.ViewModels
             }
         }
 
-        private async void OnAssetChanged(object recipient, AssetEntityChangedMessage message)
+        private async void OnAssetsChanged(object recipient, BulkItemsChangedMessage<AssetEntity> message)
         {
             // Reload snippets and tags when asset is updated/created/deleted
             await ListVM.LoadSnippetsAsync();

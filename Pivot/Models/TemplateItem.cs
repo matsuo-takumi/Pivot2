@@ -1,5 +1,6 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Pivot.Engine.Models;
 
 namespace Pivot.Models
 {

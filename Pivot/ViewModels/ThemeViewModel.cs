@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Xaml;
 using Pivot.Messages;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using Pivot.Services;
 using System;
 using System.Threading.Tasks;

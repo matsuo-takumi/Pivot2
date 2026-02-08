@@ -5,6 +5,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Pivot.ViewModels;
 using Pivot.Engine.Models;
+using Pivot.Models;
 
 namespace Pivot.Services
 {

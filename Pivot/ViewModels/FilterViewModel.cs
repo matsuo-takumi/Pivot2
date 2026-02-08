@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Pivot.Engine.Models;
+using Pivot.Models;
 
 namespace Pivot.ViewModels
 {

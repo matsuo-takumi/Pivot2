@@ -2,6 +2,7 @@ using System;
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Messages;
 using Pivot.Engine.Models;
+using Pivot.Models;
 
 namespace Pivot.Services
 {

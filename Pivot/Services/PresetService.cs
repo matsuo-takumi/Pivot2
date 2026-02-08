@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Pivot.Messages;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using Pivot.ViewModels;
 
 namespace Pivot.Services

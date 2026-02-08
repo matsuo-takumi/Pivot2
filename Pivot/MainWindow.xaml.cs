@@ -19,6 +19,7 @@ using CommunityToolkit.Mvvm.Messaging; // IMessengerを使用するために追�
 using Pivot.Messages; // BackdropTypeChangedMessageを使用するために追加
 using Pivot.Services; // SettingsServiceを使用するために追加
 using Pivot.Engine.Models; // BackdropType moved here
+using Pivot.Models;
 using System.Runtime.InteropServices; // Interopを使用するために追加
 using WinRT; // WinRT.As<T>()を使用するために追加
 using Microsoft.UI.Composition; // ICompositionSupportsSystemBackdropを使用するために追加

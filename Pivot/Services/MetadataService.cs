@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Engine.Models;
-using Pivot.Repositories;
+using Pivot.Engine.Repositories;
 
 namespace Pivot.Services
 {

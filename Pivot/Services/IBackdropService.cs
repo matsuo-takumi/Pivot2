@@ -1,6 +1,7 @@
 using System;
 using Microsoft.UI.Xaml;
 using Pivot.Engine.Models;
+using Pivot.Models;
 
 namespace Pivot.Services
 {

@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -13,6 +14,7 @@ using Pivot.Services;
 
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Messages;
+using Pivot.Engine.Messages;
 using Microsoft.UI.Dispatching;
 
 namespace Pivot.ViewModels

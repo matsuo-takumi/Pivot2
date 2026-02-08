@@ -5,6 +5,7 @@ using Pivot.Engine.Models;
 using Pivot.Models;
 using Pivot.Services;
 using Pivot.Messages;
+using Pivot.Engine.Messages;
 using Pivot.CodeModule.Helpers;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -58,19 +59,23 @@ namespace Pivot.CodeModule.ViewModels
             
             _selectedSortOption = SortOptions.First(); // Default to Manual
 
-            // Subscribe to deletion messages from Editor
-            _messenger.Register<AssetEntityChangedMessage>(this, OnAssetChanged);
+
+            // Subscribe to bulk items changed messages
+            _messenger.Register<BulkItemsChangedMessage<AssetEntity>>(this, OnAssetsChanged);
         }
 
-        private void OnAssetChanged(object recipient, AssetEntityChangedMessage message)
+        private void OnAssetsChanged(object recipient, BulkItemsChangedMessage<AssetEntity> message)
         {
-            if (message.Type == AssetEntityChangedMessage.ChangeType.Deleted)
+            foreach (var change in message.Value)
             {
-                // Remove from collections when deleted from editor
-                var item = Snippets.FirstOrDefault(s => s.Id == message.Asset?.Id);
-                if (item != null)
+                if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Deleted)
                 {
-                    Snippets.Remove(item);
+                    // Remove from collections when deleted from editor
+                    var item = Snippets.FirstOrDefault(s => s.Id == change.Item?.Id);
+                    if (item != null)
+                    {
+                         Snippets.Remove(item);
+                    }
                 }
             }
         }

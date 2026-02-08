@@ -1,5 +1,6 @@
 using System;
 using Pivot.Engine.Models;
+using Pivot.Models;
 
 namespace Pivot.Services
 {

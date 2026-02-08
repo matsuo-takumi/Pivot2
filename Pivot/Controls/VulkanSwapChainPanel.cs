@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Pivot.Engine.Models;
+using Pivot.Models;
 using Pivot.Services;
 using Pivot.Utilities;
 using System;

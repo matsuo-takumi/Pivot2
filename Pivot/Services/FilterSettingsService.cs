@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using Pivot.Messages;
 using Pivot.Engine.Models;
+using Pivot.Models;
 
 namespace Pivot.Services
 {
