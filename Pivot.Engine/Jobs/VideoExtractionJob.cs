@@ -1,0 +1,83 @@
+using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using Pivot.Engine.Core;
+using Pivot.Engine.Data;
+
+namespace Pivot.Engine.Jobs;
+
+public class VideoExtractionJob : Job
+{
+    private readonly string _sourcePath;
+    private readonly string _destinationPath;
+    private readonly int _width;
+    private readonly int _height;
+    private readonly DbContextOptions<PivotDbContext> _dbContextOptions;
+
+    public VideoExtractionJob(string id, string sourcePath, string destinationPath, int width, int height, DbContextOptions<PivotDbContext> dbContextOptions)
+        : base(id)
+    {
+        _sourcePath = sourcePath;
+        _destinationPath = destinationPath;
+        _width = width;
+        _height = height;
+        _dbContextOptions = dbContextOptions;
+    }
+
+    public override async Task ExecuteAsync(CancellationToken ct)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_destinationPath)!);
+
+            // ffmpeg should be on PATH. We seek 1s into the video to avoid black frames at start.
+            var ffmpeg = "ffmpeg";
+            var args = $"-y -ss 00:00:01 -i \"{_sourcePath}\" -vframes 1 -vf \"scale='min({_width},iw)':'min({_height},ih)':force_original_aspect_ratio=decrease,pad={_width}:{_height}:(ow-iw)/2:(oh-ih)/2\" \"{_destinationPath}\"";
+
+            var psi = new ProcessStartInfo(ffmpeg, args)
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+
+            using var proc = Process.Start(psi);
+            if (proc == null) return;
+
+            using (ct.Register(() =>
+            {
+                try { if (!proc.HasExited) proc.Kill(true); } catch { }
+            }))
+            {
+                await proc.WaitForExitAsync(ct);
+            }
+
+            if (proc.ExitCode == 0 && File.Exists(_destinationPath))
+            {
+                // Update DB
+                using var db = new PivotDbContext(_dbContextOptions);
+                var metadata = await db.AssetMetadata.FirstOrDefaultAsync(a => a.FilePath == _sourcePath, ct);
+                if (metadata != null)
+                {
+                    metadata.ThumbnailPath = _destinationPath;
+                    await db.SaveChangesAsync(ct);
+                }
+                else
+                {
+                    db.AssetMetadata.Add(new AssetMetadata
+                    {
+                        FilePath = _sourcePath,
+                        ThumbnailPath = _destinationPath,
+                        LastModifiedTicks = File.GetLastWriteTimeUtc(_sourcePath).Ticks,
+                        FileSizeBytes = new FileInfo(_sourcePath).Length
+                    });
+                    await db.SaveChangesAsync(ct);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Log?
+        }
+    }
+}
