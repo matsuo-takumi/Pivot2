@@ -21,7 +21,7 @@ namespace Pivot.Engine.Services
 	{
 		private readonly ILogger _logger;
 		private readonly IMessenger _messenger;
-		private readonly DbContextOptions<PivotDbContext> _dbOptions;
+		private readonly IDbContextFactory<PivotDbContext> _dbFactory;
 		private readonly Func<string, int, int, CancellationToken, Task<string>> _thumbnailGenerator;
 		
 		private string? _currentRootPath;
@@ -53,12 +53,12 @@ namespace Pivot.Engine.Services
 		public FileScannerService(
 			ILogger logger, 
 			IMessenger messenger, 
-			DbContextOptions<PivotDbContext> dbOptions,
+			IDbContextFactory<PivotDbContext> dbFactory,
 			Func<string, int, int, CancellationToken, Task<string>> thumbnailGenerator)
 		{
 			_logger = logger;
 			_messenger = messenger;
-			_dbOptions = dbOptions;
+			_dbFactory = dbFactory;
 			_thumbnailGenerator = thumbnailGenerator;
 
 			_flushLoopCts = new CancellationTokenSource();
@@ -92,7 +92,7 @@ namespace Pivot.Engine.Services
 			if (validPaths.Count == 0)
 			{
 				_logger.LogWarning("ReconcileAsync: No valid directories, clearing all assets from database");
-				using var context = new PivotDbContext(_dbOptions);
+				using var context = await _dbFactory.CreateDbContextAsync(ct);
 				
 				var count = await context.Assets.CountAsync(ct);
 				if (count > 0)
@@ -105,11 +105,11 @@ namespace Pivot.Engine.Services
 			}
 
 			// orphaned check
-            using (var context = new PivotDbContext(_dbOptions))
+            using (var context = await _dbFactory.CreateDbContextAsync(ct))
             {
                 var repo = new AssetRepository(context);
 			    var dbDirectories = await repo.GetAllDirectoriesAsync(ct: ct);
-
+			    
 			    var orphanedDirs = dbDirectories
 				    .Where(dbDir => !validPaths.Any(vp => 
 					    dbDir.Equals(vp, StringComparison.OrdinalIgnoreCase) ||
@@ -164,7 +164,7 @@ namespace Pivot.Engine.Services
 
 				Dictionary<string, AssetEntity> existingAssetsCache;
                 // Preload cache
-                using (var context = new PivotDbContext(_dbOptions))
+                using (var context = await _dbFactory.CreateDbContextAsync(cancellationToken))
                 {
                     var repo = new AssetRepository(context);
 					existingAssetsCache = await repo.GetExistingAssetsInDirectoryAsync(rootPath, cancellationToken);
@@ -352,7 +352,7 @@ namespace Pivot.Engine.Services
 		{
 			try
 			{
-                using var context = new PivotDbContext(_dbOptions);
+                using var context = await _dbFactory.CreateDbContextAsync(ct);
                 var repository = new AssetRepository(context);
 
 				if (!File.Exists(path)) return;
@@ -466,7 +466,7 @@ namespace Pivot.Engine.Services
 		{
 			try
 			{
-                using var context = new PivotDbContext(_dbOptions);
+                using var context = await _dbFactory.CreateDbContextAsync(ct);
                 var repository = new AssetRepository(context);
 
 				if (!File.Exists(path)) return;
@@ -580,7 +580,7 @@ namespace Pivot.Engine.Services
 
 		private async Task ProcessWatcherEventAsync(string path, WatcherChangeTypes changeType, string? newPath, CancellationToken ct)
 		{
-            using var context = new PivotDbContext(_dbOptions);
+            using var context = await _dbFactory.CreateDbContextAsync(ct);
             var repository = new AssetRepository(context);
 
 			if (changeType == WatcherChangeTypes.Deleted)

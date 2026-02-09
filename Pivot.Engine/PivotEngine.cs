@@ -11,33 +11,28 @@ public class PivotEngine : IPivotEngine, IDisposable
 {
     private readonly ILogger<PivotEngine> _logger;
     private readonly IMessenger _messenger;
+    private readonly IDbContextFactory<PivotDbContext> _dbFactory;
     private readonly JobScheduler _jobScheduler;
     private string _cacheDir = string.Empty;
-    private string _dbPath = string.Empty;
     private PivotDbContext? _dbContext; // For metadata retrieval
     private FileScannerService? _fileScanner;
     private bool _isInitialized;
 
-    public PivotEngine(ILogger<PivotEngine> logger, IMessenger messenger)
+    public PivotEngine(ILogger<PivotEngine> logger, IMessenger messenger, IDbContextFactory<PivotDbContext> dbFactory)
     {
         _logger = logger;
         _messenger = messenger;
+        _dbFactory = dbFactory;
         _jobScheduler = new JobScheduler(Math.Max(2, Environment.ProcessorCount / 2));
     }
 
-    public async Task InitializeAsync(string cacheDirectory, string dbPath)
+    public async Task InitializeAsync(string cacheDirectory)
     {
         _cacheDir = cacheDirectory;
-        _dbPath = dbPath;
         Directory.CreateDirectory(_cacheDir);
 
-        // Setup DB options
-        var optionsBuilder = new DbContextOptionsBuilder<PivotDbContext>();
-        optionsBuilder.UseSqlite($"Data Source={dbPath}");
-        var dbOptions = optionsBuilder.Options;
-
         // Initialize main context
-        _dbContext = new PivotDbContext(dbOptions);
+        _dbContext = await _dbFactory.CreateDbContextAsync();
         await _dbContext.Database.EnsureCreatedAsync();
 
         // Initialize FileScannerService
@@ -45,7 +40,7 @@ public class PivotEngine : IPivotEngine, IDisposable
         _fileScanner = new FileScannerService(
             new Logger<FileScannerService>(new LoggerFactory()), // TODO: Better logger factory injection
             _messenger,
-            dbOptions,
+            _dbFactory,
             (path, w, h, ct) => GetThumbnailAsync(path, w, h, ct)
         );
 
@@ -79,7 +74,7 @@ public class PivotEngine : IPivotEngine, IDisposable
         if (!_isInitialized) throw new InvalidOperationException("Engine not initialized");
 
         // 1. Check DB for cached thumbnail
-        using (var db = new PivotDbContext(new DbContextOptionsBuilder<PivotDbContext>().UseSqlite($"Data Source={_dbPath}").Options)) 
+        using (var db = await _dbFactory.CreateDbContextAsync(ct)) 
         {
             var meta = await db.Assets.FirstOrDefaultAsync(a => a.FilePath == assetId, ct);
             if (meta != null && !string.IsNullOrEmpty(meta.ThumbnailPath) && File.Exists(meta.ThumbnailPath))
@@ -98,19 +93,18 @@ public class PivotEngine : IPivotEngine, IDisposable
         if (File.Exists(thumbPath)) return thumbPath;
 
         Job job;
-        var dbOpts = new DbContextOptionsBuilder<PivotDbContext>().UseSqlite($"Data Source={_dbPath}").Options;
         
         if (IsImage(ext))
         {
-            job = new Jobs.ImageGenerationJob(hash, assetId, thumbPath, width, height, dbOpts);
+            job = new Jobs.ImageGenerationJob(hash, assetId, thumbPath, width, height, _dbFactory);
         }
         else if (IsVideo(ext))
         {
-            job = new Jobs.VideoExtractionJob(hash, assetId, thumbPath, width, height, dbOpts);
+            job = new Jobs.VideoExtractionJob(hash, assetId, thumbPath, width, height, _dbFactory);
         }
         else
         {
-            job = new Jobs.ShellThumbnailJob(hash, assetId, thumbPath, width, height, dbOpts);
+            job = new Jobs.ShellThumbnailJob(hash, assetId, thumbPath, width, height, _dbFactory);
         }
 
         _jobScheduler.Enqueue(job, JobPriority.High);

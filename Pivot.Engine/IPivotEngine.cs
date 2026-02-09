@@ -2,7 +2,7 @@ namespace Pivot.Engine;
 
 public interface IPivotEngine
 {
-    Task InitializeAsync(string cacheDirectory, string dbPath);
+    Task InitializeAsync(string cacheDirectory);
     
     Task<string> GetThumbnailAsync(string assetId, int width, int height, CancellationToken ct = default);
     

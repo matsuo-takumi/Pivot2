@@ -64,8 +64,9 @@ namespace Pivot
 			try
 			{
 				using var scope = Services.CreateScope();
-				var dbContext = scope.ServiceProvider.GetRequiredService<Pivot.Engine.Data.PivotDbContext>();
-				dbContext.Database.Migrate();
+				var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<Pivot.Engine.Data.PivotDbContext>>();
+				using var dbContext = await factory.CreateDbContextAsync();
+				await dbContext.Database.MigrateAsync();
 			}
 			catch (Exception ex)
 			{
@@ -80,7 +81,7 @@ namespace Pivot
 				var cachePath = System.IO.Path.Combine(appData, "Pivot", "Cache");
 				var dbPath = System.IO.Path.Combine(appData, "Pivot", "pivot.db");
 				
-				await engine.InitializeAsync(cachePath, dbPath);
+				await engine.InitializeAsync(cachePath);
 				System.Diagnostics.Debug.WriteLine("[Startup] Pivot Engine initialized successfully");
 			}
 			catch (Exception ex)
@@ -245,7 +246,7 @@ namespace Pivot
 			var dbPath = System.IO.Path.Combine(
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"Pivot", "pivot.db");
-			sc.AddDbContext<Pivot.Engine.Data.PivotDbContext>(options =>
+			sc.AddDbContextFactory<Pivot.Engine.Data.PivotDbContext>(options =>
 			options.UseSqlite($"Data Source={dbPath}"));
 		sc.AddScoped<Pivot.Engine.Repositories.IAssetRepository, Pivot.Engine.Repositories.AssetRepository>();
 		sc.AddScoped<Pivot.Repositories.IAssetRepository, Pivot.Repositories.AssetRepository>();

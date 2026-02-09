@@ -12,16 +12,16 @@ public class VideoExtractionJob : Job
     private readonly string _destinationPath;
     private readonly int _width;
     private readonly int _height;
-    private readonly DbContextOptions<PivotDbContext> _dbContextOptions;
+    private readonly IDbContextFactory<PivotDbContext> _dbFactory;
 
-    public VideoExtractionJob(string id, string sourcePath, string destinationPath, int width, int height, DbContextOptions<PivotDbContext> dbContextOptions)
+    public VideoExtractionJob(string id, string sourcePath, string destinationPath, int width, int height, IDbContextFactory<PivotDbContext> dbFactory)
         : base(id)
     {
         _sourcePath = sourcePath;
         _destinationPath = destinationPath;
         _width = width;
         _height = height;
-        _dbContextOptions = dbContextOptions;
+        _dbFactory = dbFactory;
     }
 
     public override async Task ExecuteAsync(CancellationToken ct)
@@ -56,7 +56,7 @@ public class VideoExtractionJob : Job
             if (proc.ExitCode == 0 && File.Exists(_destinationPath))
             {
                 // Update DB
-                using var db = new PivotDbContext(_dbContextOptions);
+                using var db = await _dbFactory.CreateDbContextAsync(ct);
                 var metadata = await db.Assets.FirstOrDefaultAsync(a => a.FilePath == _sourcePath, ct);
                 if (metadata != null)
                 {
