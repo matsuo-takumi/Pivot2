@@ -36,6 +36,7 @@ namespace Pivot.Views
             this.DataContext = ViewModel;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.FolderTree.CollectionChanged += FolderTree_CollectionChanged;
+            ViewModel.SmartFolderNodes.CollectionChanged += FolderTree_CollectionChanged;
 
             // Initialize BrowserControl after Loaded event
             this.Loaded += ImagePage_Loaded;
@@ -164,6 +165,7 @@ namespace Pivot.Views
         private void ImagePage_Unloaded(object sender, RoutedEventArgs e)
         {
             try { ViewModel.FolderTree.CollectionChanged -= FolderTree_CollectionChanged; } catch { }
+            try { ViewModel.SmartFolderNodes.CollectionChanged -= FolderTree_CollectionChanged; } catch { }
             // Clean up message registration
             try { WeakReferenceMessenger.Default.UnregisterAll(this); } catch { }
 
@@ -194,11 +196,33 @@ namespace Pivot.Views
             DispatcherQueue.TryEnqueue(() => BuildNavigationMenuItems());
         }
 
+
         private void BuildNavigationMenuItems()
         {
             try
             {
                 FolderNavigationView.MenuItems.Clear();
+
+                // 1. Smart Folders
+                if (ViewModel.SmartFolderNodes.Count > 0)
+                {
+                    var smartHeader = new NavigationViewItemHeader { Content = "Smart Folders" };
+                    FolderNavigationView.MenuItems.Add(smartHeader);
+
+                    foreach (var node in ViewModel.SmartFolderNodes)
+                    {
+                        var navItem = CreateNavigationViewItem(node);
+                        navItem.Icon = new FontIcon { Glyph = "\uE8B9", FontFamily = new FontFamily("Segoe MDL2 Assets") }; // Auto-filter icon
+                        FolderNavigationView.MenuItems.Add(navItem);
+                    }
+
+                    FolderNavigationView.MenuItems.Add(new NavigationViewItemSeparator());
+                }
+
+                // 2. File System Folders
+                var folderHeader = new NavigationViewItemHeader { Content = "Folders" };
+                FolderNavigationView.MenuItems.Add(folderHeader);
+
                 foreach (var node in ViewModel.FolderTree)
                 {
                     var navItem = CreateNavigationViewItem(node);
@@ -238,14 +262,30 @@ namespace Pivot.Views
             return item;
         }
 
-        private void FolderNavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+        private async void FolderNavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
         {
             if (args.SelectedItem is NavigationViewItem item && item.Tag is FolderNode node)
             {
                 ViewModel.SelectedFolder = node;
                 
-                // Update BrowserControl with directory filter (database-based)
-                BrowserControl.SetDirectoryFilter(node.FullPath);
+                if (node.FullPath.StartsWith("smart:"))
+                {
+                    // Handle Smart Folder
+                    // Format: smart:{ID}
+                    if (int.TryParse(node.FullPath.Substring(6), out int id))
+                    {
+                        var criteria = await ViewModel.GetSmartFolderCriteriaAsync(id);
+                        if (criteria != null)
+                        {
+                            BrowserControl.SetFilterCriteria(criteria);
+                        }
+                    }
+                }
+                else
+                {
+                    // Regular Folder
+                    BrowserControl.SetDirectoryFilter(node.FullPath);
+                }
             }
             else
             {

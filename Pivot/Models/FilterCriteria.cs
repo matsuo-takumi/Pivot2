@@ -75,6 +75,12 @@ namespace Pivot.Models
         /// </summary>
         public bool IncludeDeleted { get; set; } = false;
 
+        // Color Filter Properties
+        public byte? ColorR { get; set; }
+        public byte? ColorG { get; set; }
+        public byte? ColorB { get; set; }
+        public int ColorTolerance { get; set; } = 30;
+
         /// <summary>
         /// Creates a copy of this criteria.
         /// </summary>
@@ -92,7 +98,11 @@ namespace Pivot.Models
                 MinRating = MinRating,
                 SortField = SortField,
                 SortDirection = SortDirection,
-                IncludeDeleted = IncludeDeleted
+                IncludeDeleted = IncludeDeleted,
+                ColorR = ColorR,
+                ColorG = ColorG,
+                ColorB = ColorB,
+                ColorTolerance = ColorTolerance
             };
         }
     }

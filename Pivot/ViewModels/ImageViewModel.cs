@@ -27,8 +27,11 @@ namespace Pivot.ViewModels
         private readonly DirectorySettingsService? _directorySettings;
         private readonly IMessenger? _messenger;
         
+        private readonly SmartFolderService _smartFolderService;
+
         // Navigation
         public ObservableCollection<FolderNode> FolderTree { get; } = new();
+        public ObservableCollection<FolderNode> SmartFolderNodes { get; } = new();
 
         [ObservableProperty]
         private FolderNode? _selectedFolder;
@@ -46,10 +49,12 @@ namespace Pivot.ViewModels
         public ImageViewModel(
             ThemeSettingsService themeSettings,
             DirectorySettingsService directorySettings,
+            SmartFolderService smartFolderService,
             IMessenger messenger)
         {
             _themeSettings = themeSettings;
             _directorySettings = directorySettings;
+            _smartFolderService = smartFolderService;
             _messenger = messenger;
             _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             
@@ -59,6 +64,9 @@ namespace Pivot.ViewModels
             {
                 SelectionBorderThickness = _themeSettings.ImageSelectionBorderThickness;
             }
+            
+            // Load smart folders
+            _ = LoadSmartFoldersAsync();
         }
 
         partial void OnCurrentLayoutChanged(LayoutType value)
@@ -79,6 +87,59 @@ namespace Pivot.ViewModels
         {
             // Delegate to centralized utility
             Utilities.DirectoryTreeBuilder.BuildTree(FolderTree, rootDirectories);
+        }
+
+        public async Task LoadSmartFoldersAsync()
+        {
+            try
+            {
+                var folders = await _smartFolderService.GetSmartFoldersAsync();
+                
+                _dispatcherQueue.TryEnqueue(() =>
+                {
+                    SmartFolderNodes.Clear();
+                    foreach (var folder in folders)
+                    {
+                        // Use a special URI scheme for Smart Folders: "smart:{ID}"
+                        // Store the serialized criteria in Tag or retrieve it later? 
+                        // FolderNode doesn't have Tag. We'll use ID in FullPath and fetch from service or maintain a dictionary.
+                        // Actually, simpler to just store ID in path.
+                        
+                        var node = new FolderNode(folder.Name, $"smart:{folder.Id}");
+                        // We can't store the criteria directly in FolderNode without modifying it.
+                        // But we can fetch it or just use the ID to look it up if we cached it.
+                        // For now, let's keep it simple.
+                        SmartFolderNodes.Add(node);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading smart folders: {ex.Message}");
+            }
+        }
+
+        public async Task<SmartFolder?> GetSmartFolderByIdAsync(int id)
+        {
+            var folders = await _smartFolderService.GetSmartFoldersAsync();
+            return folders.FirstOrDefault(f => f.Id == id);
+        }
+
+        public async Task<FilterCriteria?> GetSmartFolderCriteriaAsync(int id)
+        {
+            var folder = await GetSmartFolderByIdAsync(id);
+            if (folder != null && !string.IsNullOrEmpty(folder.CriteriaJson))
+            {
+                try
+                {
+                    return System.Text.Json.JsonSerializer.Deserialize<FilterCriteria>(folder.CriteriaJson);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error deserializing criteria for folder {id}: {ex.Message}");
+                }
+            }
+            return null;
         }
     }
 }

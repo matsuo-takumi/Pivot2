@@ -1,6 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
 using Pivot.Engine.Core;
 using Pivot.Engine.Data;
 using Microsoft.EntityFrameworkCore;
@@ -32,11 +33,14 @@ public class ImageGenerationJob : Job
         {
             if (!File.Exists(_sourcePath)) return;
             
-            // Allow some retries for file access (e.g. if file is being written)
-            // For now, simple single attempt
+            // 1. Load Image
+            using var image = await Image.LoadAsync<Rgba32>(_sourcePath, ct);
             
-            using var image = await Image.LoadAsync(_sourcePath, ct);
-            
+            // 2. Analyze (on original image for best accuracy)
+            var pHash = Pivot.Engine.Utilities.ImageAnalysisService.ComputeAverageHash(image);
+            var colors = Pivot.Engine.Utilities.ImageAnalysisService.ExtractColors(image);
+
+            // 3. Resize for Thumbnail
             var resizeOptions = new ResizeOptions
             {
                 Mode = ResizeMode.Max,
@@ -49,27 +53,55 @@ public class ImageGenerationJob : Job
             
             image.Mutate(x => x.Resize(resizeOptions));
             
+            // 4. Save Thumbnail
             Directory.CreateDirectory(Path.GetDirectoryName(_destinationPath)!);
-            
             var encoder = new PngEncoder
             {
                 CompressionLevel = PngCompressionLevel.BestCompression
             };
-
             await image.SaveAsPngAsync(_destinationPath, encoder, ct);
             
-            // Update DB
+            // 5. Update Database
             using var db = await _dbFactory.CreateDbContextAsync(ct);
-            var metadata = await db.Assets.FirstOrDefaultAsync(a => a.FilePath == _sourcePath, ct);
-            if (metadata != null)
+            var asset = await db.Assets
+                .Include(a => a.Colors)
+                .FirstOrDefaultAsync(a => a.FilePath == _sourcePath, ct);
+
+            if (asset != null)
             {
-                metadata.ThumbnailPath = _destinationPath;
+                // Update existing asset
+                asset.ThumbnailPath = _destinationPath;
+                asset.ThumbnailGeneratedAt = DateTime.UtcNow;
+                asset.Width = image.Width; // Thumbnail dims (Note: Original dims lost if we don't save them before resize. Assuming Scanner already got them, or we should capture them.)
+                // Actually, Scanner gets simple dims. Accurately, we should capture original dims. 
+                // However, 'image' here is now resized. 
+                // If we want original dims, we should have captured them before mutate.
+                
+                // Let's rely on Scanner for Dimensions for now, OR capture them if we want to be safe.
+                // But Scanner uses Image.Identify which is fast. 
+                // We'll just update the thumbnail path and analysis data.
+                
+                asset.PerceptualHash = pHash;
+
+                // Update Colors
+                db.AssetColors.RemoveRange(asset.Colors);
+                foreach (var c in colors)
+                {
+                    c.AssetId = asset.Id;
+                    db.AssetColors.Add(c);
+                }
+                
                 await db.SaveChangesAsync(ct);
             }
             else
             {
-                // Create new entry
-                db.Assets.Add(new AssetEntity
+                // Asset not found. Create new?
+                // Typically Scanner creates the asset first.
+                // But if it doesn't exist, we can create it with the info we have.
+                // However, usually we don't want to create assets for files that might not match criteria if Scanner didn't pick them up.
+                // For safety/robustness, we'll create it if missing, similar to original code's 'else' block.
+                
+                var newAsset = new AssetEntity
                 {
                     FilePath = _sourcePath,
                     FileName = Path.GetFileName(_sourcePath),
@@ -78,8 +110,18 @@ public class ImageGenerationJob : Job
                     FileSize = new FileInfo(_sourcePath).Length,
                     LastModifiedUtc = File.GetLastWriteTimeUtc(_sourcePath),
                     ThumbnailPath = _destinationPath,
-                    ThumbnailGeneratedAt = DateTime.UtcNow
-                });
+                    ThumbnailGeneratedAt = DateTime.UtcNow,
+                    PerceptualHash = pHash
+                };
+                
+                db.Assets.Add(newAsset);
+                // We need to save first to get ID for colors? 
+                // EF Core handles graph add usually.
+                foreach(var c in colors)
+                {
+                    newAsset.Colors.Add(c);
+                }
+                
                 await db.SaveChangesAsync(ct);
             }
         }

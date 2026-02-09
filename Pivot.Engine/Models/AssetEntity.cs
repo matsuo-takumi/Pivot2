@@ -13,6 +13,7 @@ namespace Pivot.Engine.Models
     [Index(nameof(AspectRatio), Name = "IX_Asset_AspectRatio")]
     [Index(nameof(Rating), Name = "IX_Asset_Rating")]
     [Index(nameof(SortOrder), Name = "IX_Asset_SortOrder")]
+    [Index(nameof(PerceptualHash), Name = "IX_Asset_PerceptualHash")]
     public class AssetEntity : System.ComponentModel.INotifyPropertyChanged
     {
         public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
@@ -127,6 +128,12 @@ namespace Pivot.Engine.Models
         /// </summary>
         [MaxLength(10)]
         public string? DominantColor { get; set; }
+
+        // [New in v2.1] Duplicate/Similar search
+        public ulong? PerceptualHash { get; set; }
+
+        // [New in v2.1] Advanced color search
+        public virtual ICollection<AssetColor> Colors { get; set; } = new List<AssetColor>();
         
         // 論理削除
         public bool IsDeleted { get; set; }

@@ -211,6 +211,36 @@ namespace Pivot.Controls
             }
         }
 
+        private void FilterColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        {
+            // Optional: Live preview? For now, require Apply click.
+        }
+
+        private void ApplyColorFilter_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel == null) return;
+            var color = FilterColorPicker.Color;
+            // Use a default tolerance or allow user to set it? 30 is good default.
+            _viewModel.SetColorFilter(color.R, color.G, color.B, 30);
+            
+            // Close flyout
+            if (ColorFilterButton.Flyout is Flyout f) f.Hide();
+            
+            // Visual feedback
+            ColorFilterButton.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(40, color.R, color.G, color.B));
+        }
+
+        private void ClearColorFilter_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel == null) return;
+            _viewModel.ClearColorFilter();
+            
+            if (ColorFilterButton.Flyout is Flyout f) f.Hide();
+            
+            // Reset visual
+            ColorFilterButton.ClearValue(Button.BackgroundProperty);
+        }
+
         #endregion
 
         #region Item Interaction Handlers (Parent-Level)
@@ -546,6 +576,15 @@ namespace Pivot.Controls
             _viewModel.SetDirectoryFilter(directoryPath);
         }
 
+        /// <summary>
+        /// Apply a complete set of filter criteria (e.g., from a Smart Folder).
+        /// </summary>
+        public void SetFilterCriteria(FilterCriteria criteria)
+        {
+            if (_viewModel == null) return;
+            _viewModel.SetCriteria(criteria);
+        }
+
         private void LayoutButton_Click(object sender, RoutedEventArgs e)
         {
             if (_viewModel == null) return;
@@ -687,6 +726,35 @@ namespace Pivot.Controls
                 {
                     return false;
                 }
+            }
+
+            // Check Color Filter
+            if (criteria.ColorR.HasValue && criteria.ColorG.HasValue && criteria.ColorB.HasValue && asset.Colors != null)
+            {
+                int r = criteria.ColorR.Value;
+                int g = criteria.ColorG.Value;
+                int b = criteria.ColorB.Value;
+                int t = criteria.ColorTolerance;
+
+                int minR = Math.Max(0, r - t);
+                int maxR = Math.Min(255, r + t);
+                int minG = Math.Max(0, g - t);
+                int maxG = Math.Min(255, g + t);
+                int minB = Math.Max(0, b - t);
+                int maxB = Math.Min(255, b + t);
+
+                bool match = false;
+                foreach (var c in asset.Colors)
+                {
+                    if (c.R >= minR && c.R <= maxR &&
+                        c.G >= minG && c.G <= maxG &&
+                        c.B >= minB && c.B <= maxB)
+                    {
+                        match = true;
+                        break;
+                    }
+                }
+                if (!match) return false;
             }
 
             return true;

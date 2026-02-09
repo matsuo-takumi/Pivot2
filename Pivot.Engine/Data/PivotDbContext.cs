@@ -6,6 +6,8 @@ namespace Pivot.Engine.Data;
 public class PivotDbContext : DbContext
 {
     public DbSet<AssetEntity> Assets { get; set; }
+    public DbSet<AssetColor> AssetColors { get; set; }
+    public DbSet<SmartFolder> SmartFolders { get; set; }
 
     public PivotDbContext(DbContextOptions<PivotDbContext> options) : base(options)
     {

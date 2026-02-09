@@ -157,7 +157,8 @@
                 Margin="0,0,0,8">
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
@@ -203,10 +204,42 @@
                         Padding="8">
                     <FontIcon x:Name="SortDirectionIcon" Glyph="&#xE74B;" FontSize="14"/>
                 </Button>
+
+                <!-- Color Filter -->
+                <Button x:Name="ColorFilterButton"
+                        Grid.Column="4"
+                        ToolTipService.ToolTip="Filter by Color"
+                        Padding="8">
+                    <FontIcon Glyph="&#xE790;" FontSize="14" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                    <Button.Flyout>
+                        <Flyout>
+                            <StackPanel Spacing="8" Width="220">
+                                <TextBlock Text="Filter by Color" Style="{StaticResource BaseTextBlockStyle}" FontWeight="SemiBold"/>
+                                <ColorPicker x:Name="FilterColorPicker"
+                                             ColorSpectrumShape="Ring"
+                                             IsMoreButtonVisible="False"
+                                             IsColorSliderVisible="True"
+                                             IsColorChannelTextInputVisible="False"
+                                             IsHexInputVisible="True"
+                                             IsAlphaEnabled="False"
+                                             ColorChanged="FilterColorPicker_ColorChanged"/>
+                                
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Content="Apply" Click="ApplyColorFilter_Click" HorizontalAlignment="Stretch" Grid.Column="0" Style="{StaticResource AccentButtonStyle}"/>
+                                    <Button Content="Clear" Click="ClearColorFilter_Click" HorizontalAlignment="Stretch" Grid.Column="1"/>
+                                </Grid>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
                 
                 <!-- Loading Indicator (in filter bar) -->
                 <StackPanel x:Name="FilterBarLoadingIndicator"
-                            Grid.Column="4"
+                            Grid.Column="5"
                             Orientation="Horizontal"
                             Spacing="6"
                             Visibility="Collapsed"

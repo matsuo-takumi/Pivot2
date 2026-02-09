@@ -258,9 +258,9 @@ namespace Pivot
 			// File scanner service
 			sc.AddSingleton<Pivot.Engine.Services.FileScannerService>();
 			sc.AddSingleton<IThumbnailService, ThumbnailService>();
-
+			sc.AddSingleton<Pivot.Engine.Services.IAnalysisQueryService, Pivot.Engine.Services.AnalysisQueryService>();
             
-            // New Code Logic Layer
+            sc.AddSingleton<SmartFolderService>();
             sc.AddScoped<CodeService>();
             sc.AddSingleton<CodeTagService>();
             sc.AddSingleton<CodeNavigationService>();
@@ -310,6 +310,8 @@ namespace Pivot
             sc.AddTransient<CodeSettingsViewModel>();
             sc.AddTransient<Pivot.CodeModule.ViewModels.CodeColorPresetViewModel>();
             sc.AddTransient<Pivot.CodeModule.ViewModels.CodeColorSettingViewModel>();
+            
+            sc.AddTransient<DuplicateViewModel>();
             
             Services = sc.BuildServiceProvider();
 

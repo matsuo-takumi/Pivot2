@@ -152,6 +152,28 @@ namespace Pivot.Services
                 query = query.Where(a => a.Rating >= criteria.MinRating);
             }
 
+            // Color Filter
+            if (criteria.ColorR.HasValue && criteria.ColorG.HasValue && criteria.ColorB.HasValue)
+            {
+                int r = criteria.ColorR.Value;
+                int g = criteria.ColorG.Value;
+                int b = criteria.ColorB.Value;
+                int t = criteria.ColorTolerance;
+
+                // Simple bounding box check on the asset's extracted colors
+                int minR = Math.Max(0, r - t);
+                int maxR = Math.Min(255, r + t);
+                int minG = Math.Max(0, g - t);
+                int maxG = Math.Min(255, g + t);
+                int minB = Math.Max(0, b - t);
+                int maxB = Math.Min(255, b + t);
+
+                query = query.Where(a => a.Colors.Any(c => 
+                    c.R >= minR && c.R <= maxR &&
+                    c.G >= minG && c.G <= maxG &&
+                    c.B >= minB && c.B <= maxB));
+            }
+
             // Apply sorting
             query = ApplySorting(query, criteria.SortField, criteria.SortDirection);
 

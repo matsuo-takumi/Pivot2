@@ -131,6 +131,39 @@ namespace Pivot.ViewModels
             }
         }
 
+        /// <summary>
+        /// Replace current criteria with new criteria (e.g. from Smart Folder).
+        /// Preserves transient state if needed, or fully replaces.
+        /// </summary>
+        public void SetCriteria(FilterCriteria newCriteria)
+        {
+            // Clone to ensure we don't modify the source (e.g. Smart Folder definition) inadvertently
+            FilterCriteria = newCriteria.Clone();
+            _logger.LogDebug("BrowserViewModel: Criteria replaced from Smart Folder/External source");
+            OnCriteriaChanged();
+        }
+
+        public void SetColorFilter(byte r, byte g, byte b, int tolerance = 30)
+        {
+            FilterCriteria.ColorR = r;
+            FilterCriteria.ColorG = g;
+            FilterCriteria.ColorB = b;
+            FilterCriteria.ColorTolerance = tolerance;
+            _logger.LogDebug("BrowserViewModel: Color filter set to R={R}, G={G}, B={B}, Tol={T}", r, g, b, tolerance);
+            OnCriteriaChanged();
+        }
+
+        public void ClearColorFilter()
+        {
+            if (FilterCriteria.ColorR == null) return;
+            
+            FilterCriteria.ColorR = null;
+            FilterCriteria.ColorG = null;
+            FilterCriteria.ColorB = null;
+            _logger.LogDebug("BrowserViewModel: Color filter cleared");
+            OnCriteriaChanged();
+        }
+
         partial void OnCurrentLayoutChanged(LayoutType value)
         {
             _logger.LogDebug("BrowserViewModel: Layout changed to {Layout}", value);
