@@ -10,6 +10,7 @@ namespace Pivot.Engine;
 public class PivotEngine : IPivotEngine, IDisposable
 {
     private readonly ILogger<PivotEngine> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly IMessenger _messenger;
     private readonly IDbContextFactory<PivotDbContext> _dbFactory;
     private readonly JobScheduler _jobScheduler;
@@ -18,9 +19,10 @@ public class PivotEngine : IPivotEngine, IDisposable
     private FileScannerService? _fileScanner;
     private bool _isInitialized;
 
-    public PivotEngine(ILogger<PivotEngine> logger, IMessenger messenger, IDbContextFactory<PivotDbContext> dbFactory)
+    public PivotEngine(ILogger<PivotEngine> logger, ILoggerFactory loggerFactory, IMessenger messenger, IDbContextFactory<PivotDbContext> dbFactory)
     {
         _logger = logger;
+        _loggerFactory = loggerFactory;
         _messenger = messenger;
         _dbFactory = dbFactory;
         _jobScheduler = new JobScheduler(Math.Max(2, Environment.ProcessorCount / 2));
@@ -33,12 +35,11 @@ public class PivotEngine : IPivotEngine, IDisposable
 
         // Initialize main context
         _dbContext = await _dbFactory.CreateDbContextAsync();
-        await _dbContext.Database.EnsureCreatedAsync();
 
         // Initialize FileScannerService
         // Pass a delegate for thumbnail generation that calls our GetThumbnailAsync
         _fileScanner = new FileScannerService(
-            new Logger<FileScannerService>(new LoggerFactory()), // TODO: Better logger factory injection
+            _loggerFactory.CreateLogger<FileScannerService>(),
             _messenger,
             _dbFactory,
             (path, w, h, ct) => GetThumbnailAsync(path, w, h, ct)

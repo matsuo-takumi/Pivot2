@@ -76,9 +76,9 @@ public class JobScheduler : IDisposable
             {
                 break;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Log error but continue
+                System.Diagnostics.Debug.WriteLine($"[JobScheduler] Job execution failed: {ex}");
             }
         }
     }
