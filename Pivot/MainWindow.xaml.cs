@@ -103,38 +103,9 @@ namespace Pivot
             // ナビゲーション要求はNavigationServiceが処理 - 直接購読不要
         }
 
-        private void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (MainPivot.SelectedItem is PivotItem selectedPivotItem)
-            {
-                
-                // Navigate based on selected index
-                switch (MainPivot.SelectedIndex)
-                {
-                    case 0: // Home
-                        NavigateTo(NavigationRegion.Home);
-                        break;
-                    case 1: // Asset
-                        NavigateTo(NavigationRegion.Asset);
-                        break;
-                    case 2: // Image
-                        NavigateTo(NavigationRegion.Image);
-                        break;
-                    case 3: // Project
-                        NavigateTo(NavigationRegion.Project);
-                        break;
-                    case 4: // Code
-                        NavigateTo(NavigationRegion.Code);
-                        break;
-                    case 5: // Duplicates
-                        NavigateTo(NavigationRegion.Duplicate);
-                        break;
-                    case 6: // Preference
-                        NavigateTo(NavigationRegion.Preference);
-                        break;
-                }
-            }
-        }
+
+
+
         #region Loading Indicator
 
         /// <summary>
