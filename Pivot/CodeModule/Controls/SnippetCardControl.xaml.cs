@@ -46,7 +46,7 @@ namespace Pivot.CodeModule.Controls
         {
             if (Settings == null)
             {
-                Settings = ((App)Application.Current).Services.GetService<CodeSettingsViewModel>();
+                Settings = ((App)Application.Current).Services.GetService<CodeSettingsViewModel>()!;
             }
         }
 

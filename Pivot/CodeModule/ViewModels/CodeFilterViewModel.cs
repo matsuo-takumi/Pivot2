@@ -87,7 +87,7 @@ namespace Pivot.CodeModule.ViewModels
             // Passing null asset signals general update or we rely on CodeViewModel reloading blindly.
             _messenger.Send(new Pivot.Messages.AssetEntityChangedMessage(
                 null, 
-                Pivot.Messages.AssetEntityChangedMessage.ChangeType.Updated));
+                Pivot.Messages.AssetChangeType.Updated));
         }
 
         public bool IsTagDeletable(string? tagName)
