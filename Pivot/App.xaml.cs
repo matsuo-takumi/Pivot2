@@ -246,8 +246,9 @@ namespace Pivot
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"Pivot", "pivot.db");
 			sc.AddDbContext<Pivot.Engine.Data.PivotDbContext>(options =>
-				options.UseSqlite($"Data Source={dbPath}"));
-			sc.AddScoped<Pivot.Engine.Repositories.IAssetRepository, Pivot.Engine.Repositories.AssetRepository>();
+			options.UseSqlite($"Data Source={dbPath}"));
+		sc.AddScoped<Pivot.Engine.Repositories.IAssetRepository, Pivot.Engine.Repositories.AssetRepository>();
+		sc.AddScoped<Pivot.Repositories.IAssetRepository, Pivot.Repositories.AssetRepository>();
 
 			
 			// Pivot Engine (thumbnail generation, metadata indexing)
