@@ -22,7 +22,7 @@ namespace Pivot.Engine.Services
 		private readonly ILogger _logger;
 		private readonly IMessenger _messenger;
 		private readonly IDbContextFactory<PivotDbContext> _dbFactory;
-		private readonly Func<string, int, int, CancellationToken, Task<string>> _thumbnailGenerator;
+
 		
 		private string? _currentRootPath;
 		private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
@@ -50,16 +50,16 @@ namespace Pivot.Engine.Services
 		private const int AssetFlushIntervalMs = 300;
 		private const int AssetFlushBatchMax = 100;
 
+		public Func<string, int, int, CancellationToken, Task<string>>? ThumbnailGenerator { get; set; }
+
 		public FileScannerService(
-			ILogger logger, 
+			ILogger<FileScannerService> logger, 
 			IMessenger messenger, 
-			IDbContextFactory<PivotDbContext> dbFactory,
-			Func<string, int, int, CancellationToken, Task<string>> thumbnailGenerator)
+			IDbContextFactory<PivotDbContext> dbFactory)
 		{
 			_logger = logger;
 			_messenger = messenger;
 			_dbFactory = dbFactory;
-			_thumbnailGenerator = thumbnailGenerator;
 
 			_flushLoopCts = new CancellationTokenSource();
 			_flushLoopTask = RunFlushLoopAsync(_flushLoopCts.Token);
@@ -413,7 +413,10 @@ namespace Pivot.Engine.Services
 					try
 					{
                         // Generate thumbnail via Engine
-						thumbnailPath = await _thumbnailGenerator(path, 300, 200, ct);
+						if (ThumbnailGenerator != null)
+                        {
+                            thumbnailPath = await ThumbnailGenerator(path, 300, 200, ct);
+                        }
 					}
 					catch { }
 				}
@@ -529,7 +532,10 @@ namespace Pivot.Engine.Services
 					try
 					{
                         // Generate thumbnail via Engine (which will queue if needed and return empty string)
-						thumbnailPath = await _thumbnailGenerator(path, 300, 200, ct);
+						if (ThumbnailGenerator != null)
+                        {
+                            thumbnailPath = await ThumbnailGenerator(path, 300, 200, ct);
+                        }
 					}
 					catch { }
 				}

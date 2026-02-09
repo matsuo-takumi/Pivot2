@@ -256,8 +256,7 @@ namespace Pivot
 			sc.AddSingleton<Pivot.Engine.IPivotEngine, Pivot.Engine.PivotEngine>();
 			
 			// File scanner service
-			// File scanner service - Removed (Logic moved to Engine)
-			// sc.AddSingleton<FileScannerService>();
+			sc.AddSingleton<Pivot.Engine.Services.FileScannerService>();
 			sc.AddSingleton<IThumbnailService, ThumbnailService>();
 
             

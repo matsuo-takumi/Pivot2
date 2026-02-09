@@ -16,15 +16,21 @@ public class PivotEngine : IPivotEngine, IDisposable
     private readonly JobScheduler _jobScheduler;
     private string _cacheDir = string.Empty;
     private PivotDbContext? _dbContext; // For metadata retrieval
-    private FileScannerService? _fileScanner;
+    private readonly FileScannerService _fileScanner;
     private bool _isInitialized;
 
-    public PivotEngine(ILogger<PivotEngine> logger, ILoggerFactory loggerFactory, IMessenger messenger, IDbContextFactory<PivotDbContext> dbFactory)
+    public PivotEngine(
+        ILogger<PivotEngine> logger, 
+        ILoggerFactory loggerFactory, 
+        IMessenger messenger, 
+        IDbContextFactory<PivotDbContext> dbFactory,
+        FileScannerService fileScanner)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
         _messenger = messenger;
         _dbFactory = dbFactory;
+        _fileScanner = fileScanner;
         _jobScheduler = new JobScheduler(Math.Max(2, Environment.ProcessorCount / 2));
     }
 
@@ -35,15 +41,9 @@ public class PivotEngine : IPivotEngine, IDisposable
 
         // Initialize main context
         _dbContext = await _dbFactory.CreateDbContextAsync();
-
-        // Initialize FileScannerService
-        // Pass a delegate for thumbnail generation that calls our GetThumbnailAsync
-        _fileScanner = new FileScannerService(
-            _loggerFactory.CreateLogger<FileScannerService>(),
-            _messenger,
-            _dbFactory,
-            (path, w, h, ct) => GetThumbnailAsync(path, w, h, ct)
-        );
+        
+        // Initialize FileScannerService delegate to resolve circular dependency
+        _fileScanner.ThumbnailGenerator = (path, w, h, ct) => GetThumbnailAsync(path, w, h, ct);
 
         _isInitialized = true;
         _logger.LogInformation("PivotEngine initialized at {Path}", _cacheDir);
