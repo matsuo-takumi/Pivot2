@@ -176,7 +176,7 @@ namespace Pivot.CodeModule.ViewModels
                 // Notify changes (Updated)
                 _messenger.Send(new AssetEntityChangedMessage(
                     CurrentSnippet, 
-                    AssetEntityChangedMessage.ChangeType.Updated));
+                    AssetChangeType.Updated));
             }
             catch (Exception ex)
             {
@@ -195,7 +195,7 @@ namespace Pivot.CodeModule.ViewModels
                 await _codeService.DeleteSnippetAsync(CurrentSnippet);
 
                 // Notify list to remove item
-                _messenger.Send(new AssetEntityChangedMessage(CurrentSnippet, AssetEntityChangedMessage.ChangeType.Deleted));
+                _messenger.Send(new AssetEntityChangedMessage(CurrentSnippet, AssetChangeType.Deleted));
 
                 CloseEditor();
             }

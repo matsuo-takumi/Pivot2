@@ -66,7 +66,7 @@ namespace Pivot.CodeModule.ViewModels
 
         private void OnAssetChanged(object recipient, AssetEntityChangedMessage message)
         {
-            if (message.Type == AssetEntityChangedMessage.ChangeType.Deleted)
+            if (message.Type == AssetChangeType.Deleted || message.Type == AssetChangeType.Removed)
             {
                 // Remove from collections when deleted from editor
                 var item = Snippets.FirstOrDefault(s => s.Id == message.Asset?.Id);

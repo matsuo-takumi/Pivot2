@@ -103,7 +103,7 @@ namespace Pivot.Views
         public void Receive(AssetEntityChangedMessage message)
         {
             // Reload when individual asset changes
-            if (message.Asset?.Kind == AssetKind.Model3D || message.Type == AssetEntityChangedMessage.ChangeType.Deleted)
+            if (message.Asset?.Kind == AssetKind.Model3D || message.Type == AssetChangeType.Deleted)
             {
                 DispatcherQueue.TryEnqueue(async () =>
                 {

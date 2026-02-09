@@ -4,20 +4,21 @@ namespace Pivot.Messages
 {
     public class AssetEntityChangedMessage
     {
-        public AssetEntity Asset { get; }
-        public ChangeType ChangeType { get; }
+        public AssetEntity? Asset { get; }
+        public AssetChangeType Type { get; }
 
-        public AssetEntityChangedMessage(AssetEntity asset, ChangeType changeType = ChangeType.Updated)
+        public AssetEntityChangedMessage(AssetEntity? asset, AssetChangeType type = AssetChangeType.Updated)
         {
             Asset = asset;
-            ChangeType = changeType;
+            Type = type;
         }
     }
 
-    public enum ChangeType
+    public enum AssetChangeType
     {
         Added,
         Updated,
-        Removed
+        Removed,
+        Deleted
     }
 }
