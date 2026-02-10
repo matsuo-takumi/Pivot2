@@ -11,11 +11,19 @@ using Pivot.Engine.Models;
 
 namespace Pivot.ViewModels;
 
+// 画像表示用の軽量ViewModel
+public class DuplicateAssetItem
+{
+    public int Id { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string FilePath { get; set; } = string.Empty;
+    public string ThumbnailPath { get; set; } = string.Empty; // ここにサムネイルパスを入れる
+}
+
 public partial class DuplicateViewModel : ObservableObject
 {
     private readonly IDbContextFactory<PivotDbContext> _dbFactory;
 
-    // 重複グループのリスト
     [ObservableProperty]
     private ObservableCollection<DuplicateGroupViewModel> _duplicateGroups = new();
 
@@ -25,7 +33,6 @@ public partial class DuplicateViewModel : ObservableObject
     [ObservableProperty]
     private string _statusMessage = "Ready to scan";
 
-    // コンストラクタで DB Factory を受け取る (DI)
     public DuplicateViewModel(IDbContextFactory<PivotDbContext> dbFactory)
     {
         _dbFactory = dbFactory;
@@ -34,61 +41,44 @@ public partial class DuplicateViewModel : ObservableObject
     [RelayCommand]
     private async Task ScanAsync()
     {
+        if (IsScanning) return;
         IsScanning = true;
-        StatusMessage = "Scanning for duplicates...";
+        StatusMessage = "Scanning hashes...";
         DuplicateGroups.Clear();
 
         try
         {
-            await Task.Run(async () =>
+            // DB操作は別スレッドで
+            var groupsData = await Task.Run(async () =>
             {
                 using var db = await _dbFactory.CreateDbContextAsync();
-
-                // ハッシュがある画像のみ取得
-                var assets = await db.Assets
+                
+                // ハッシュが重複しているものを取得
+                var duplicates = await db.Assets
                     .Where(a => a.PerceptualHash != null)
-                    .Select(a => new { a.Id, a.PerceptualHash })
-                    .ToListAsync();
-
-                // ここでハッシュ比較ロジック (簡易実装: 完全一致)
-                // ※ 本来はハミング距離計算が必要ですが、まずは完全一致で動かします
-                var groups = assets
                     .GroupBy(a => a.PerceptualHash)
                     .Where(g => g.Count() > 1)
-                    .ToList();
+                    .Select(g => g.Select(a => new DuplicateAssetItem 
+                    { 
+                        Id = a.Id, 
+                        FileName = a.FileName, 
+                        FilePath = a.FilePath,
+                        // 本来はThumbnailServiceを使うべきですが、簡易的にFilePathまたはキャッシュパスを指定
+                        ThumbnailPath = a.FilePath 
+                    }).ToList())
+                    .ToListAsync();
 
-                foreach (var group in groups)
-                {
-                    // UIスレッドでコレクションに追加
-                    // (実際のアプリではここでもう少し詳細なデータをロードします)
-                    var groupVm = new DuplicateGroupViewModel(group.Select(x => x.Id).ToList());
-                    
-                    // UI更新のためDispatcherが必要ですが、MVVM ToolkitのMessenger等を使うか
-                    // 簡易的にUIスレッドへ戻す処理が必要です。
-                    // ここでは簡略化のため、ViewModel側でコレクション操作だけに留めます。
-                    // 注意: Task.Run内から直接ObservableCollectionを操作すると例外が発生する可能性があります。
-                    // 実際のアプリでは DispatcherQueue を使うべきですが、
-                    // ここではユーザー提示コードに従いつつ、BindingOperations.EnableCollectionSynchronization等の対策が前提、
-                    // またはUIスレッドに戻して追加する必要があります。
-                    // 今回は簡易的に、ここでリストを作って最後に一括更新するか、
-                    // RelayCommandの非同期フロー(UIスレッドに戻ってくる)を利用して、
-                    // 結果を返してから追加するのがベターですが、
-                    // ユーザーコードを尊重しつつ、ObservableCollection操作はUIスレッドで行うように修正します。
-                }
-                
-                return groups; // グループ情報を返す
-            }).ContinueWith(t => 
+                return duplicates;
+            });
+
+            // UIスレッドでViewModel構築
+            foreach (var groupAssets in groupsData)
             {
-                if (t.IsFaulted) throw t.Exception;
-                
-                var groups = t.Result;
-                foreach(var g in groups)
-                {
-                     DuplicateGroups.Add(new DuplicateGroupViewModel(g.Select(x => x.Id).ToList()));
-                }
-            }, TaskScheduler.FromCurrentSynchronizationContext()); // UIスレッドで実行
-            
-            StatusMessage = "Scan complete.";
+                var groupVm = new DuplicateGroupViewModel(groupAssets);
+                DuplicateGroups.Add(groupVm);
+            }
+
+            StatusMessage = $"Found {DuplicateGroups.Count} duplicate groups.";
         }
         catch (Exception ex)
         {
@@ -101,20 +91,31 @@ public partial class DuplicateViewModel : ObservableObject
     }
 }
 
-// グループ用の子ViewModel
 public partial class DuplicateGroupViewModel : ObservableObject
 {
-    public List<int> AssetIds { get; }
+    // XAMLが参照していた Assets プロパティ
+    public ObservableCollection<DuplicateAssetItem> Assets { get; }
 
-    public DuplicateGroupViewModel(List<int> assetIds)
+    // XAMLが参照していた SelectedToKeep プロパティ
+    [ObservableProperty]
+    private DuplicateAssetItem? _selectedToKeep;
+
+    public DuplicateGroupViewModel(List<DuplicateAssetItem> assets)
     {
-        AssetIds = assetIds;
+        Assets = new ObservableCollection<DuplicateAssetItem>(assets);
+        // デフォルトで最初の一つを選択して残す候補にする
+        SelectedToKeep = Assets.FirstOrDefault();
     }
 
     [RelayCommand]
     private async Task ResolveAsync()
     {
-        // 解決（削除など）ロジック
+        if (SelectedToKeep == null) return;
+
+        // ここに「選択されていないものを削除する」ロジックを実装
+        // 今回はプレースホルダーのみ
         await Task.CompletedTask;
+        
+        // 処理完了後、親のリストから自分を消すなどの通知が必要
     }
 }
