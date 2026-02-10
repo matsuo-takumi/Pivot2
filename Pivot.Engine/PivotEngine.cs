@@ -39,6 +39,12 @@ public class PivotEngine : IPivotEngine, IDisposable
         _cacheDir = cacheDirectory;
         Directory.CreateDirectory(_cacheDir);
 
+        // Initialize DB with migrations
+        using (var db = await _dbFactory.CreateDbContextAsync())
+        {
+            await db.Database.MigrateAsync();
+        }
+
         // Initialize main context
         _dbContext = await _dbFactory.CreateDbContextAsync();
         

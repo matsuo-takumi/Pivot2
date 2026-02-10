@@ -61,6 +61,8 @@ namespace Pivot
 		protected override async void OnLaunched(LaunchActivatedEventArgs args)
 		{
 			// Initialize SQLite database with migrations (allows schema evolution without data loss)
+			/* 
+			Moved to PivotEngine.InitializeAsync to ensure proper Migration
 			try
 			{
 				using var scope = Services.CreateScope();
@@ -73,6 +75,7 @@ namespace Pivot
 			{
 				System.Diagnostics.Debug.WriteLine($"Database initialization failed: {ex}");
 			}
+			*/
 			
 			// Initialize Pivot Engine (thumbnail generation, background processing)
 			try
