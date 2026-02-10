@@ -46,8 +46,8 @@ public partial class DuplicateViewModel : ObservableObject
 
                 // ハッシュがある画像のみ取得
                 var assets = await db.Assets
+                    .AsNoTracking()
                     .Where(a => a.PerceptualHash != null)
-                    .Select(a => new { a.Id, a.PerceptualHash })
                     .ToListAsync();
 
                 // ここでハッシュ比較ロジック (簡易実装: 完全一致)
@@ -55,26 +55,8 @@ public partial class DuplicateViewModel : ObservableObject
                 var groups = assets
                     .GroupBy(a => a.PerceptualHash)
                     .Where(g => g.Count() > 1)
+                    .Select(g => new DuplicateGroupViewModel(g.ToList()))
                     .ToList();
-
-                foreach (var group in groups)
-                {
-                    // UIスレッドでコレクションに追加
-                    // (実際のアプリではここでもう少し詳細なデータをロードします)
-                    var groupVm = new DuplicateGroupViewModel(group.Select(x => x.Id).ToList());
-                    
-                    // UI更新のためDispatcherが必要ですが、MVVM ToolkitのMessenger等を使うか
-                    // 簡易的にUIスレッドへ戻す処理が必要です。
-                    // ここでは簡略化のため、ViewModel側でコレクション操作だけに留めます。
-                    // 注意: Task.Run内から直接ObservableCollectionを操作すると例外が発生する可能性があります。
-                    // 実際のアプリでは DispatcherQueue を使うべきですが、
-                    // ここではユーザー提示コードに従いつつ、BindingOperations.EnableCollectionSynchronization等の対策が前提、
-                    // またはUIスレッドに戻して追加する必要があります。
-                    // 今回は簡易的に、ここでリストを作って最後に一括更新するか、
-                    // RelayCommandの非同期フロー(UIスレッドに戻ってくる)を利用して、
-                    // 結果を返してから追加するのがベターですが、
-                    // ユーザーコードを尊重しつつ、ObservableCollection操作はUIスレッドで行うように修正します。
-                }
                 
                 return groups; // グループ情報を返す
             }).ContinueWith(t => 
@@ -84,7 +66,7 @@ public partial class DuplicateViewModel : ObservableObject
                 var groups = t.Result;
                 foreach(var g in groups)
                 {
-                     DuplicateGroups.Add(new DuplicateGroupViewModel(g.Select(x => x.Id).ToList()));
+                     DuplicateGroups.Add(g);
                 }
             }, TaskScheduler.FromCurrentSynchronizationContext()); // UIスレッドで実行
             
@@ -104,11 +86,16 @@ public partial class DuplicateViewModel : ObservableObject
 // グループ用の子ViewModel
 public partial class DuplicateGroupViewModel : ObservableObject
 {
-    public List<int> AssetIds { get; }
+    [ObservableProperty]
+    private ObservableCollection<AssetEntity> _assets;
 
-    public DuplicateGroupViewModel(List<int> assetIds)
+    [ObservableProperty]
+    private AssetEntity? _selectedToKeep;
+
+    public DuplicateGroupViewModel(List<AssetEntity> assets)
     {
-        AssetIds = assetIds;
+        Assets = new ObservableCollection<AssetEntity>(assets);
+        SelectedToKeep = assets.FirstOrDefault();
     }
 
     [RelayCommand]
