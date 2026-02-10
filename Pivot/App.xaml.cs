@@ -66,7 +66,8 @@ namespace Pivot
 				using var scope = Services.CreateScope();
 				var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<Pivot.Engine.Data.PivotDbContext>>();
 				using var dbContext = await factory.CreateDbContextAsync();
-				await dbContext.Database.MigrateAsync();
+				// await dbContext.Database.MigrateAsync();
+				await dbContext.Database.EnsureCreatedAsync();
 			}
 			catch (Exception ex)
 			{
