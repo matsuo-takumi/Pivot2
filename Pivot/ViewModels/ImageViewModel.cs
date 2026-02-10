@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Pivot.Services;
+using Pivot.Engine.Services;
 
 using CommunityToolkit.Mvvm.Messaging;
 using Pivot.Messages;
@@ -36,6 +37,9 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private FolderNode? _selectedFolder;
 
+        // Service dependencies for Partial Classes
+        private readonly IAnalysisQueryService? _analysisService;
+
         // Legacy layout properties (retained for binding compatibility if any, but simplified)
         [ObservableProperty]
         private LayoutType _currentLayout = LayoutType.Grid;
@@ -50,12 +54,14 @@ namespace Pivot.ViewModels
             ThemeSettingsService themeSettings,
             DirectorySettingsService directorySettings,
             SmartFolderService smartFolderService,
-            IMessenger messenger)
+            IMessenger messenger,
+            IAnalysisQueryService analysisService)
         {
             _themeSettings = themeSettings;
             _directorySettings = directorySettings;
             _smartFolderService = smartFolderService;
             _messenger = messenger;
+            _analysisService = analysisService;
             _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             
             _messenger?.RegisterAll(this);

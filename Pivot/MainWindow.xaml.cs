@@ -94,7 +94,7 @@ namespace Pivot
             NavigateTo(NavigationRegion.Image);
             NavigateTo(NavigationRegion.Project);
             NavigateTo(NavigationRegion.Code);
-            NavigateTo(NavigationRegion.Duplicate);
+
             NavigateTo(NavigationRegion.Preference);
             
             // Set initial Pivot selection
@@ -454,13 +454,7 @@ namespace Pivot
                         CodeFrame.Navigate(typeof(Pivot.CodeModule.Views.CodePage), null, transition);
                     }
                     break;
-                case NavigationRegion.Duplicate:
-                    // 既にDuplicatePageが表示されている場合は再ナビゲートしない
-                    if (DuplicateFrame.Content?.GetType() != typeof(Views.DuplicatePage))
-                    {
-                        DuplicateFrame.Navigate(typeof(Views.DuplicatePage), null, transition);
-                    }
-                    break;
+
                 case NavigationRegion.Preference:
                     // 既にPreferencePageが表示されている場合は再ナビゲートしない
                     if (PreferenceFrame.Content?.GetType() != typeof(Views.PreferencePage))

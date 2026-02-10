@@ -315,8 +315,7 @@ namespace Pivot
             sc.AddTransient<Pivot.CodeModule.ViewModels.CodeColorPresetViewModel>();
             sc.AddTransient<Pivot.CodeModule.ViewModels.CodeColorSettingViewModel>();
             
-            sc.AddTransient<DuplicateViewModel>();
-            
+
             Services = sc.BuildServiceProvider();
 
 

@@ -57,9 +57,7 @@
             <PivotItem Header="Code">
                 <Frame x:Name="CodeFrame"/>
             </PivotItem>
-            <PivotItem Header="Duplicates">
-                <Frame x:Name="DuplicateFrame"/>
-            </PivotItem>
+
             <PivotItem Header="Preference">
                 <Frame x:Name="PreferenceFrame"/>
             </PivotItem>

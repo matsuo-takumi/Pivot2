@@ -7,7 +7,6 @@ namespace Pivot.Models
         Image,
         Project,
         Code,
-        Duplicate,
         Preference
     }
 }
