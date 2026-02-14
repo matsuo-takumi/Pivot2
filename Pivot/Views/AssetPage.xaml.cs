@@ -21,7 +21,7 @@ namespace Pivot.Views
     {
         public AssetViewModel ViewModel { get; }
         
-        private readonly ObservableCollection<AssetEntity> _assets = new();
+        private readonly ObservableCollection<AssetModel> _assets = new();
         private readonly AssetQueryService _queryService;
 
         public AssetPage()
@@ -71,7 +71,7 @@ namespace Pivot.Views
                     _assets.Clear();
                     foreach (var asset in assets)
                     {
-                        _assets.Add(asset);
+                        _assets.Add(AssetMapper.ToAssetModel(asset));
                     }
                     FileCountText.Text = $"{_assets.Count} items";
                 });
@@ -84,9 +84,9 @@ namespace Pivot.Views
         
         private void FileListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (FileListView.SelectedItem is AssetEntity asset)
+            if (FileListView.SelectedItem is AssetModel asset)
             {
-                ViewModel.SelectedAsset = AssetMapper.ToTemplateItem(asset);
+                ViewModel.SelectedAsset = AssetMapper.ToTemplateItem(asset.Entity);
                 SelectedModelText.Text = asset.FileName;
             }
         }

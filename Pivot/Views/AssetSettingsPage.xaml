@@ -255,8 +255,7 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Show Grid" VerticalAlignment="Center" FontSize="12"/>
-                                    <ToggleSwitch x:Name="ShowGridToggle" Grid.Column="1" 
-                                                 IsOn="{x:Bind ViewModel.ShowGrid, Mode=TwoWay}"/>
+
                                 </Grid>
                             </StackPanel>
                         </StackPanel>

@@ -177,6 +177,10 @@ namespace Pivot.Controls
                 {
                     aspect = templateItem.AspectRatio;
                 }
+                else if (item is AssetModel assetModel && assetModel.AspectRatio.HasValue && assetModel.AspectRatio.Value > 0)
+                {
+                    aspect = assetModel.AspectRatio.Value;
+                }
                 else if (item is AssetEntity assetEntity && assetEntity.AspectRatio.HasValue && assetEntity.AspectRatio.Value > 0)
                 {
                     aspect = assetEntity.AspectRatio.Value;

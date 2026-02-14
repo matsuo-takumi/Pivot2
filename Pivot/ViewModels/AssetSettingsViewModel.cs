@@ -72,8 +72,7 @@ namespace Pivot.ViewModels
         [ObservableProperty]
         private bool _showCameraInfo;
 
-        [ObservableProperty]
-        private bool _showGrid;
+
 
         [ObservableProperty]
         private ObservableCollection<MaterialPreset> _materialPresets = new();
@@ -165,7 +164,7 @@ namespace Pivot.ViewModels
             ShowViewportSize = _viewportSettings.GetShowViewportSize();
             ShowCameraInfo = _viewportSettings.GetShowCameraInfo();
 
-            ShowGrid = _viewportSettings.GetShowGrid();
+
         }
 
         private async Task LoadPresetsAsync()
@@ -293,11 +292,7 @@ namespace Pivot.ViewModels
             _ = _viewportSettings.SetShowCameraInfoAsync(value);
         }
 
-        partial void OnShowGridChanged(bool value)
-        {
-            _ = _viewportSettings.SetShowGridAsync(value);
-            _messenger.Send(new Pivot.Messages.SettingsChangedMessage("Viewport.ShowGrid"));
-        }
+
 
         [RelayCommand]
         private async Task AddMaterialPresetAsync(string? presetName)

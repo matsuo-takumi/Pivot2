@@ -58,8 +58,11 @@ namespace Pivot.Services
         {
             if (snippet == null) return null;
 
-            snippet.LastModifiedUtc = DateTime.UtcNow;
-            snippet.Kind = AssetKind.Code; // Ensure kind is set
+            var updatedSnippet = snippet with
+            {
+                LastModifiedUtc = DateTime.UtcNow,
+                Kind = AssetKind.Code
+            };
 
             try
             {
@@ -192,9 +195,18 @@ namespace Pivot.Services
                 await File.WriteAllTextAsync(snippet.FilePath, content);
                 
                 // Update metadata
-                snippet.ContentIndex = content.Length > 500 ? content.Substring(0, 500) : content;
-                snippet.FileSize = new FileInfo(snippet.FilePath).Length;
-                snippet.UpdatedAt = DateTime.UtcNow;
+                // Update metadata (create new record for DB update)
+                var updatedSnippet = snippet with 
+                {
+                    ContentIndex = content.Length > 500 ? content.Substring(0, 500) : content,
+                    FileSize = new FileInfo(snippet.FilePath).Length,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                // IMPORTANT: We must update the DB with the new record
+                // (The caller's 'snippet' variable remains unchanged due to immutability)
+                // Attempting to recursively call SaveSnippetAsync or UpsertAsync
+                await _repository.UpsertAsync(updatedSnippet);
             }
             catch (Exception ex)
             {

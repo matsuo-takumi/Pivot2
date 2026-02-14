@@ -14,7 +14,7 @@ namespace Pivot.Collections
     /// ObservableCollection that supports incremental loading for WinUI 3 virtualization.
     /// Loads assets in batches using AssetQueryService.
     /// </summary>
-    public class IncrementalAssetCollection : ObservableCollection<AssetEntity>, ISupportIncrementalLoading
+    public class IncrementalAssetCollection : ObservableCollection<AssetModel>, ISupportIncrementalLoading
     {
         private readonly IServiceProvider _serviceProvider;
         private FilterCriteria _criteria;
@@ -84,7 +84,7 @@ namespace Pivot.Collections
                 Clear();
                 foreach (var item in initialItems)
                 {
-                    Add(item);
+                    Add(AssetMapper.ToAssetModel(item));
                 }
 
                 _hasMoreItems = Count < _totalCount;
@@ -124,7 +124,7 @@ namespace Pivot.Collections
 
                 foreach (var item in items)
                 {
-                    Add(item);
+                    Add(AssetMapper.ToAssetModel(item));
                 }
 
                 _hasMoreItems = Count < _totalCount;

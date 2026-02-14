@@ -173,7 +173,7 @@ namespace Pivot.Utilities
 
             // Create mesh
             _meshManager.CreateDefaultMesh();
-            _meshManager.CreateGridMesh(10f, 40, 0.005f); // 10 units, 40 divisions, very thin lines
+
 
             // Create command resources
             CreateCommandBuffers();
@@ -190,10 +190,7 @@ namespace Pivot.Utilities
             _meshManager.UploadMesh(vertices, indices);
         }
 
-        public void SetShowGrid(bool show)
-        {
-            _meshManager.ShowGrid = show;
-        }
+
 
         public void Render(OrbitCamera camera)
         {
@@ -256,15 +253,7 @@ namespace Pivot.Utilities
             var descriptorSet = _pipelineManager.DescriptorSet;
             vk.CmdBindDescriptorSets(_vkCommandBuffer, PipelineBindPoint.Graphics, _pipelineManager.PipelineLayout, 0, 1, &descriptorSet, 0, null);
 
-            // Draw Grid first (behind the model)
-            if (_meshManager.ShowGrid && _meshManager.GridIndexCount > 0 && _meshManager.GridVertexBuffer.Handle != 0)
-            {
-                var offset = 0ul;
-                var gridVertexBuffer = _meshManager.GridVertexBuffer;
-                vk.CmdBindVertexBuffers(_vkCommandBuffer, 0, 1, in gridVertexBuffer, in offset);
-                vk.CmdBindIndexBuffer(_vkCommandBuffer, _meshManager.GridIndexBuffer, 0, IndexType.Uint32);
-                vk.CmdDrawIndexed(_vkCommandBuffer, _meshManager.GridIndexCount, 1, 0, 0, 0);
-            }
+
 
             // Draw main model
             if (_meshManager.IndexCount > 0 && _meshManager.VertexBuffer.Handle != 0)

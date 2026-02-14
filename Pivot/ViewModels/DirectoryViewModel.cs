@@ -54,34 +54,7 @@ namespace Pivot.ViewModels
             }
         }
 
-        // デザイン時用のコンストラクタ（XAMLデザイナーが使用）
-        public DirectoryViewModel()
-        {
-            if (Windows.ApplicationModel.DesignMode.DesignModeEnabled)
-            {
-                AssetDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Assets" };
-                ImageDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Images" };
-                ProjectDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Projects" };
-                CodeDirectories = new ObservableCollection<string> { "C:\\DesignMode\\Code" };
-                AddDirectoryCommand = new AsyncRelayCommand<DirectoryCategory>(async (_) => await Task.CompletedTask);
-                RemoveDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
-                AddAssetDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
-                AddImageDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
-                AddProjectDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
-                AddCodeDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
-                SelectAssetDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
-                SelectImageDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
-                SelectProjectDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
-                SelectCodeDirectoryCommand = new AsyncRelayCommand(async () => await Task.CompletedTask);
-                OpenDirectoryCommand = new AsyncRelayCommand<string>(async (_) => await Task.CompletedTask);
-            }
-            else
-            {
-                // 実行時にこのコンストラクタが呼ばれるべきではない
-                // DIコンテナが引数付きのコンストラクタを使用する想定
-                throw new InvalidOperationException("Parameterless constructor should not be called at runtime.");
-            }
-        }
+
 
         // 実行時用のコンストラクタ（DIコンテナが使用）
         public DirectoryViewModel(

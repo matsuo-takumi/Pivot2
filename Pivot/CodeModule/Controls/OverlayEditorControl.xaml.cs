@@ -240,7 +240,7 @@ namespace Pivot.CodeModule.Controls
                 
                 if (ViewModel.CurrentSnippet != null && titleBox != null)
                 {
-                    ViewModel.CurrentSnippet.FileName = titleBox.Text;
+                    ViewModel.CurrentSnippet = ViewModel.CurrentSnippet with { FileName = titleBox.Text };
                 }
                 
                 // Get current text from editor and sync to ViewModel

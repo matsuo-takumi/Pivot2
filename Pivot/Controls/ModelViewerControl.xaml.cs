@@ -111,7 +111,7 @@ namespace Pivot.Controls
                 if (_viewportSettings != null && _renderer != null)
                 {
                     _renderer.SetBackfaceCulling(_viewportSettings.GetBackfaceCulling());
-                    _renderer.SetShowGrid(_viewportSettings.GetShowGrid());
+
                 }
                 
                 // Hide loading indicator after initialization
@@ -124,10 +124,7 @@ namespace Pivot.Controls
             // Register for settings changes
             WeakReferenceMessenger.Default.Register<SettingsChangedMessage>(this, (r, m) =>
             {
-                if (m.Value == "Viewport.ShowGrid" && _renderer != null && _viewportSettings != null)
-                {
-                    _renderer.SetShowGrid(_viewportSettings.GetShowGrid());
-                }
+
             });
         }
 

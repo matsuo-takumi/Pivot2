@@ -20,11 +20,11 @@ namespace Pivot.CodeModule.Controls
     public sealed partial class SnippetCardControl : UserControl
     {
         public static readonly DependencyProperty AssetProperty =
-            DependencyProperty.Register("Asset", typeof(AssetEntity), typeof(SnippetCardControl), new PropertyMetadata(null));
+            DependencyProperty.Register("Asset", typeof(AssetModel), typeof(SnippetCardControl), new PropertyMetadata(null));
 
-        public AssetEntity Asset
+        public AssetModel Asset
         {
-            get => (AssetEntity)GetValue(AssetProperty);
+            get => (AssetModel)GetValue(AssetProperty);
             set => SetValue(AssetProperty, value);
         }
 
@@ -59,6 +59,11 @@ namespace Pivot.CodeModule.Controls
         private void Dummy() { } // Placeholder to keep diff clean if needed or just remove methods entirely
 
 
+
+        private CodeService? GetCodeService()
+        {
+            return ((App)Application.Current).Services.GetService<CodeService>();
+        }
 
         private CodeListViewModel? GetListViewModel()
         {
@@ -103,7 +108,7 @@ namespace Pivot.CodeModule.Controls
                 var codeService = GetCodeService();
                 if (codeService == null) return;
 
-                string content = await codeService.ReadContentAsync(Asset);
+                string content = await codeService.ReadContentAsync(Asset.Entity);
 
                 // Process variables
                 var processedContent = await ProcessTemplateVariablesAsync(content);
@@ -223,14 +228,18 @@ namespace Pivot.CodeModule.Controls
             if (codeService == null) return;
 
             // Read content
-            string content = await codeService.ReadContentAsync(Asset);
+            string content = await codeService.ReadContentAsync(Asset.Entity);
 
             // Create duplicate with modified name
             var newSnippet = await page.ViewModel.EditorVM.CreateSnippetAsync(
                 Asset.FileName + "_copy",
-                Asset.Tool ?? "text",
+                Asset.Entity.Tool ?? "text",
                 content,
-                Asset.GetTags().ToArray()
+                // AssetModel wraps Entity, UserTagsJson is string, need to deserialize or use helper?
+                // AssetModel doesn't have GetTags method, AssetEntity might have had extension?
+                // Checking AssetEntityExtensions usage.
+                // Assuming extension methods still work on Asset.Entity
+                Pivot.Models.AssetEntityExtensions.GetTags(Asset.Entity).ToArray()
             );
 
             if (newSnippet != null)
@@ -260,9 +269,5 @@ namespace Pivot.CodeModule.Controls
             listVM?.DeleteItemCommand?.Execute(Asset);
         }
 
-        private CodeService? GetCodeService()
-        {
-            return App.Current.Services.GetService(typeof(CodeService)) as CodeService;
-        }
     }
 }

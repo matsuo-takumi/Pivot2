@@ -101,9 +101,12 @@ namespace Pivot.Repositories
             // If no rows were updated, insert new record
             if (affected == 0)
             {
-                asset.CreatedAt = DateTime.UtcNow;
-                asset.UpdatedAt = DateTime.UtcNow;
-                _context.Assets.Add(asset);
+                var newAsset = asset with
+                {
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.Assets.Add(newAsset);
                 await _context.SaveChangesAsync(ct);
             }
         }

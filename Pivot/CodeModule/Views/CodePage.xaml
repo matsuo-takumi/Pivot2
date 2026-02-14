@@ -5,7 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:local="using:Pivot.CodeModule.Views"
-    xmlns:models="using:Pivot.Engine.Models"
+    xmlns:models="using:Pivot.Models"
     xmlns:converters="using:Pivot.Converters"
     xmlns:viewmodels="using:Pivot.CodeModule.ViewModels"
     xmlns:controls="using:Pivot.CodeModule.Controls"
@@ -90,7 +90,7 @@
                     </ItemsPanelTemplate>
                 </GridView.ItemsPanel>
                 <GridView.ItemTemplate>
-                    <DataTemplate x:DataType="models:AssetEntity">
+                    <DataTemplate x:DataType="models:AssetModel">
                         <controls:SnippetCardControl Asset="{x:Bind}" 
                                                   HorizontalAlignment="Stretch" 
                                                   VerticalAlignment="Stretch"/>

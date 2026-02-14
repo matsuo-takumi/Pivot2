@@ -28,12 +28,16 @@ namespace Pivot.Services
 			{
 				if (File.Exists(_settingsPath))
 				{
+                    System.Diagnostics.Debug.WriteLine($"[JsonSettingsStore] Loading settings from {_settingsPath}");
 					var json = await File.ReadAllTextAsync(_settingsPath, ct).ConfigureAwait(false);
+                    System.Diagnostics.Debug.WriteLine($"[JsonSettingsStore] Settings content length: {json.Length}");
 					var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
 					_cache = dict ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    System.Diagnostics.Debug.WriteLine($"[JsonSettingsStore] Loaded {_cache.Count} keys.");
 				}
 				else
 				{
+                    System.Diagnostics.Debug.WriteLine($"[JsonSettingsStore] Settings file not found at {_settingsPath}");
 					_cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 				}
 			}

@@ -23,10 +23,10 @@ namespace Pivot.CodeModule.ViewModels
         private readonly IMessenger _messenger;
 
         [ObservableProperty]
-        private ObservableCollection<AssetEntity> _snippets = new();
+        private ObservableCollection<AssetModel> _snippets = new();
 
         [ObservableProperty]
-        private AssetEntity? _selectedSnippet;
+        private AssetModel? _selectedSnippet;
 
         // Current filter state
         private string _activeTagFilter = string.Empty;
@@ -93,20 +93,20 @@ namespace Pivot.CodeModule.ViewModels
 
 
         [RelayCommand]
-        private async Task DeleteItemAsync(AssetEntity item)
+        private async Task DeleteItemAsync(AssetModel item)
         {
             if (item == null) return;
             Snippets.Remove(item);
-            await _codeService.DeleteSnippetAsync(item);
+            await _codeService.DeleteSnippetAsync(item.Entity);
         }
 
         [RelayCommand]
-        private async Task TogglePinAsync(AssetEntity item)
+        private async Task TogglePinAsync(AssetModel item)
         {
             if (item == null) return;
             
             item.IsFavorite = !item.IsFavorite;
-            await _codeService.SaveSnippetAsync(item, saveToDisk: false);
+            await _codeService.SaveSnippetAsync(item.Entity, saveToDisk: false);
             
             // Reload to resort
             await LoadSnippetsAsync();
@@ -140,7 +140,7 @@ namespace Pivot.CodeModule.ViewModels
                 Snippets.Clear();
                 foreach (var asset in assets)
                 {
-                    Snippets.Add(asset);
+                    Snippets.Add(AssetMapper.ToAssetModel(asset));
                 }
             }
             catch (Exception ex)
@@ -230,7 +230,7 @@ namespace Pivot.CodeModule.ViewModels
                 if (s.SortOrder != i)
                 {
                     s.SortOrder = i;
-                    tasks.Add(_codeService.SaveSnippetAsync(s, saveToDisk: false));
+                    tasks.Add(_codeService.SaveSnippetAsync(s.Entity, saveToDisk: false));
                 }
             }
             
@@ -244,7 +244,7 @@ namespace Pivot.CodeModule.ViewModels
         /// Context menu: Move Up
         /// </summary>
         [RelayCommand]
-        private void MoveItemUp(AssetEntity item)
+        private void MoveItemUp(AssetModel item)
         {
             if (!CanReorder) return;
             var index = Snippets.IndexOf(item);
@@ -257,8 +257,9 @@ namespace Pivot.CodeModule.ViewModels
         /// <summary>
         /// Context menu: Move Down
         /// </summary>
+        /// </summary>
         [RelayCommand]
-        private void MoveItemDown(AssetEntity item)
+        private void MoveItemDown(AssetModel item)
         {
             if (!CanReorder) return;
             var index = Snippets.IndexOf(item);

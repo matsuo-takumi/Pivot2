@@ -8,10 +8,19 @@ namespace Pivot.Services
     /// Centralized mapper for converting between AssetEntity (DB) and TemplateItem (UI).
     /// This eliminates duplicate conversion logic scattered across the codebase.
     /// </summary>
+    /// <summary>
+    /// Centralized mapper for converting between AssetEntity (DB) and UI Models.
+    /// </summary>
     public static class AssetMapper
     {
+        public static AssetModel ToAssetModel(AssetEntity entity)
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            return new AssetModel(entity);
+        }
+
         /// <summary>
-        /// Convert AssetEntity to TemplateItem for UI display.
+        /// Deprecated: Use ToAssetModel instead. Kept for legacy compatibility if any.
         /// </summary>
         public static TemplateItem ToTemplateItem(AssetEntity entity)
         {
@@ -33,38 +42,8 @@ namespace Pivot.Services
             };
         }
 
-        /// <summary>
-        /// Update existing TemplateItem from AssetEntity (for real-time updates).
-        /// </summary>
-        public static void UpdateTemplateItem(TemplateItem item, AssetEntity entity)
-        {
-            if (item == null || entity == null) return;
+        public static TemplateItem ToPreviewItem(AssetEntity entity) => ToTemplateItem(entity);
 
-            item.Kind = entity.Kind;
-            item.Path = entity.FilePath;
-            item.Name = entity.FileName;
-            item.Size = entity.FileSize;
-            item.LastModified = entity.LastModifiedUtc;
-            item.AspectRatio = entity.AspectRatio ?? 1.0;
-            item.PixelWidth = entity.Width ?? 0;
-            item.PixelHeight = entity.Height ?? 0;
-            item.ThumbnailPath = entity.ThumbnailPath ?? entity.FilePath;
-        }
-
-        /// <summary>
-        /// Create a lightweight TemplateItem for preview (minimal properties).
-        /// </summary>
-        public static TemplateItem ToPreviewItem(AssetEntity entity)
-        {
-            if (entity == null)
-                throw new ArgumentNullException(nameof(entity));
-
-            return new TemplateItem
-            {
-                Path = entity.FilePath,
-                Name = entity.FileName,
-                ThumbnailPath = entity.ThumbnailPath ?? entity.FilePath
-            };
-        }
+        // ... other methods if needed, but we are moving to AssetModel
     }
 }

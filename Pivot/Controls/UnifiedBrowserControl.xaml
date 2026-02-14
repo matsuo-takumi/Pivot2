@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Pivot.Controls"
     xmlns:utils="using:Pivot.Utilities"
-    xmlns:models="using:Pivot.Engine.Models"
+    xmlns:models="using:Pivot.Models"
     xmlns:converters="using:Pivot.Converters"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -16,7 +16,7 @@
         <converters:SelectionToBorderBrushConverter x:Key="SelectionConverter"/>
         <converters:SelectionToBorderThicknessConverter x:Key="SelectionThicknessConverter"/>
         <!-- Card Template for Masonry/Grid layouts -->
-        <DataTemplate x:Key="AssetCardTemplate" x:DataType="models:AssetEntity">
+        <DataTemplate x:Key="AssetCardTemplate" x:DataType="models:AssetModel">
             <Grid Margin="2" CanDrag="True" DragStarting="ItemBorder_DragStarting">
                 <!-- Card content (no selection border here) -->
                 <Border x:Name="ItemBorder" 
@@ -72,7 +72,7 @@
         </DataTemplate>
 
         <!-- List Template for detailed row view -->
-        <DataTemplate x:Key="AssetListTemplate" x:DataType="models:AssetEntity">
+        <DataTemplate x:Key="AssetListTemplate" x:DataType="models:AssetModel">
             <Border x:Name="ItemBorder"
                     Margin="2" 
                     Padding="6"

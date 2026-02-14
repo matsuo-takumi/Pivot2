@@ -42,9 +42,9 @@ namespace Pivot.Controls
         public AssetKind? TargetKind { get; set; }
 
         // Interaction Events
-        public event EventHandler<AssetEntity>? ItemClicked;
-        public event EventHandler<AssetEntity>? ItemDoubleClicked;
-        public event EventHandler<(AssetEntity Asset, Windows.Foundation.Point Position)>? ItemRightTapped;
+        public event EventHandler<AssetModel>? ItemClicked;
+        public event EventHandler<AssetModel>? ItemDoubleClicked;
+        public event EventHandler<(AssetModel Asset, Windows.Foundation.Point Position)>? ItemRightTapped;
 
         public UnifiedBrowserControl()
         {
@@ -108,76 +108,42 @@ namespace Pivot.Controls
             }
         }
 
-        #region Criteria Change Handlers
-
         private async void OnCriteriaChanged(object? sender, EventArgs e)
         {
-            if (_viewModel == null || _collection == null) return;
-
-            System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] OnCriteriaChanged - Directory: '{_viewModel.FilterCriteria.Directory ?? "(null)"}'");
-            await _collection.ResetAsync(_viewModel.FilterCriteria);
-            UpdateEmptyState();
+            if (_collection != null && _viewModel != null)
+            {
+                await _collection.ResetAsync(_viewModel.FilterCriteria);
+                UpdateEmptyState();
+            }
         }
 
         private void OnLoadingStateChanged(object? sender, bool isLoading)
         {
-            DispatcherQueue.TryEnqueue(() =>
+            if (_viewModel != null)
             {
-                LoadingRing.IsActive = isLoading;
-                FilterBarLoadingIndicator.Visibility = isLoading ? Visibility.Visible : Visibility.Collapsed;
-                if (_viewModel != null)
-                {
-                    _viewModel.IsLoading = isLoading;
-                }
-                
-                // When loading completes, invalidate MasonryLayout to recalculate with correct aspect ratios
-                // This fixes the issue where images appear squished on initial load because
-                // AspectRatio data wasn't available when the layout was first calculated.
-                if (!isLoading && AssetRepeater.Layout is MasonryLayout masonryLayout)
-                {
-                    masonryLayout.Invalidate();
-                }
-            });
+                _viewModel.IsLoading = isLoading;
+            }
+            UpdateEmptyState();
         }
 
-        private void OnCountsUpdated(object? sender, (int Loaded, int Total) counts)
+        private void OnCountsUpdated(object? sender, (int Loaded, int Total) e)
         {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                _viewModel?.UpdateCounts(counts.Loaded, counts.Total);
-                UpdateStatusText();
-                UpdateEmptyState();
-            });
+             UpdateStatusText();
         }
 
-        #endregion
-
-        #region FilterBar Handlers
+        // FilterBar Handlers
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            // Debounce search to avoid excessive queries
-            _searchDebounceToken?.Cancel();
-            _searchDebounceToken = new CancellationTokenSource();
-            var token = _searchDebounceToken.Token;
-
-            _ = Task.Delay(300, token).ContinueWith(t =>
+            if (_viewModel != null)
             {
-                if (!t.IsCanceled && _viewModel != null)
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        _viewModel.SetSearchQuery(SearchBox.Text);
-                    });
-                }
-            });
+                _viewModel.SetSearchQuery(SearchBox.Text);
+            }
         }
 
         private void RatingFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_viewModel == null || RatingFilter.SelectedItem is not ComboBoxItem item) return;
-
-            if (int.TryParse(item.Tag?.ToString(), out int rating))
+            if (_viewModel != null && RatingFilter.SelectedItem is ComboBoxItem item && item.Tag is string tag && int.TryParse(tag, out int rating))
             {
                 _viewModel.SetMinRating(rating);
             }
@@ -185,70 +151,60 @@ namespace Pivot.Controls
 
         private void SortField_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_viewModel == null || SortFieldCombo.SelectedItem is not ComboBoxItem item) return;
-
-            var fieldStr = item.Tag?.ToString();
-            if (Enum.TryParse<SortField>(fieldStr, out var field))
+            if (_viewModel != null && SortFieldCombo.SelectedItem is ComboBoxItem item && item.Tag is string fieldName)
             {
-                var direction = _sortAscending ? SortDirection.Ascending : SortDirection.Descending;
-                _viewModel.SetSorting(field, direction);
+                if (Enum.TryParse<Pivot.Services.SortField>(fieldName, out var field))
+                {
+                    _viewModel.SetSorting(field, _viewModel.FilterCriteria.SortDirection);
+                }
             }
         }
 
         private void SortDirection_Click(object sender, RoutedEventArgs e)
         {
-            _sortAscending = !_sortAscending;
-            SortDirectionIcon.Glyph = _sortAscending ? "\uE74A" : "\uE74B"; // Up/Down arrows
-
-            if (_viewModel != null && SortFieldCombo.SelectedItem is ComboBoxItem item)
+            if (_viewModel != null)
             {
-                var fieldStr = item.Tag?.ToString();
-                if (Enum.TryParse<SortField>(fieldStr, out var field))
-                {
-                    var direction = _sortAscending ? SortDirection.Ascending : SortDirection.Descending;
-                    _viewModel.SetSorting(field, direction);
-                }
+                var newDirection = _viewModel.FilterCriteria.SortDirection == Pivot.Services.SortDirection.Ascending
+                    ? Pivot.Services.SortDirection.Descending
+                    : Pivot.Services.SortDirection.Ascending;
+                _viewModel.SetSorting(_viewModel.FilterCriteria.SortField, newDirection);
+                
+                // Visual update (icon) is handled by binding or manually if needed
+                SortDirectionIcon.Glyph = newDirection == Pivot.Services.SortDirection.Ascending ? "\uE74B" : "\uE74A";
             }
         }
 
         private void FilterColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
         {
-            // Optional: Live preview? For now, require Apply click.
+            // Optional
         }
 
         private void ApplyColorFilter_Click(object sender, RoutedEventArgs e)
         {
-            if (_viewModel == null) return;
-            var color = FilterColorPicker.Color;
-            // Use a default tolerance or allow user to set it? 30 is good default.
-            _viewModel.SetColorFilter(color.R, color.G, color.B, 30);
-            
-            // Close flyout
-            if (ColorFilterButton.Flyout is Flyout f) f.Hide();
-            
-            // Visual feedback
-            ColorFilterButton.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(40, color.R, color.G, color.B));
+            if (_viewModel != null)
+            {
+                var color = FilterColorPicker.Color;
+                _viewModel.SetColorFilter(color.R, color.G, color.B);
+            }
+            ColorFilterButton.Flyout?.Hide();
         }
 
         private void ClearColorFilter_Click(object sender, RoutedEventArgs e)
         {
-            if (_viewModel == null) return;
-            _viewModel.ClearColorFilter();
-            
-            if (ColorFilterButton.Flyout is Flyout f) f.Hide();
-            
-            // Reset visual
-            ColorFilterButton.ClearValue(Button.BackgroundProperty);
+            if (_viewModel != null)
+            {
+                _viewModel.ClearColorFilter();
+            }
+            ColorFilterButton.Flyout?.Hide();
         }
 
-        #endregion
 
         #region Item Interaction Handlers (Parent-Level)
 
-        // Helper to find the AssetEntity from a tapped element
+        // Helper to find the AssetModel from a tapped element
         // x:Bind を使用している DataTemplate 内では DataContext が設定されないため、
         // ItemsRepeater.GetElementIndex() を使用してインデックスからデータを取得する
-        private AssetEntity? FindAssetFromElement(DependencyObject? element)
+        private AssetModel? FindAssetFromElement(DependencyObject? element)
         {
             // まず視覚ツリーを辿ってItemsRepeaterの直接の子要素を見つける
             DependencyObject? current = element;
@@ -270,7 +226,7 @@ namespace Pivot.Controls
                 }
                 
                 // DataContext でも試す（フォールバック）
-                if (current is FrameworkElement fe && fe.DataContext is AssetEntity asset)
+                if (current is FrameworkElement fe && fe.DataContext is AssetModel asset)
                 {
                     return asset;
                 }
@@ -382,19 +338,19 @@ namespace Pivot.Controls
         }
 
         // Multi-selection state
-        private readonly HashSet<AssetEntity> _selectedAssets = new();
-        private AssetEntity? _lastClickedAsset; // For Shift-click range selection
+        private readonly HashSet<AssetModel> _selectedAssets = new();
+        private AssetModel? _lastClickedAsset; // For Shift-click range selection
         
         /// <summary>
         /// Gets the currently selected assets.
         /// </summary>
-        public IReadOnlyCollection<AssetEntity> SelectedItems => _selectedAssets;
+        public IReadOnlyCollection<AssetModel> SelectedItems => _selectedAssets;
 
         /// <summary>
         /// Moves the selection by the specified delta (e.g., +1 for next, -1 for previous).
         /// Returns the newly selected asset, or null if no change.
         /// </summary>
-        public AssetEntity? MoveSelection(int delta)
+        public AssetModel? MoveSelection(int delta)
         {
             if (_collection == null || _collection.Count == 0) return null;
 
@@ -468,8 +424,11 @@ namespace Pivot.Controls
                     _selectedAssets.Add(asset);
                 }
                 
-                // Use DragDropService for AssetEntity
-                await DragDropService.HandleDragStartingForAssetEntity(sender, e, asset, _selectedAssets);
+                // Use DragDropService for AssetEntity (Unwrap Entity)
+                // Assuming DragDropService handles IEnumerable<AssetEntity> or similar
+                // We'll map AssetModels back to Entities for drag service
+                var selectedEntities = _selectedAssets.Select(a => a.Entity).ToList();
+                await DragDropService.HandleDragStartingForAssetEntity(sender, e, asset.Entity, selectedEntities);
             }
             catch (Exception ex)
             {
@@ -664,12 +623,13 @@ namespace Pivot.Controls
                         if (change.Type == ItemChangeData<AssetEntity>.ChangeType.Added ||
                             change.Type == ItemChangeData<AssetEntity>.ChangeType.Updated)
                         {
-                            // Check if already exists
+                            // Check if already exists by checking the underlying entity path in AssetModels
                             var existing = _collection.FirstOrDefault(a => a.FilePath == change.Item.FilePath);
                             if (existing == null)
                             {
                                 // Add new item at the beginning for immediate visibility
-                                _collection.Insert(0, change.Item);
+                                // Wrap Entity in Model
+                                _collection.Insert(0, AssetMapper.ToAssetModel(change.Item));
                                 System.Diagnostics.Debug.WriteLine($"[UnifiedBrowser] Added: {change.Item.FileName}");
                             }
                         }

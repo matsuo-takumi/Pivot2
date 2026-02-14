@@ -49,21 +49,25 @@ namespace Pivot.Services
 
             // AssetDirectories
             var assetPref = await _settingsStore.GetAsync("AssetDirectories");
+            _logger.LogInformation("Loaded AssetDirectories raw value: {Value}", assetPref);
             _assetDirectories = ParseDirectoriesValue(assetPref);
             await NormalizeAndPersistIfNeededAsync("AssetDirectories", assetPref, _assetDirectories);
 
             // ImageDirectories
             var imagePref = await _settingsStore.GetAsync("ImageDirectories");
+            _logger.LogInformation("Loaded ImageDirectories raw value: {Value}", imagePref);
             _imageDirectories = ParseDirectoriesValue(imagePref);
             await NormalizeAndPersistIfNeededAsync("ImageDirectories", imagePref, _imageDirectories);
 
             // ProjectDirectories
             var projectPref = await _settingsStore.GetAsync("ProjectDirectories");
+            _logger.LogInformation("Loaded ProjectDirectories raw value: {Value}", projectPref);
             _projectDirectories = ParseDirectoriesValue(projectPref);
             await NormalizeAndPersistIfNeededAsync("ProjectDirectories", projectPref, _projectDirectories);
 
             // CodeDirectories
             var codePref = await _settingsStore.GetAsync("CodeDirectories");
+            _logger.LogInformation("Loaded CodeDirectories raw value: {Value}", codePref);
             _codeDirectories = ParseDirectoriesValue(codePref);
             await NormalizeAndPersistIfNeededAsync("CodeDirectories", codePref, _codeDirectories);
 

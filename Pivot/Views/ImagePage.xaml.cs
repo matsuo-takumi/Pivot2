@@ -72,24 +72,24 @@ namespace Pivot.Views
         }
         
         // Event handlers for BrowserControl
-        private void BrowserControl_ItemClicked(object? sender, AssetEntity asset)
+        private void BrowserControl_ItemClicked(object? sender, AssetModel asset)
         {
             // Selection handling
             System.Diagnostics.Debug.WriteLine($"Item clicked: {asset.FileName}");
         }
         
-        private void BrowserControl_ItemDoubleClicked(object? sender, AssetEntity asset)
+        private void BrowserControl_ItemDoubleClicked(object? sender, AssetModel asset)
         {
             try
             {
                 // Show preview using centralized mapper
-                var item = AssetMapper.ToPreviewItem(asset);
+                var item = AssetMapper.ToPreviewItem(asset.Entity);
                 _ = PreviewControl.ShowAsync(item);
             }
             catch { }
         }
         
-        private void BrowserControl_ItemRightTapped(object? sender, (AssetEntity Asset, Windows.Foundation.Point Position) args)
+        private void BrowserControl_ItemRightTapped(object? sender, (AssetModel Asset, Windows.Foundation.Point Position) args)
         {
             _rightTappedAsset = args.Asset;
             
@@ -99,7 +99,7 @@ namespace Pivot.Views
             }
         }
         
-        private AssetEntity? _rightTappedAsset;
+        private AssetModel? _rightTappedAsset;
         
         private void OpenDirectory_Click(object sender, RoutedEventArgs e)
         {

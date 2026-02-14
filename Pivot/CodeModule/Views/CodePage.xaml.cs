@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Pivot.CodeModule.ViewModels;
+using Pivot.Models;
 using Pivot.CodeModule.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using System;
@@ -78,9 +79,9 @@ namespace Pivot.CodeModule.Views
 
         private void SnippetCard_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement element && element.DataContext is AssetEntity snippet)
+            if (sender is FrameworkElement element && element.DataContext is AssetModel snippet)
             {
-                _ = ViewModel.EditorVM.SetSnippetAsync(snippet);
+                _ = ViewModel.EditorVM.SetSnippetAsync(snippet.Entity);
             }
         }
 
@@ -100,9 +101,9 @@ namespace Pivot.CodeModule.Views
 
         private async void SnippetsGridView_ItemClick(object sender, ItemClickEventArgs e)
         {
-            if (e.ClickedItem is AssetEntity asset)
+            if (e.ClickedItem is AssetModel asset)
             {
-                await ViewModel.EditorVM.SetSnippetAsync(asset);
+                await ViewModel.EditorVM.SetSnippetAsync(asset.Entity);
             }
         }
     }
